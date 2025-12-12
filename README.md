@@ -23,8 +23,9 @@ The app runs at http://localhost:3000.
 
 ### Environment variables
 Create a `.env` file based on `.env.example` with your database and auth secrets.
-- `DATABASE_URL` - PostgreSQL connection string
+- `DATABASE_URL` - PostgreSQL connection string (e.g., `postgresql://USER:PASSWORD@localhost:5432/pulse`)
 - `NEXTAUTH_SECRET` - secret for NextAuth JWT/session signing
+- `NEXTAUTH_URL` - base URL for NextAuth callbacks (e.g., http://localhost:3000)
 
 ### Prisma
 Generate the Prisma client and run migrations once your database is reachable.
