@@ -1,4 +1,20 @@
-export default function FeedPlaceholder() {
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+
+export default async function FeedPlaceholder() {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.id) {
+    redirect("/auth/login");
+  }
+
+  const preferenceCount = await prisma.preference.count({ where: { userId: session.user.id } });
+  if (preferenceCount === 0) {
+    redirect("/onboarding");
+  }
+
   return (
     <section className="card">
       <div className="space-y-3">

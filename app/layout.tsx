@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
-import "./globals.css";
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import "./globals.css";
+import { authOptions } from "@/lib/auth";
+import AuthActions from "@/components/AuthActions";
 
 export const metadata: Metadata = {
   title: "Pulse",
