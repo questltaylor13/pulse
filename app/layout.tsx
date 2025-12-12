@@ -1,22 +1,17 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { getServerSession } from "next-auth";
 import "./globals.css";
-import { authOptions } from "@/lib/auth";
-import AuthActions from "@/components/AuthActions";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Pulse",
   description: "Discover the best events around Denver.",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(authOptions);
-
   return (
     <html lang="en">
       <body className="min-h-screen bg-slate-50 text-slate-900">
@@ -26,7 +21,15 @@ export default async function RootLayout({
               <Link href="/" className="text-lg font-semibold text-primary">
                 Pulse
               </Link>
-              <AuthActions session={session} />
+              <div className="flex items-center gap-3 text-sm text-slate-600">
+                <span className="rounded-full bg-primary/10 px-3 py-1 text-primary">Denver beta</span>
+                <Link
+                  href="/auth/signin"
+                  className="rounded-md px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100"
+                >
+                  Sign in
+                </Link>
+              </div>
             </div>
           </header>
           <main className="flex-1">
