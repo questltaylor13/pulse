@@ -4,6 +4,29 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcrypt";
 import { z } from "zod";
 
+declare module "next-auth" {
+  interface User {
+    username?: string | null;
+    onboardingComplete: boolean;
+  }
+  interface Session {
+    user: {
+      id: string;
+      email: string;
+      name?: string | null;
+      username?: string | null;
+      onboardingComplete: boolean;
+    };
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    username?: string | null;
+    onboardingComplete: boolean;
+  }
+}
+
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -43,6 +66,8 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           email: user.email,
           name: user.name ?? undefined,
+          username: user.username ?? undefined,
+          onboardingComplete: user.onboardingComplete,
         };
       },
     }),
@@ -51,20 +76,36 @@ export const authOptions: NextAuthOptions = {
     signIn: "/auth/login",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
-        token.id = user.id;
+        token.sub = user.id;
         token.email = user.email;
         token.name = user.name;
+        token.username = user.username;
+        token.onboardingComplete = user.onboardingComplete;
+      }
+      // Refresh onboardingComplete and username on every request
+      if (trigger === "update" || !token.onboardingComplete || !token.username) {
+        if (token.sub) {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.sub },
+            select: { onboardingComplete: true, username: true },
+          });
+          if (dbUser) {
+            token.onboardingComplete = dbUser.onboardingComplete;
+            token.username = dbUser.username;
+          }
+        }
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = (token.id as string) ?? session.user.id;
-        session.user.email =
-          (token.email as string | undefined) ?? session.user.email ?? "";
-        session.user.name = (token.name as string | undefined) ?? session.user.name;
+        session.user.id = token.sub ?? "";
+        session.user.email = token.email ?? session.user.email ?? "";
+        session.user.name = token.name as string | undefined;
+        session.user.username = token.username as string | undefined;
+        session.user.onboardingComplete = token.onboardingComplete ?? false;
       }
       return session;
     },

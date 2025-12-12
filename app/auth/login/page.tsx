@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -23,14 +23,20 @@ export default function LoginPage() {
       password,
     });
 
-    setLoading(false);
-
     if (result?.error) {
       setError("Invalid email or password");
+      setLoading(false);
       return;
     }
 
-    router.push("/onboarding");
+    // Get session to check onboarding status
+    const session = await getSession();
+
+    if (session?.user?.onboardingComplete) {
+      router.push("/feed");
+    } else {
+      router.push("/onboarding");
+    }
   };
 
   return (

@@ -4,6 +4,16 @@
 
 :root {
   color-scheme: light;
+
+  /* Landing page brand colors */
+  --landing-green: #2D5A3D;
+  --landing-green-light: #4A7A5C;
+  --landing-green-dark: #1E3D2A;
+  --landing-coral: #E87461;
+  --landing-coral-light: #F09A8D;
+  --landing-coral-dark: #D45A47;
+  --landing-beige: #F5EDE6;
+  --landing-beige-dark: #E8DDD3;
 }
 
 body {
@@ -20,4 +30,68 @@ body {
 
 .card {
   @apply rounded-xl border border-slate-200 bg-white p-6 shadow-sm;
+}
+
+/* Landing page specific utilities */
+.landing-section {
+  @apply py-16 md:py-24;
+}
+
+.landing-heading {
+  @apply text-3xl md:text-4xl font-bold tracking-tight;
+}
+
+.landing-subheading {
+  @apply text-lg md:text-xl text-slate-600;
+}
+
+.btn-landing-primary {
+  @apply inline-flex items-center justify-center rounded-lg px-6 py-3 text-base font-semibold text-white shadow-md transition hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+  background-color: var(--landing-green);
+}
+
+.btn-landing-primary:hover {
+  background-color: var(--landing-green-dark);
+}
+
+.btn-landing-secondary {
+  @apply inline-flex items-center justify-center rounded-lg px-6 py-3 text-base font-semibold transition border-2 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+  color: var(--landing-green);
+  border-color: var(--landing-green);
+}
+
+.btn-landing-secondary:hover {
+  background-color: var(--landing-beige);
+}
+
+.bg-landing-beige {
+  background-color: var(--landing-beige);
+}
+
+.bg-landing-green {
+  background-color: var(--landing-green);
+}
+
+.text-landing-green {
+  color: var(--landing-green);
+}
+
+.text-landing-coral {
+  color: var(--landing-coral);
+}
+
+/* Toast animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
 }

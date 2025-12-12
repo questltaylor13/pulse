@@ -9,15 +9,23 @@
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "seed": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/seed.ts",
+    "db:seed": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/seed.ts",
+    "places:ingest": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/ingest-places.ts",
+    "places:enrich": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/enrich-places.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@types/qrcode": "^1.5.6",
     "autoprefixer": "^10.4.20",
     "bcrypt": "^5.1.1",
+    "nanoid": "^3.3.11",
     "next": "^14.2.10",
     "next-auth": "^4.24.7",
+    "openai": "^6.10.0",
     "postcss": "^8.4.47",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwindcss": "^3.4.13",
@@ -31,6 +39,7 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.10",
     "prisma": "^5.22.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.6.3"
   }
 }

@@ -1,0 +1,12 @@
+export { default as HeroSection } from "./HeroSection";
+export { default as FeaturedEventsSection } from "./FeaturedEventsSection";
+export { default as HowItWorksSection } from "./HowItWorksSection";
+export { default as NewPlacesSection } from "./NewPlacesSection";
+export { default as FeatureHighlightsSection } from "./FeatureHighlightsSection";
+export { default as CreatorPicksSection } from "./CreatorPicksSection";
+export { default as CreatorSpotlightSection } from "./CreatorSpotlightSection";
+export { default as CategoryGridSection } from "./CategoryGridSection";
+export { default as NeighborhoodSection } from "./NeighborhoodSection";
+export { default as StatsBar } from "./StatsBar";
+export { default as FinalCTASection } from "./FinalCTASection";
+export { default as LandingFooter } from "./LandingFooter";
