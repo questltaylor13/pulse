@@ -1,0 +1,159 @@
+// Prisma schema for Pulse MVP
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RelationshipStatus {
+  SINGLE
+  COUPLE
+}
+
+enum PreferenceType {
+  LIKE
+  DISLIKE
+}
+
+enum DenverTenure {
+  NEW_TO_DENVER
+  ONE_TO_TWO_YEARS
+  TWO_TO_FIVE_YEARS
+  FIVE_PLUS_YEARS
+}
+
+enum Category {
+  ART
+  LIVE_MUSIC
+  BARS
+  FOOD
+  COFFEE
+  OUTDOORS
+  FITNESS
+  SEASONAL
+  POPUP
+  OTHER
+}
+
+enum InteractionStatus {
+  SAVED
+  ATTENDED
+}
+
+model User {
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  name               String?
+  passwordHash       String?
+  citySlug           String?
+  relationshipStatus RelationshipStatus?
+  denverTenure       DenverTenure?
+  isAdmin            Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  preferences        Preference[]
+  interactions       UserEventInteraction[]
+  lists              List[]
+}
+
+model City {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  timezone  String
+  events    Event[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Preference {
+  id             String         @id @default(cuid())
+  userId         String
+  category       Category
+  preferenceType PreferenceType
+  intensity      Int
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, category])
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  cityId      String
+  title       String
+  description String
+  category    Category
+  tags        String[]
+  venueName   String
+  address     String
+  startTime   DateTime
+  endTime     DateTime?
+  priceRange  String
+  source      String
+  sourceUrl   String?
+  externalId  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  city         City                  @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  interactions UserEventInteraction[]
+  listItems    ListItem[]
+
+  @@index([cityId, startTime])
+  @@index([category])
+  @@unique([externalId, source])
+}
+
+model UserEventInteraction {
+  id        String            @id @default(cuid())
+  userId    String
+  eventId   String
+  status    InteractionStatus
+  rating    Int?
+  liked     Boolean?
+  notes     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([userId, status])
+  @@index([eventId, liked])
+}
+
+model List {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items ListItem[]
+
+  @@unique([userId, name])
+}
+
+model ListItem {
+  id        String   @id @default(cuid())
+  listId    String
+  eventId   String
+  createdAt DateTime @default(now())
+
+  list  List  @relation(fields: [listId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, eventId])
+  @@index([eventId])
+}
