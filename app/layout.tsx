@@ -24,7 +24,7 @@ export default function RootLayout({
               <div className="flex items-center gap-3 text-sm text-slate-600">
                 <span className="rounded-full bg-primary/10 px-3 py-1 text-primary">Denver beta</span>
                 <Link
-                  href="/auth/signin"
+                  href="/auth/login"
                   className="rounded-md px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100"
                 >
                   Sign in
