@@ -29,23 +29,15 @@ export const authOptions: NextAuthOptions = {
 
         const { email, password } = parsed.data;
 
-        const existingUser = await prisma.user.findUnique({ where: { email } });
-        if (!existingUser?.passwordHash) {
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user?.passwordHash) {
           return null;
         }
 
-        const isValid = await compare(password, existingUser.passwordHash);
+        const isValid = await compare(password, user.passwordHash);
         if (!isValid) {
           return null;
         }
-
-        const user =
-          existingUser.citySlug === "denver"
-            ? existingUser
-            : await prisma.user.update({
-                where: { id: existingUser.id },
-                data: { citySlug: "denver" },
-              });
 
         return {
           id: user.id,

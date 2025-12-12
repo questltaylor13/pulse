@@ -19,13 +19,6 @@ enum PreferenceType {
   DISLIKE
 }
 
-enum DenverTenure {
-  NEW_TO_DENVER
-  ONE_TO_TWO_YEARS
-  TWO_TO_FIVE_YEARS
-  FIVE_PLUS_YEARS
-}
-
 enum Category {
   ART
   LIVE_MUSIC
@@ -49,9 +42,8 @@ model User {
   email              String              @unique
   name               String?
   passwordHash       String?
-  citySlug           String?
+  citySlug           String              @default("denver")
   relationshipStatus RelationshipStatus?
-  denverTenure       DenverTenure?
   isAdmin            Boolean             @default(false)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt

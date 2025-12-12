@@ -84,52 +84,45 @@ export default async function InterestsPage() {
         <p className="text-slate-600">Choose how much each vibe speaks to you.</p>
       </div>
 
-      <form action={saveInterests} className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          {INTERESTS.map((interest) => (
-            <div key={interest.key} className="card space-y-3">
-              <div className="space-y-1">
-                <h3 className="text-lg font-semibold text-slate-900">{interest.label}</h3>
-                <p className="text-sm text-slate-600">{interest.description}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(
-                  [
-                    { label: "Love it", value: "love" },
-                    { label: "Like it", value: "like" },
-                    { label: "Not my thing", value: "dislike" },
-                  ] as const
-                ).map((option) => (
-                  <label
-                    key={option.value}
-                    className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm transition hover:border-primary ${
-                      existingSelections[interest.key] === option.value
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-slate-200 text-slate-700"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name={interest.key}
-                      value={option.value}
-                      required
-                      defaultChecked={existingSelections[interest.key] === option.value}
-                      className="h-4 w-4 accent-primary"
-                    />
-                    {option.label}
-                  </label>
-                ))}
-              </div>
+      <form action={saveInterests} className="grid gap-4 md:grid-cols-2">
+        {INTERESTS.map((interest) => (
+          <div key={interest.key} className="card space-y-3">
+            <div className="space-y-1">
+              <h3 className="text-lg font-semibold text-slate-900">{interest.label}</h3>
+              <p className="text-sm text-slate-600">{interest.description}</p>
             </div>
-          ))}
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <a href="/onboarding" className="btn-secondary">
-            Back
-          </a>
-          <button type="submit" className="btn-primary">
-            Save and review
-          </button>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { label: "Love it", value: "love" },
+                  { label: "Like it", value: "like" },
+                  { label: "Not my thing", value: "dislike" },
+                ] as const
+              ).map((option) => (
+                <label
+                  key={option.value}
+                  className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm transition hover:border-primary ${
+                    existingSelections[interest.key] === option.value
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-slate-200 text-slate-700"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name={interest.key}
+                    value={option.value}
+                    required
+                    defaultChecked={existingSelections[interest.key] === option.value}
+                    className="h-4 w-4 accent-primary"
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="md:col-span-2 flex justify-end">
+          <button type="submit" className="btn-primary">Save and review</button>
         </div>
       </form>
     </section>

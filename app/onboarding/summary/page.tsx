@@ -1,6 +1,6 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Category, DenverTenure, PreferenceType, RelationshipStatus } from "@prisma/client";
+import { Category, PreferenceType, RelationshipStatus } from "@prisma/client";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
@@ -21,13 +21,6 @@ const LABELS: Record<Category, string> = {
 const relationshipCopy: Record<RelationshipStatus, string> = {
   [RelationshipStatus.SINGLE]: "Mostly solo / with friends",
   [RelationshipStatus.COUPLE]: "Mostly as a couple / date nights",
-};
-
-const tenureCopy: Record<DenverTenure, string> = {
-  [DenverTenure.NEW_TO_DENVER]: "I'm brand new here (0–6 months)",
-  [DenverTenure.ONE_TO_TWO_YEARS]: "1–2 years",
-  [DenverTenure.TWO_TO_FIVE_YEARS]: "2–5 years",
-  [DenverTenure.FIVE_PLUS_YEARS]: "5+ years (seasoned Denverite)",
 };
 
 export default async function SummaryPage() {
@@ -59,19 +52,11 @@ export default async function SummaryPage() {
         <p className="text-slate-600">Here is how we will start tailoring Denver picks for you.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="card space-y-3">
-          <p className="text-sm font-medium text-slate-700">You’re exploring Denver mostly as</p>
-          <p className="text-lg font-semibold text-slate-900">
-            {user?.relationshipStatus ? relationshipCopy[user.relationshipStatus] : "Not set"}
-          </p>
-        </div>
-        <div className="card space-y-3">
-          <p className="text-sm font-medium text-slate-700">How long you’ve been here</p>
-          <p className="text-lg font-semibold text-slate-900">
-            {user?.denverTenure ? tenureCopy[user.denverTenure] : "Not set"}
-          </p>
-        </div>
+      <div className="card space-y-3">
+        <p className="text-sm font-medium text-slate-700">You’re exploring Denver mostly as</p>
+        <p className="text-lg font-semibold text-slate-900">
+          {user?.relationshipStatus ? relationshipCopy[user.relationshipStatus] : "Not set"}
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
