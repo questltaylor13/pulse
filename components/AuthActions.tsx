@@ -55,32 +55,7 @@ export default function AuthActions() {
   const username = session.user.username;
 
   return (
-    <div className="flex items-center gap-3 text-sm text-slate-700">
-      <Link
-        href="/feed"
-        className="font-medium text-slate-600 transition hover:text-slate-900"
-      >
-        Feed
-      </Link>
-      <Link
-        href="/community"
-        className="font-medium text-slate-600 transition hover:text-slate-900"
-      >
-        Community
-      </Link>
-      <Link
-        href="/lists/want"
-        className="font-medium text-slate-600 transition hover:text-slate-900"
-      >
-        Lists
-      </Link>
-      <Link
-        href="/groups"
-        className="font-medium text-slate-600 transition hover:text-slate-900"
-      >
-        Groups
-      </Link>
-
+    <div className="flex items-center text-sm text-slate-700">
       {/* Profile Dropdown */}
       <div className="relative" ref={dropdownRef}>
         <button

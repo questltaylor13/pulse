@@ -19,6 +19,10 @@ interface PlaceItem {
   neighborhood: string | null;
   hours: string | null;
   imageUrl: string | null;
+  googleRating: number | null;
+  googleReviewCount: number | null;
+  vibeTags: string[];
+  companionTags: string[];
 }
 
 export interface PlacesResponse {
@@ -26,6 +30,22 @@ export interface PlacesResponse {
   statuses: Record<string, ItemStatus>;
   total: number;
 }
+
+// Main category tabs mapping
+const CATEGORY_MAPPING: Record<string, Category[]> = {
+  "food-drink": ["RESTAURANT", "BARS", "COFFEE", "FOOD"],
+  "experiences": ["ACTIVITY_VENUE"],
+  "entertainment": ["LIVE_MUSIC", "ART"],
+  "outdoors": ["OUTDOORS", "FITNESS"],
+};
+
+// Experience subcategory tags
+const EXPERIENCE_TAGS: Record<string, string[]> = {
+  "creative": ["glass-blowing", "pottery", "paint-sip", "candle-making", "art-studio", "crafts", "creative"],
+  "active": ["archery", "axe-throwing", "rock-climbing", "escape-room", "go-karts", "bowling", "mini-golf", "batting-cages", "active", "adventure"],
+  "wellness": ["spa", "float-tank", "sauna", "yoga", "wellness", "meditation"],
+  "entertainment": ["speakeasy", "board-game", "vr-arcade", "karaoke", "comedy", "jazz", "live-music", "theater", "arcade"],
+};
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -35,8 +55,13 @@ export async function GET(request: NextRequest) {
   }
 
   const searchParams = request.nextUrl.searchParams;
+  const mainTab = searchParams.get("tab"); // food-drink, experiences, entertainment, outdoors, new
+  const subcategory = searchParams.get("subcategory"); // creative, active, wellness, etc.
   const categoryFilter = searchParams.get("category") as Category | null;
   const subcategoryFilter = searchParams.get("subcategories")?.split(",").filter(Boolean) || [];
+  const vibeFilter = searchParams.get("vibe"); // date-night, group, solo, family
+  const excludeDone = searchParams.get("excludeDone") !== "false"; // Default to excluding done/passed
+  const isNew = searchParams.get("new") === "true";
 
   // Get Denver city
   const denver = await prisma.city.findUnique({
@@ -47,22 +72,80 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "City not found" }, { status: 404 });
   }
 
+  // Get user's Done and Passed items to exclude
+  let excludedItemIds: string[] = [];
+  if (excludeDone) {
+    const excludedStatuses = await prisma.userItemStatus.findMany({
+      where: {
+        userId: session.user.id,
+        status: { in: ["DONE", "PASS"] },
+        item: {
+          type: "PLACE",
+          cityId: denver.id,
+        },
+      },
+      select: { itemId: true },
+    });
+    excludedItemIds = excludedStatuses.map((s) => s.itemId);
+  }
+
   // Build the query for places
-  const whereClause = {
+  const whereClause: Record<string, unknown> = {
     cityId: denver.id,
     type: "PLACE" as const,
-    ...(categoryFilter && { category: categoryFilter }),
-    // Filter by subcategories using tags array
-    ...(subcategoryFilter.length > 0 && {
-      tags: { hasSome: subcategoryFilter },
-    }),
   };
+
+  // Exclude Done/Passed places
+  if (excludedItemIds.length > 0) {
+    whereClause.id = { notIn: excludedItemIds };
+  }
+
+  // Filter by main tab category
+  if (mainTab && CATEGORY_MAPPING[mainTab]) {
+    whereClause.category = { in: CATEGORY_MAPPING[mainTab] };
+  }
+
+  // Filter by experience subcategory
+  if (mainTab === "experiences" && subcategory && EXPERIENCE_TAGS[subcategory]) {
+    whereClause.tags = { hasSome: EXPERIENCE_TAGS[subcategory] };
+  }
+
+  // Legacy category filter
+  if (categoryFilter) {
+    whereClause.category = categoryFilter;
+  }
+
+  // Legacy subcategory filter using tags
+  if (subcategoryFilter.length > 0) {
+    whereClause.tags = { hasSome: subcategoryFilter };
+  }
+
+  // Vibe filter (date-night, group, solo, family)
+  if (vibeFilter) {
+    // Search in companionTags or vibeTags
+    whereClause.OR = [
+      { companionTags: { has: vibeFilter } },
+      { vibeTags: { has: vibeFilter } },
+      { tags: { has: vibeFilter } },
+    ];
+  }
+
+  // New & Trending filter - places opened in last 90 days
+  if (isNew || mainTab === "new") {
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    whereClause.createdAt = { gte: ninetyDaysAgo };
+  }
 
   // Get places and user statuses in parallel
   const [places, userStatuses] = await Promise.all([
     prisma.item.findMany({
       where: whereClause,
-      orderBy: { title: "asc" },
+      orderBy: [
+        { createdAt: "desc" }, // Newest first
+        { title: "asc" },
+      ],
+      take: 50, // Limit results
     }),
     prisma.userItemStatus.findMany({
       where: {
@@ -97,6 +180,10 @@ export async function GET(request: NextRequest) {
     neighborhood: place.neighborhood,
     hours: place.hours,
     imageUrl: place.imageUrl,
+    googleRating: place.googleRating,
+    googleReviewCount: place.googleReviewCount,
+    vibeTags: place.vibeTags || [],
+    companionTags: place.companionTags || [],
   }));
 
   const response: PlacesResponse = {

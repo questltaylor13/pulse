@@ -7,6 +7,7 @@ export { default as CreatorPicksSection } from "./CreatorPicksSection";
 export { default as CreatorSpotlightSection } from "./CreatorSpotlightSection";
 export { default as CategoryGridSection } from "./CategoryGridSection";
 export { default as NeighborhoodSection } from "./NeighborhoodSection";
+export { default as ExploreSection } from "./ExploreSection";
 export { default as StatsBar } from "./StatsBar";
 export { default as FinalCTASection } from "./FinalCTASection";
 export { default as LandingFooter } from "./LandingFooter";

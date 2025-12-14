@@ -13,6 +13,7 @@ import {
   getEventShareUrl,
   CalendarProvider,
 } from "@/lib/calendar";
+import { InviteFriendsModal } from "@/components/calendar";
 
 interface PlaceData {
   id: string;
@@ -206,13 +207,18 @@ export default function EventDetailClient({ event }: EventDetailClientProps) {
   const [status, setStatus] = useState<EventListStatus | null>(event.userStatus);
   const [isLoading, setIsLoading] = useState(false);
   const [showCalendarMenu, setShowCalendarMenu] = useState(false);
+  const [showPulseCalendarMenu, setShowPulseCalendarMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showGoingWithModal, setShowGoingWithModal] = useState(false);
   const [showCalendarNudge, setShowCalendarNudge] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState<"MORE" | "LESS" | null>(null);
   const [copied, setCopied] = useState(false);
+  const [calendarStatus, setCalendarStatus] = useState<"GOING" | "MAYBE" | null>(null);
+  const [addingToCalendar, setAddingToCalendar] = useState(false);
 
   const calendarMenuRef = useRef<HTMLDivElement>(null);
+  const pulseCalendarMenuRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
   // Close dropdowns when clicking outside
@@ -220,6 +226,9 @@ export default function EventDetailClient({ event }: EventDetailClientProps) {
     function handleClickOutside(event: MouseEvent) {
       if (calendarMenuRef.current && !calendarMenuRef.current.contains(event.target as Node)) {
         setShowCalendarMenu(false);
+      }
+      if (pulseCalendarMenuRef.current && !pulseCalendarMenuRef.current.contains(event.target as Node)) {
+        setShowPulseCalendarMenu(false);
       }
       if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
         setShowMoreMenu(false);
@@ -328,6 +337,29 @@ export default function EventDetailClient({ event }: EventDetailClientProps) {
       await submitEventFeedback(event.id, type);
     } catch (error) {
       console.error("Failed to submit feedback:", error);
+    }
+  };
+
+  const handleAddToPulseCalendar = async (newStatus: "GOING" | "MAYBE") => {
+    setShowPulseCalendarMenu(false);
+    setAddingToCalendar(true);
+    try {
+      const res = await fetch("/api/calendar/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId: event.id, calendarStatus: newStatus }),
+      });
+      if (res.ok) {
+        setCalendarStatus(newStatus);
+        // Also update the status to WANT if not already
+        if (status !== "WANT") {
+          setStatus("WANT");
+        }
+      }
+    } catch (error) {
+      console.error("Failed to add to calendar:", error);
+    } finally {
+      setAddingToCalendar(false);
     }
   };
 
@@ -693,16 +725,73 @@ export default function EventDetailClient({ event }: EventDetailClientProps) {
 
       {/* Action Buttons - Row 2: Secondary Actions */}
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        {/* Calendar Dropdown */}
+        {/* Add to My Calendar (Pulse) */}
+        <div className="relative" ref={pulseCalendarMenuRef}>
+          <button
+            onClick={() => setShowPulseCalendarMenu(!showPulseCalendarMenu)}
+            disabled={addingToCalendar}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition ${
+              calendarStatus
+                ? calendarStatus === "GOING"
+                  ? "bg-green-100 text-green-700 hover:bg-green-200"
+                  : "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                : "bg-primary text-white hover:bg-primary/90"
+            } disabled:opacity-50`}
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            {calendarStatus === "GOING" ? "Going ✓" : calendarStatus === "MAYBE" ? "Maybe" : "Add to My Calendar"}
+          </button>
+          {showPulseCalendarMenu && (
+            <div className="absolute top-full left-0 mt-2 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg z-50">
+              <button
+                onClick={() => handleAddToPulseCalendar("GOING")}
+                className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 ${
+                  calendarStatus === "GOING" ? "text-green-700 bg-green-50" : "text-slate-700"
+                }`}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Going
+              </button>
+              <button
+                onClick={() => handleAddToPulseCalendar("MAYBE")}
+                className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 ${
+                  calendarStatus === "MAYBE" ? "text-yellow-700 bg-yellow-50" : "text-slate-700"
+                }`}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Maybe
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Invite Friends */}
+        <button
+          onClick={() => setShowInviteModal(true)}
+          className="flex items-center gap-1.5 rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 transition"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          Invite Friends
+        </button>
+
+        {/* External Calendar Dropdown */}
         <div className="relative" ref={calendarMenuRef}>
           <button
             onClick={() => setShowCalendarMenu(!showCalendarMenu)}
             className="flex items-center gap-1.5 rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 transition"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            Add to Calendar
+            Export
           </button>
           {showCalendarMenu && (
             <div className="absolute top-full left-0 mt-2 w-44 rounded-lg border border-slate-200 bg-white py-1 shadow-lg z-50">
@@ -894,6 +983,14 @@ export default function EventDetailClient({ event }: EventDetailClientProps) {
           </div>
         </div>
       )}
+
+      {/* Invite Friends Modal */}
+      <InviteFriendsModal
+        eventId={event.id}
+        eventTitle={event.title}
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Category } from "@prisma/client";
@@ -8,8 +8,9 @@ import Link from "next/link";
 import EventCard from "@/components/EventCard";
 import SuggestedSection from "@/components/SuggestedSection";
 import FollowedCreatorPicksSection from "@/components/FollowedCreatorPicksSection";
-import InfluencerPicksSection from "@/components/InfluencerPicksSection";
 import NewInDenverSection from "@/components/NewInDenverSection";
+import SplitLayout from "@/components/layouts/SplitLayout";
+import FeedSidebar from "@/components/feed/FeedSidebar";
 import { ScoredEvent } from "@/lib/scoring";
 
 const CATEGORIES: { value: Category | "ALL"; label: string }[] = [
@@ -112,6 +113,17 @@ interface UserInteractions {
   };
 }
 
+interface FriendUser {
+  id: string;
+  name: string | null;
+  username: string | null;
+  profileImageUrl: string | null;
+}
+
+interface FriendsGoingMap {
+  [eventId: string]: FriendUser[];
+}
+
 export default function FeedPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -122,10 +134,14 @@ export default function FeedPage() {
   const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>([]);
   const [showNeighborhoodFilter, setShowNeighborhoodFilter] = useState(false);
+  // Lifestyle filters
+  const [dogFriendlyFilter, setDogFriendlyFilter] = useState(false);
+  const [soberFriendlyFilter, setSoberFriendlyFilter] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
   const [interactions, setInteractions] = useState<UserInteractions>({});
+  const [friendsGoing, setFriendsGoing] = useState<FriendsGoingMap>({});
 
   // Redirect if not authenticated or onboarding not complete
   useEffect(() => {
@@ -141,7 +157,14 @@ export default function FeedPage() {
     }
   }, [session, status, router]);
 
-  const fetchEvents = useCallback(async (pageNum: number, cat: Category | "ALL", neighborhoods: string[], subcategories: string[]) => {
+  const fetchEvents = useCallback(async (
+    pageNum: number,
+    cat: Category | "ALL",
+    neighborhoods: string[],
+    subcategories: string[],
+    dogFriendly: boolean,
+    soberFriendly: boolean
+  ) => {
     setLoading(true);
     setError(null);
     try {
@@ -157,6 +180,12 @@ export default function FeedPage() {
       }
       if (subcategories.length > 0) {
         params.set("subcategories", subcategories.join(","));
+      }
+      if (dogFriendly) {
+        params.set("dogFriendly", "true");
+      }
+      if (soberFriendly) {
+        params.set("soberFriendly", "true");
       }
 
       const response = await fetch(`/api/feed?${params}`);
@@ -174,6 +203,25 @@ export default function FeedPage() {
 
       setHasMore(data.hasMore);
       setTotal(data.total);
+
+      // Fetch friends going for these events
+      const eventIds = data.events.map((e: ScoredEvent) => e.id);
+      if (eventIds.length > 0) {
+        fetch("/api/friends/going", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ eventIds }),
+        })
+          .then((res) => res.json())
+          .then((friendsData) => {
+            if (friendsData.friendsGoing) {
+              setFriendsGoing((prev) => ({ ...prev, ...friendsData.friendsGoing }));
+            }
+          })
+          .catch(() => {
+            // Friends going is optional
+          });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -202,9 +250,9 @@ export default function FeedPage() {
 
   useEffect(() => {
     if (status === "loading" || !session?.user?.onboardingComplete) return;
-    fetchEvents(1, category, selectedNeighborhoods, selectedSubcategories);
+    fetchEvents(1, category, selectedNeighborhoods, selectedSubcategories, dogFriendlyFilter, soberFriendlyFilter);
     fetchInteractions();
-  }, [category, selectedNeighborhoods, selectedSubcategories, fetchEvents, fetchInteractions, session, status]);
+  }, [category, selectedNeighborhoods, selectedSubcategories, dogFriendlyFilter, soberFriendlyFilter, fetchEvents, fetchInteractions, session, status]);
 
   const handleCategoryChange = (newCategory: Category | "ALL") => {
     setCategory(newCategory);
@@ -243,7 +291,7 @@ export default function FeedPage() {
   const handleLoadMore = () => {
     const nextPage = page + 1;
     setPage(nextPage);
-    fetchEvents(nextPage, category, selectedNeighborhoods, selectedSubcategories);
+    fetchEvents(nextPage, category, selectedNeighborhoods, selectedSubcategories, dogFriendlyFilter, soberFriendlyFilter);
   };
 
   const handleSave = async (eventId: string) => {
@@ -302,6 +350,44 @@ export default function FeedPage() {
     }
   };
 
+  // Build active filters for sidebar
+  const activeFilters = useMemo(() => {
+    const filters: { type: "category" | "neighborhood" | "subcategory" | "lifestyle"; value: string; label: string }[] = [];
+
+    if (category !== "ALL") {
+      const categoryLabel = CATEGORIES.find((c) => c.value === category)?.label || category;
+      filters.push({ type: "category", value: category, label: categoryLabel });
+    }
+
+    selectedNeighborhoods.forEach((hood) => {
+      filters.push({ type: "neighborhood", value: hood, label: hood });
+    });
+
+    selectedSubcategories.forEach((sub) => {
+      const subLabel = SUBCATEGORIES[category]?.find((s) => s.value === sub)?.label || sub;
+      filters.push({ type: "subcategory", value: sub, label: subLabel });
+    });
+
+    if (dogFriendlyFilter) {
+      filters.push({ type: "lifestyle", value: "dogFriendly", label: "🐕 Dog Friendly" });
+    }
+
+    if (soberFriendlyFilter) {
+      filters.push({ type: "lifestyle", value: "soberFriendly", label: "🍹 Drinking Optional" });
+    }
+
+    return filters;
+  }, [category, selectedNeighborhoods, selectedSubcategories, dogFriendlyFilter, soberFriendlyFilter]);
+
+  const handleClearAllFilters = () => {
+    setCategory("ALL");
+    setSelectedNeighborhoods([]);
+    setSelectedSubcategories([]);
+    setDogFriendlyFilter(false);
+    setSoberFriendlyFilter(false);
+    setPage(1);
+  };
+
   // Show loading while checking auth
   if (status === "loading" || !session?.user?.onboardingComplete) {
     return (
@@ -311,7 +397,8 @@ export default function FeedPage() {
     );
   }
 
-  return (
+  // Main feed content
+  const mainContent = (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -321,97 +408,35 @@ export default function FeedPage() {
             {total} events happening in the next 2 weeks
           </p>
         </div>
-        <div className="flex gap-2">
-          <Link
-            href="/feed/following"
-            className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
+        <Link
+          href="/feed/following"
+          className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
+        >
+          <svg
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-              />
-            </svg>
-            Following
-          </Link>
-          <Link
-            href="/places"
-            className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
-          >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-              />
-            </svg>
-            Places
-          </Link>
-          <Link
-            href="/influencers"
-            className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
-          >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-              />
-            </svg>
-            Curators
-          </Link>
-          <Link
-            href="/saved"
-            className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
-          >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-              />
-            </svg>
-            Saved
-          </Link>
-        </div>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+            />
+          </svg>
+          Following
+        </Link>
       </div>
-
-      {/* New in Denver section */}
-      <NewInDenverSection />
 
       {/* Suggested for you section */}
       <SuggestedSection />
 
+      {/* New in Denver section */}
+      <NewInDenverSection />
+
       {/* Picks from curators you follow */}
       <FollowedCreatorPicksSection />
-
-      {/* Discover new curators */}
-      <InfluencerPicksSection />
 
       {/* Category Filter */}
       <div className="flex flex-wrap gap-2">
@@ -428,6 +453,38 @@ export default function FeedPage() {
             {cat.label}
           </button>
         ))}
+      </div>
+
+      {/* Lifestyle Filters */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => {
+            setDogFriendlyFilter(!dogFriendlyFilter);
+            setPage(1);
+          }}
+          className={`rounded-full px-4 py-2 text-sm font-medium transition flex items-center gap-1.5 ${
+            dogFriendlyFilter
+              ? "bg-amber-500 text-white"
+              : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+          }`}
+        >
+          <span>🐕</span>
+          Dog Friendly
+        </button>
+        <button
+          onClick={() => {
+            setSoberFriendlyFilter(!soberFriendlyFilter);
+            setPage(1);
+          }}
+          className={`rounded-full px-4 py-2 text-sm font-medium transition flex items-center gap-1.5 ${
+            soberFriendlyFilter
+              ? "bg-teal-500 text-white"
+              : "bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100"
+          }`}
+        >
+          <span>🍹</span>
+          Drinking Optional
+        </button>
       </div>
 
       {/* Subcategory Filter - shows when FOOD, RESTAURANT, or BARS is selected */}
@@ -641,6 +698,7 @@ export default function FeedPage() {
                 onUnsave={handleUnsave}
                 onLike={handleLike}
                 onUnlike={handleUnlike}
+                friendsGoing={friendsGoing[event.id]}
               />
             ))}
           </div>
@@ -660,5 +718,17 @@ export default function FeedPage() {
         </>
       )}
     </div>
+  );
+
+  // Sidebar content
+  const sidebarContent = (
+    <FeedSidebar
+      activeFilters={activeFilters}
+      onClearFilters={activeFilters.length > 0 ? handleClearAllFilters : undefined}
+    />
+  );
+
+  return (
+    <SplitLayout main={mainContent} sidebar={sidebarContent} />
   );
 }

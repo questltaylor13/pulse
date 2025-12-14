@@ -15,7 +15,7 @@ import {
 
 export interface PlaceData {
   id: string;
-  googleMapsUrl: string;
+  googleMapsUrl: string | null;
   googleRating: number | null;
   googleReviewCount: number | null;
   priceLevel: number | null;
@@ -23,6 +23,13 @@ export interface PlaceData {
   vibeTags: string[];
   companionTags: string[];
   pulseDescription: string | null;
+  primaryImageUrl?: string | null;
+  isDogFriendly?: boolean;
+  dogFriendlyNotes?: string | null;
+  isDrinkingOptional?: boolean;
+  isAlcoholFree?: boolean;
+  hasMocktailMenu?: boolean;
+  soberFriendlyNotes?: string | null;
 }
 
 export interface ScoredEvent {
@@ -68,6 +75,9 @@ export interface ScoreBreakdown {
   budgetScore: number;
   vibeScore: number;
   socialScore: number;
+  // Lifestyle scores
+  dogFriendlyScore: number;
+  soberFriendlyScore: number;
 }
 
 export type ReasonType =
@@ -88,7 +98,9 @@ export type ReasonType =
   | "SOLO_MATCH"
   | "VIBE_MATCH"
   | "SOCIAL_MATCH"
-  | "BUDGET_MATCH";
+  | "BUDGET_MATCH"
+  | "DOG_FRIENDLY_MATCH"
+  | "SOBER_FRIENDLY_MATCH";
 
 export interface UserPreferences {
   categories: Map<Category, { type: "LIKE" | "DISLIKE"; intensity: number }>;
@@ -145,6 +157,11 @@ export interface DetailedPreferencesData {
   vibeHighEnergy: number | null;
   // Social intent
   socialIntent: SocialIntent;
+  // Lifestyle preferences
+  hasDog: boolean;
+  dogFriendlyOnly: boolean;
+  preferSoberFriendly: boolean;
+  avoidBars: boolean;
 }
 
 export interface ScoringContext {
@@ -178,6 +195,12 @@ interface EventForScoring {
   appleRatingCount: number | null;
   place?: PlaceData | null;
   saveCount?: number; // For trending calculation
+  // Lifestyle fields
+  isDogFriendly?: boolean;
+  dogFriendlyDetails?: string | null;
+  isDrinkingOptional?: boolean;
+  isAlcoholFree?: boolean;
+  soberFriendlyNotes?: string | null;
 }
 
 // ============================================================================
@@ -767,6 +790,57 @@ function calculateSocialScore(
   return 0;
 }
 
+/**
+ * Calculate dog-friendly score (0 to +20 points)
+ * Boosts events that are dog-friendly when user has a dog
+ */
+function calculateDogFriendlyScore(
+  event: EventForScoring,
+  detailedPrefs?: DetailedPreferencesData
+): number {
+  if (!detailedPrefs || !detailedPrefs.hasDog) return 0;
+
+  if (event.isDogFriendly) {
+    // Strong boost for dog-friendly events
+    return 20;
+  }
+
+  // Check if place is dog-friendly
+  // (place data might include isDogFriendly field)
+  // For now, no penalty for non-dog-friendly events
+  return 0;
+}
+
+/**
+ * Calculate sober-friendly score (-15 to +20 points)
+ * Boosts events that are sober-friendly when user prefers them
+ * Penalizes bar-centric events when user avoids bars
+ */
+function calculateSoberFriendlyScore(
+  event: EventForScoring,
+  detailedPrefs?: DetailedPreferencesData
+): number {
+  if (!detailedPrefs) return 0;
+
+  let score = 0;
+
+  // Boost for sober-friendly events
+  if (detailedPrefs.preferSoberFriendly) {
+    if (event.isAlcoholFree) {
+      score += 20; // Strong boost for alcohol-free events
+    } else if (event.isDrinkingOptional) {
+      score += 15; // Good boost for drinking optional events
+    }
+  }
+
+  // Penalty for bar-centric events when user avoids bars
+  if (detailedPrefs.avoidBars && event.category === "BARS") {
+    score -= 15;
+  }
+
+  return score;
+}
+
 // ============================================================================
 // RECOMMENDATION REASON GENERATION
 // ============================================================================
@@ -964,6 +1038,24 @@ function generateRecommendationReason(
     });
   }
 
+  // Dog-friendly match reason
+  if (breakdown.dogFriendlyScore >= 15) {
+    reasons.push({
+      reason: "Bring your pup!",
+      reasonType: "DOG_FRIENDLY_MATCH",
+      priority: 9,
+    });
+  }
+
+  // Sober-friendly match reason
+  if (breakdown.soberFriendlyScore >= 15) {
+    reasons.push({
+      reason: "Great without drinking",
+      reasonType: "SOBER_FRIENDLY_MATCH",
+      priority: 8,
+    });
+  }
+
   // Sort by priority and return highest
   reasons.sort((a, b) => b.priority - a.priority);
 
@@ -1149,6 +1241,8 @@ export function scoreEvent(
         budgetScore: 0,
         vibeScore: 0,
         socialScore: 0,
+        dogFriendlyScore: 0,
+        soberFriendlyScore: 0,
       },
       recommendationReason: "",
       reasonType: "CATEGORY_MATCH",
@@ -1174,6 +1268,10 @@ export function scoreEvent(
   const vibeScore = calculateVibeScore(event, context.detailedPreferences);
   const socialScore = calculateSocialScore(event, context.detailedPreferences);
 
+  // Lifestyle preference scores
+  const dogFriendlyScore = calculateDogFriendlyScore(event, context.detailedPreferences);
+  const soberFriendlyScore = calculateSoberFriendlyScore(event, context.detailedPreferences);
+
   const breakdown: ScoreBreakdown = {
     categoryScore,
     timeScore,
@@ -1188,6 +1286,8 @@ export function scoreEvent(
     budgetScore,
     vibeScore,
     socialScore,
+    dogFriendlyScore,
+    soberFriendlyScore,
   };
 
   const totalScore =
@@ -1203,7 +1303,9 @@ export function scoreEvent(
     timingScore +
     budgetScore +
     vibeScore +
-    socialScore;
+    socialScore +
+    dogFriendlyScore +
+    soberFriendlyScore;
 
   const { reason, reasonType } = generateRecommendationReason(event, breakdown, context);
 
@@ -1382,6 +1484,10 @@ export function buildDetailedPreferencesData(
     vibeModerate: number | null;
     vibeHighEnergy: number | null;
     socialIntent: SocialIntent;
+    hasDog?: boolean;
+    dogFriendlyOnly?: boolean;
+    preferSoberFriendly?: boolean;
+    avoidBars?: boolean;
   } | null
 ): DetailedPreferencesData | undefined {
   if (!prefs) return undefined;
@@ -1402,6 +1508,10 @@ export function buildDetailedPreferencesData(
     vibeModerate: prefs.vibeModerate,
     vibeHighEnergy: prefs.vibeHighEnergy,
     socialIntent: prefs.socialIntent,
+    hasDog: prefs.hasDog ?? false,
+    dogFriendlyOnly: prefs.dogFriendlyOnly ?? false,
+    preferSoberFriendly: prefs.preferSoberFriendly ?? false,
+    avoidBars: prefs.avoidBars ?? false,
   };
 }
 

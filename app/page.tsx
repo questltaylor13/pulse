@@ -1,13 +1,8 @@
 import {
   HeroSection,
-  FeaturedEventsSection,
   HowItWorksSection,
-  NewPlacesSection,
   FeatureHighlightsSection,
-  CreatorPicksSection,
-  CreatorSpotlightSection,
-  CategoryGridSection,
-  NeighborhoodSection,
+  ExploreSection,
   StatsBar,
   FinalCTASection,
   LandingFooter,
@@ -27,7 +22,6 @@ async function getLandingData() {
     return res.json();
   } catch (error) {
     console.error("Error fetching landing data:", error);
-    // Return empty data structure as fallback
     return {
       featuredEvents: [],
       newPlaces: [],
@@ -46,35 +40,20 @@ export default async function HomePage() {
 
   return (
     <div className="-mx-4 -mt-10 sm:-mx-0">
-      {/* Hero */}
+      {/* Hero with rotating videos */}
       <HeroSection />
-
-      {/* Featured Events */}
-      <FeaturedEventsSection events={data.featuredEvents} />
 
       {/* How It Works */}
       <HowItWorksSection />
 
-      {/* New & Upcoming Places */}
-      <NewPlacesSection
-        newPlaces={data.newPlaces}
-        upcomingPlaces={data.upcomingPlaces}
+      {/* Explore by Category & Neighborhood (combined) */}
+      <ExploreSection
+        categoryCounts={data.categoryCounts}
+        neighborhoodCounts={data.neighborhoodCounts}
       />
 
       {/* Feature Highlights */}
       <FeatureHighlightsSection />
-
-      {/* Creator Picks */}
-      <CreatorPicksSection creators={data.featuredCreators} />
-
-      {/* Creator Spotlight */}
-      <CreatorSpotlightSection creator={data.spotlightCreator} />
-
-      {/* Category Grid */}
-      <CategoryGridSection categoryCounts={data.categoryCounts} />
-
-      {/* Neighborhoods */}
-      <NeighborhoodSection neighborhoodCounts={data.neighborhoodCounts} />
 
       {/* Stats Bar */}
       <StatsBar stats={data.stats} />

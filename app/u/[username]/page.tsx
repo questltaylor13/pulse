@@ -189,12 +189,20 @@ export default function ProfilePage() {
           {/* Avatar */}
           <div className="relative h-24 w-24 rounded-full overflow-hidden bg-slate-100 flex-shrink-0">
             {profile.profileImageUrl ? (
-              <Image
-                src={profile.profileImageUrl}
-                alt={profile.name || profile.username}
-                fill
-                className="object-cover"
-              />
+              profile.profileImageUrl.startsWith("http") ? (
+                <img
+                  src={profile.profileImageUrl}
+                  alt={profile.name || profile.username}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <Image
+                  src={profile.profileImageUrl}
+                  alt={profile.name || profile.username}
+                  fill
+                  className="object-cover"
+                />
+              )
             ) : (
               <div className="h-full w-full flex items-center justify-center text-slate-400 text-4xl font-bold">
                 {(profile.name || profile.username)[0].toUpperCase()}
@@ -287,12 +295,23 @@ export default function ProfilePage() {
               </button>
             )}
             {profile.isOwnProfile && (
-              <Link
-                href="/settings/profile"
-                className="inline-block rounded-md bg-slate-100 px-6 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 transition"
-              >
-                Edit Profile
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/settings/profile"
+                  className="inline-block rounded-md bg-slate-100 px-6 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 transition"
+                >
+                  Edit Profile
+                </Link>
+                <Link
+                  href="/calendar"
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-2 text-sm font-medium text-white hover:bg-primary/90 transition"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  My Calendar
+                </Link>
+              </div>
             )}
           </div>
         </div>

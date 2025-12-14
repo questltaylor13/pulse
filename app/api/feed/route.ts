@@ -31,21 +31,40 @@ export async function GET(request: NextRequest) {
   const categoryFilter = searchParams.get("category") as Category | null;
   const neighborhoodFilter = searchParams.get("neighborhoods")?.split(",").filter(Boolean) || [];
   const subcategoryFilter = searchParams.get("subcategories")?.split(",").filter(Boolean) || [];
+  const dogFriendlyFilter = searchParams.get("dogFriendly") === "true";
+  const soberFriendlyFilter = searchParams.get("soberFriendly") === "true";
 
-  // Get Denver city
-  const denver = await prisma.city.findUnique({
-    where: { slug: "denver" },
-  });
+  // Get Denver city and user preferences in parallel
+  const [denver, user] = await Promise.all([
+    prisma.city.findUnique({
+      where: { slug: "denver" },
+    }),
+    session?.user?.id
+      ? prisma.user.findUnique({
+          where: { id: session.user.id },
+          include: {
+            preferences: true,
+            detailedPreferences: true,
+          },
+        })
+      : null,
+  ]);
 
   if (!denver) {
     return NextResponse.json({ error: "City not found" }, { status: 404 });
   }
 
+  // Check user lifestyle preferences
+  const userWantsDogFriendly = user?.detailedPreferences?.dogFriendlyOnly ?? false;
+  const userPrefersSoberFriendly = user?.detailedPreferences?.preferSoberFriendly ?? false;
+  const userAvoidsBars = user?.detailedPreferences?.avoidBars ?? false;
+
   // Build the event query
   const now = new Date();
   const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-  const whereClause = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const whereClause: any = {
     cityId: denver.id,
     startTime: {
       gte: now,
@@ -57,7 +76,18 @@ export async function GET(request: NextRequest) {
     ...(subcategoryFilter.length > 0 && {
       tags: { hasSome: subcategoryFilter },
     }),
+    // Dog-friendly filter (from URL param or user preference)
+    ...((dogFriendlyFilter || userWantsDogFriendly) && { isDogFriendly: true }),
   };
+
+  // Sober-friendly filter - show events that are drinking optional OR alcohol-free
+  // Apply when: URL param is set, user prefers sober-friendly, or user avoids bars
+  if (soberFriendlyFilter || userPrefersSoberFriendly || userAvoidsBars) {
+    whereClause.OR = [
+      { isDrinkingOptional: true },
+      { isAlcoholFree: true },
+    ];
+  }
 
   // Get total count and events with place data
   const [total, events] = await Promise.all([
@@ -78,6 +108,12 @@ export async function GET(request: NextRequest) {
             companionTags: true,
             pulseDescription: true,
             primaryImageUrl: true,
+            isDogFriendly: true,
+            dogFriendlyNotes: true,
+            isDrinkingOptional: true,
+            isAlcoholFree: true,
+            hasMocktailMenu: true,
+            soberFriendlyNotes: true,
           },
         },
         creatorFeatures: {
@@ -100,39 +136,25 @@ export async function GET(request: NextRequest) {
   // Score events based on user preferences if logged in
   let scoredEvents: ScoredEvent[];
 
-  if (session?.user?.id) {
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: {
-        preferences: true,
-        detailedPreferences: true,
-      },
-    });
+  if (user) {
+    const preferences = buildUserPreferences(
+      user.preferences.map((p) => ({
+        category: p.category,
+        preferenceType: p.preferenceType,
+        intensity: p.intensity,
+      })),
+      user.relationshipStatus
+    );
 
-    if (user) {
-      const preferences = buildUserPreferences(
-        user.preferences.map((p) => ({
-          category: p.category,
-          preferenceType: p.preferenceType,
-          intensity: p.intensity,
-        })),
-        user.relationshipStatus
-      );
+    const detailedPreferences = buildDetailedPreferencesData(user.detailedPreferences);
 
-      const detailedPreferences = buildDetailedPreferencesData(user.detailedPreferences);
-
-      const context: ScoringContext = {
-        preferences,
-        detailedPreferences,
-      };
-      scoredEvents = scoreAndRankEvents(events, context);
-    } else {
-      // No user found, use neutral preferences
-      const context: ScoringContext = { preferences: buildUserPreferences([], null) };
-      scoredEvents = scoreAndRankEvents(events, context);
-    }
+    const context: ScoringContext = {
+      preferences,
+      detailedPreferences,
+    };
+    scoredEvents = scoreAndRankEvents(events, context);
   } else {
-    // Anonymous user, use neutral preferences
+    // Anonymous user or no user found, use neutral preferences
     const context: ScoringContext = { preferences: buildUserPreferences([], null) };
     scoredEvents = scoreAndRankEvents(events, context);
   }

@@ -215,6 +215,18 @@ model User {
   totalEventsAttended Int               @default(0)
   totalBadgesEarned   Int               @default(0)
 
+  // Labs (premium builder community)
+  labsRSVPs           LabsRSVP[]
+  labsSaves           LabsSave[]
+
+  // Friends
+  friendRequestsSent     Friendship[] @relation("FriendRequestsSent")
+  friendRequestsReceived Friendship[] @relation("FriendRequestsReceived")
+
+  // Calendar & Invitations
+  invitationsReceived    EventInvitation[] @relation("InvitationsReceived")
+  invitationsSent        EventInvitation[] @relation("InvitationsSent")
+
   @@index([username])
   @@index([referralCode])
   @@index([totalEventsAttended])
@@ -290,6 +302,19 @@ model Event {
   // What's included (for workshops, classes, etc.)
   whatsIncluded String[]
 
+  // ============================================================================
+  // DOG-FRIENDLY & SOBER-FRIENDLY FIELDS
+  // ============================================================================
+
+  // Dog-friendly
+  isDogFriendly       Boolean  @default(false)
+  dogFriendlyDetails  String?  // "Dogs allowed on patio only" or "Treats provided!"
+
+  // Sober-friendly / Drinking optional
+  isDrinkingOptional  Boolean  @default(false)  // Good mocktail menu, not centered on alcohol
+  isAlcoholFree       Boolean  @default(false)  // No alcohol at all
+  soberFriendlyNotes  String?  // "Great mocktail menu" or "Coffee-focused event"
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -307,6 +332,7 @@ model Event {
   creatorFeatures CreatorEventFeature[]   // Creators who are hosting/featuring this event
   groupEvents     GroupEvent[]            // Group event suggestions
   socialContent   EventSocialContent[]    // Embedded social media content
+  invitations     EventInvitation[]       // Calendar invitations
 
   @@index([cityId, startTime])
   @@index([category])
@@ -378,6 +404,9 @@ model Item {
   // Place-specific
   neighborhood  String?   // e.g., "RiNo", "LoHi", "LoDo"
   hours         String?   // e.g., "Mon-Fri 11am-10pm"
+  // Vibe/Companion tags (for places)
+  vibeTags      String[]  // e.g., ["date-night", "group", "solo", "family"]
+  companionTags String[]  // e.g., ["romantic", "adventurous", "relaxing"]
   // Location ratings
   googleRating      Float?    // Google Maps rating (0-5)
   googleRatingCount Int?      // Number of Google reviews
@@ -477,6 +506,13 @@ model UserEventInteraction {
   liked     Boolean?
   notes     String?
   goingWith GoingWith?        // Who the user is going with
+
+  // Calendar-specific fields
+  calendarStatus   CalendarStatus?  // User's response to this event
+  addedToCalendar  Boolean @default(false)  // Synced to external calendar
+  reminderSet      Boolean @default(false)
+  reminderTime     DateTime?
+
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
 
@@ -805,6 +841,18 @@ model DetailedPreferences {
   // Social Intent (single select)
   socialIntent      SocialIntent  @default(EITHER)
 
+  // ============================================================================
+  // LIFESTYLE PREFERENCES (Dog-Friendly & Sober-Friendly)
+  // ============================================================================
+
+  // Dog preferences
+  hasDog              Boolean  @default(false)  // User has a dog
+  dogFriendlyOnly     Boolean  @default(false)  // Only show dog-friendly options
+
+  // Sober-friendly preferences
+  preferSoberFriendly Boolean  @default(false)  // Prioritize non-drinking options
+  avoidBars           Boolean  @default(false)  // Don't show bar-focused events
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -963,6 +1011,23 @@ model Place {
   occasionTags    String[]   // birthday, first-date, work-hang
   goodForTags     String[]   // quick-bite, linger-friendly, active
   pulseDescription String?   // AI-generated summary
+
+  // ============================================================================
+  // DOG-FRIENDLY & SOBER-FRIENDLY FIELDS
+  // ============================================================================
+
+  // Dog-friendly
+  isDogFriendly       Boolean  @default(false)
+  dogFriendlyAreas    String[] // ["patio", "indoor", "full-venue"]
+  dogAmenities        String[] // ["water-bowls", "treats", "dog-menu", "off-leash-area"]
+  dogFriendlyNotes    String?  // "Dogs welcome on heated patio year-round"
+
+  // Sober-friendly / Drinking optional
+  isDrinkingOptional  Boolean  @default(false)
+  isAlcoholFree       Boolean  @default(false)
+  hasMocktailMenu     Boolean  @default(false)
+  naOptions           String[] // ["mocktails", "na-beer", "na-wine", "craft-sodas", "coffee", "tea"]
+  soberFriendlyNotes  String?
 
   // ============================================================================
   // NEW & UPCOMING PLACES FIELDS
@@ -1124,9 +1189,10 @@ model Group {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  members      GroupMember[]
-  groupEvents  GroupEvent[]
-  groupPlaces  GroupPlace[]
+  members          GroupMember[]
+  groupEvents      GroupEvent[]
+  groupPlaces      GroupPlace[]
+  eventInvitations EventInvitation[]
 
   @@index([joinCode])
   @@index([isPublic])
@@ -1196,4 +1262,191 @@ model GroupPlace {
   @@unique([groupId, placeId])
   @@index([groupId, status])
   @@index([placeId])
+}
+
+// ============================================================================
+// PULSE LABS - Premium Builder Community
+// ============================================================================
+
+enum LabsItemType {
+  COWORKING_SESSION    // Work alongside builders
+  STARTUP_EVENT        // Pitch nights, founder dinners, hackathons
+  BUILDER_MEETUP       // Casual builder hangouts
+  GET_INVOLVED         // Volunteer, mentor, join opportunities
+  WORKSHOP             // Skill-building sessions
+}
+
+enum LabsItemStatus {
+  ACTIVE
+  FULL
+  CANCELLED
+  COMPLETED
+}
+
+enum RSVPStatus {
+  GOING
+  MAYBE
+  CANCELLED
+}
+
+// Friendship status for friend requests
+enum FriendshipStatus {
+  PENDING   // Request sent, waiting for response
+  ACCEPTED  // Friends!
+  DECLINED  // Request rejected
+  BLOCKED   // User blocked
+}
+
+// Calendar status for user's response to events
+enum CalendarStatus {
+  GOING     // Confirmed going
+  MAYBE     // Tentative
+  DECLINED  // Not going
+}
+
+// Invitation status for event invitations
+enum InvitationStatus {
+  PENDING   // Waiting for response
+  ACCEPTED  // Accepted the invitation
+  DECLINED  // Declined the invitation
+  MAYBE     // Maybe/tentative
+}
+
+// Labs items - premium content for builders
+model LabsItem {
+  id            String         @id @default(cuid())
+
+  // Content
+  title         String
+  description   String         @db.Text
+  type          LabsItemType
+
+  // When & Where (optional - some items are ongoing)
+  startTime     DateTime?
+  endTime       DateTime?
+  venueName     String?
+  address       String?
+  neighborhood  String?
+  isVirtual     Boolean        @default(false)
+  virtualLink   String?
+
+  // Metadata
+  tags          String[]
+  imageUrl      String?
+  hostName      String?        // "Hosted by Denver Founders"
+  hostImageUrl  String?
+  capacity      Int?           // Max attendees
+  spotsLeft     Int?           // Remaining spots
+
+  // Status
+  status        LabsItemStatus @default(ACTIVE)
+
+  // Tracking
+  citySlug      String         @default("denver")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // Relations
+  rsvps         LabsRSVP[]
+  saves         LabsSave[]
+
+  @@index([type])
+  @@index([status])
+  @@index([startTime])
+  @@index([citySlug])
+}
+
+// User RSVPs for Labs items
+model LabsRSVP {
+  id          String     @id @default(cuid())
+  userId      String
+  labsItemId  String
+  status      RSVPStatus @default(GOING)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  labsItem    LabsItem   @relation(fields: [labsItemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, labsItemId])
+  @@index([userId])
+  @@index([labsItemId])
+}
+
+// User saves for Labs items
+model LabsSave {
+  id          String   @id @default(cuid())
+  userId      String
+  labsItemId  String
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  labsItem    LabsItem @relation(fields: [labsItemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, labsItemId])
+  @@index([userId])
+  @@index([labsItemId])
+}
+
+// ============================================================================
+// FRIENDS SYSTEM
+// ============================================================================
+
+// Friend relationships between users
+model Friendship {
+  id          String           @id @default(cuid())
+
+  // The user who sent the request
+  requesterId String
+  requester   User             @relation("FriendRequestsSent", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  // The user who received the request
+  addresseeId String
+  addressee   User             @relation("FriendRequestsReceived", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  status      FriendshipStatus @default(PENDING)
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([requesterId, addresseeId])
+  @@index([requesterId, status])
+  @@index([addresseeId, status])
+}
+
+// ============================================================================
+// CALENDAR & EVENT INVITATIONS
+// ============================================================================
+
+// Event invitations from friends or groups
+model EventInvitation {
+  id          String           @id @default(cuid())
+
+  // Who's being invited
+  inviteeId   String
+  invitee     User             @relation("InvitationsReceived", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  // What event
+  eventId     String
+  event       Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // Who sent it (optional - could be from a group)
+  inviterId   String?
+  inviter     User?            @relation("InvitationsSent", fields: [inviterId], references: [id], onDelete: SetNull)
+
+  // Or from a group
+  groupId     String?
+  group       Group?           @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  // Invitation details
+  message     String?          // "Hey, want to come to this with us?"
+  status      InvitationStatus @default(PENDING)
+  respondedAt DateTime?
+
+  createdAt   DateTime         @default(now())
+
+  @@index([inviteeId, status])
+  @@index([eventId])
+  @@index([inviterId])
+  @@index([groupId])
 }

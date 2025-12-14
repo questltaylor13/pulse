@@ -4,9 +4,13 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
+import SplitLayout from "@/components/layouts/SplitLayout";
+import GroupActivityCard from "@/components/community/GroupActivityCard";
+import TrendingSection from "@/components/community/TrendingSection";
+import YourStatsSidebar from "@/components/community/YourStatsSidebar";
 import LeaderboardTable from "@/components/leaderboards/LeaderboardTable";
 import BadgeCard from "@/components/badges/BadgeCard";
+import { Category } from "@prisma/client";
 
 interface UserStats {
   rank: number | null;
@@ -45,6 +49,49 @@ interface Badge {
   requirementValue: number;
 }
 
+interface Group {
+  id: string;
+  name: string;
+  emoji: string;
+  memberCount: number;
+  members: {
+    user: {
+      id: string;
+      name: string | null;
+      profileImageUrl: string | null;
+    };
+  }[];
+  groupEvents: {
+    event: {
+      id: string;
+      title: string;
+      startTime: Date | string;
+    };
+  }[];
+}
+
+interface TrendingEvent {
+  id: string;
+  title: string;
+  category: Category;
+  venueName: string;
+  neighborhood: string | null;
+  startTime: Date | string;
+  imageUrl: string | null;
+  saveCount: number;
+}
+
+interface HotPlace {
+  id: string;
+  title: string;
+  category: Category;
+  neighborhood: string | null;
+  imageUrl: string | null;
+  isNew: boolean;
+  isUpcoming: boolean;
+  isSoftOpen: boolean;
+}
+
 export default function CommunityPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -52,6 +99,9 @@ export default function CommunityPage() {
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [topLeaderboard, setTopLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [recentBadges, setRecentBadges] = useState<Badge[]>([]);
+  const [userGroups, setUserGroups] = useState<Group[]>([]);
+  const [trendingEvents, setTrendingEvents] = useState<TrendingEvent[]>([]);
+  const [hotPlaces, setHotPlaces] = useState<HotPlace[]>([]);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -64,14 +114,16 @@ export default function CommunityPage() {
 
   const fetchData = async () => {
     try {
-      const [leaderboardRes, badgesRes] = await Promise.all([
+      const [leaderboardRes, badgesRes, groupsRes, trendingRes] = await Promise.all([
         fetch("/api/leaderboards?limit=5"),
         fetch("/api/badges?filter=earned"),
+        fetch("/api/groups"),
+        fetch("/api/trending?limit=6"),
       ]);
 
       if (leaderboardRes.ok) {
         const data = await leaderboardRes.json();
-        setTopLeaderboard(data.entries);
+        setTopLeaderboard(data.entries || []);
         if (data.currentUserRank) {
           setUserStats({
             rank: data.currentUserRank,
@@ -85,14 +137,23 @@ export default function CommunityPage() {
 
       if (badgesRes.ok) {
         const data = await badgesRes.json();
-        setRecentBadges(data.badges.slice(0, 4));
+        setRecentBadges(data.badges?.slice(0, 4) || []);
         if (userStats) {
           setUserStats((prev) =>
-            prev
-              ? { ...prev, totalBadgesEarned: data.badges.length }
-              : null
+            prev ? { ...prev, totalBadgesEarned: data.badges?.length || 0 } : null
           );
         }
+      }
+
+      if (groupsRes.ok) {
+        const data = await groupsRes.json();
+        setUserGroups(data.groups || []);
+      }
+
+      if (trendingRes.ok) {
+        const data = await trendingRes.json();
+        setTrendingEvents(data.events || []);
+        setHotPlaces(data.places || []);
       }
     } catch (error) {
       console.error("Failed to fetch community data:", error);
@@ -109,98 +170,57 @@ export default function CommunityPage() {
     );
   }
 
-  return (
+  // Main content
+  const mainContent = (
     <div className="space-y-8">
       {/* Hero Section */}
-      <div className="bg-gradient-to-r from-primary/10 to-purple-100 rounded-2xl p-6 md:p-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">
-              Community Hub
-            </h1>
-            <p className="text-slate-600">
-              Compete, earn badges, and explore Denver together
-            </p>
-          </div>
-
-          {/* Quick Stats */}
-          <div className="flex gap-4 md:gap-6">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-primary">
-                {userStats?.rank ? `#${userStats.rank}` : "--"}
-              </p>
-              <p className="text-sm text-slate-500">Your Rank</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-slate-900">
-                {recentBadges.length}
-              </p>
-              <p className="text-sm text-slate-500">Badges Earned</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-slate-900">
-                {userStats?.score?.toLocaleString() || 0}
-              </p>
-              <p className="text-sm text-slate-500">Points</p>
-            </div>
-          </div>
-        </div>
+      <div className="bg-gradient-to-r from-primary/10 via-purple-50 to-pink-50 rounded-2xl p-6 md:p-8">
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">
+          What&apos;s Happening in Denver
+        </h1>
+        <p className="text-slate-600">
+          See what your friends and the community are exploring
+        </p>
       </div>
 
-      {/* Quick Links */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <Link
-          href="/community/leaderboards"
-          className="card hover:shadow-lg transition-shadow text-center"
-        >
-          <div className="text-3xl mb-2">🏆</div>
-          <h3 className="font-semibold text-slate-900">Leaderboards</h3>
-          <p className="text-sm text-slate-500">See top explorers</p>
-        </Link>
-        <Link
-          href="/community/badges"
-          className="card hover:shadow-lg transition-shadow text-center"
-        >
-          <div className="text-3xl mb-2">🎖️</div>
-          <h3 className="font-semibold text-slate-900">Badges</h3>
-          <p className="text-sm text-slate-500">View all badges</p>
-        </Link>
-        <Link
-          href="/groups"
-          className="card hover:shadow-lg transition-shadow text-center"
-        >
-          <div className="text-3xl mb-2">👥</div>
-          <h3 className="font-semibold text-slate-900">Groups</h3>
-          <p className="text-sm text-slate-500">Explore with friends</p>
-        </Link>
-        <Link
-          href="/influencers"
-          className="card hover:shadow-lg transition-shadow text-center"
-        >
-          <div className="text-3xl mb-2">✨</div>
-          <h3 className="font-semibold text-slate-900">Creators</h3>
-          <p className="text-sm text-slate-500">Follow tastemakers</p>
-        </Link>
-      </div>
+      {/* Section 1: Your Groups (Social First!) */}
+      <section>
+        <GroupActivityCard groups={userGroups} />
+      </section>
 
-      {/* Leaderboard Preview */}
-      <div className="card">
+      {/* Section 2: Trending Events & Hot Places */}
+      <section>
+        <TrendingSection events={trendingEvents} places={hotPlaces} />
+      </section>
+
+      {/* Section 3: Leaderboard Preview (Moved Down) */}
+      <section className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-900">
-            This Month&apos;s Top Explorers
+          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+            <span>🏆</span>
+            Denver&apos;s Top Explorers
           </h2>
           <Link
             href="/community/leaderboards"
             className="text-sm text-primary hover:text-primary/80 font-medium"
           >
-            View All
+            View Full Leaderboard
           </Link>
         </div>
+
         {topLeaderboard.length > 0 ? (
-          <LeaderboardTable
-            entries={topLeaderboard}
-            currentUserId={session?.user?.id}
-          />
+          <>
+            <LeaderboardTable
+              entries={topLeaderboard.slice(0, 5)}
+              currentUserId={session?.user?.id}
+            />
+            {userStats?.rank && userStats.rank > 5 && (
+              <div className="mt-4 p-3 bg-slate-50 rounded-lg text-center text-sm text-slate-600">
+                You&apos;re #{userStats.rank} this month
+                {userStats.rank <= 20 && " — Keep going! 💪"}
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-8">
             <p className="text-slate-500">
@@ -208,21 +228,23 @@ export default function CommunityPage() {
             </p>
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Recent Badges */}
-      <div className="card">
+      {/* Section 4: Badges You're Close To */}
+      <section className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Your Recent Badges
+          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+            <span>🎖️</span>
+            Your Badges
           </h2>
           <Link
             href="/community/badges"
             className="text-sm text-primary hover:text-primary/80 font-medium"
           >
-            View All
+            View All Badges
           </Link>
         </div>
+
         {recentBadges.length > 0 ? (
           <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
             {recentBadges.map((badge) => (
@@ -242,18 +264,103 @@ export default function CommunityPage() {
           </div>
         ) : (
           <div className="text-center py-8">
-            <p className="text-slate-500">
+            <p className="text-slate-500 mb-4">
               No badges earned yet. Keep exploring to earn your first badge!
             </p>
             <Link
               href="/feed"
-              className="inline-block mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+              className="inline-block px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition text-sm font-medium"
             >
               Browse Events
             </Link>
           </div>
         )}
+      </section>
+    </div>
+  );
+
+  // Sidebar content
+  const sidebarContent = (
+    <div className="space-y-6">
+      {/* Your Stats */}
+      <YourStatsSidebar
+        rank={userStats?.rank || null}
+        score={userStats?.score || null}
+        badgesEarned={recentBadges.length}
+        currentStreak={userStats?.currentStreak || 0}
+      />
+
+      {/* Quick Links */}
+      <div className="card">
+        <h3 className="text-lg font-semibold text-slate-900 mb-4">Explore</h3>
+        <div className="space-y-2">
+          <Link
+            href="/community/leaderboards"
+            className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-slate-50 transition"
+          >
+            <span className="text-xl">🏆</span>
+            <div>
+              <p className="font-medium text-slate-900 text-sm">Leaderboards</p>
+              <p className="text-xs text-slate-500">See top explorers</p>
+            </div>
+          </Link>
+          <Link
+            href="/community/badges"
+            className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-slate-50 transition"
+          >
+            <span className="text-xl">🎖️</span>
+            <div>
+              <p className="font-medium text-slate-900 text-sm">Badges</p>
+              <p className="text-xs text-slate-500">View all badges</p>
+            </div>
+          </Link>
+          <Link
+            href="/groups"
+            className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-slate-50 transition"
+          >
+            <span className="text-xl">👥</span>
+            <div>
+              <p className="font-medium text-slate-900 text-sm">Groups</p>
+              <p className="text-xs text-slate-500">Plan with friends</p>
+            </div>
+          </Link>
+          <Link
+            href="/friends"
+            className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-slate-50 transition"
+          >
+            <span className="text-xl">🤝</span>
+            <div>
+              <p className="font-medium text-slate-900 text-sm">Friends</p>
+              <p className="text-xs text-slate-500">Find & connect</p>
+            </div>
+          </Link>
+          <Link
+            href="/influencers"
+            className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-slate-50 transition"
+          >
+            <span className="text-xl">✨</span>
+            <div>
+              <p className="font-medium text-slate-900 text-sm">Creators</p>
+              <p className="text-xs text-slate-500">Follow tastemakers</p>
+            </div>
+          </Link>
+        </div>
+      </div>
+
+      {/* Invite Friends CTA */}
+      <div className="card bg-gradient-to-br from-primary/5 to-purple-50">
+        <h3 className="font-semibold text-slate-900 mb-2">Invite Friends</h3>
+        <p className="text-sm text-slate-600 mb-4">
+          Explore Denver together! Share Pulse with friends.
+        </p>
+        <button className="w-full px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition text-sm font-medium">
+          Share Invite Link
+        </button>
       </div>
     </div>
+  );
+
+  return (
+    <SplitLayout main={mainContent} sidebar={sidebarContent} />
   );
 }

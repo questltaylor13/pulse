@@ -11,7 +11,16 @@ import {
   getEventShareUrl,
   CalendarProvider,
 } from "@/lib/calendar";
-import AddToGroupDropdown from "@/components/AddToGroupDropdown";
+import ScoreBadge from "@/components/ScoreBadge";
+import { FriendsGoingBadge } from "@/components/FriendsGoingBadge";
+import { DogFriendlyBadge, SoberFriendlyBadge } from "@/components/badges";
+
+interface FriendUser {
+  id: string;
+  name: string | null;
+  username: string | null;
+  profileImageUrl: string | null;
+}
 
 interface UserList {
   id: string;
@@ -34,7 +43,7 @@ interface CreatorFeature {
 
 interface PlaceData {
   id: string;
-  googleMapsUrl: string;
+  googleMapsUrl?: string | null;
   googleRating?: number | null;
   googleReviewCount?: number | null;
   priceLevel?: number | null;
@@ -42,6 +51,13 @@ interface PlaceData {
   vibeTags?: string[];
   companionTags?: string[];
   pulseDescription?: string | null;
+  primaryImageUrl?: string | null;
+  isDogFriendly?: boolean;
+  dogFriendlyNotes?: string | null;
+  isDrinkingOptional?: boolean;
+  isAlcoholFree?: boolean;
+  hasMocktailMenu?: boolean;
+  soberFriendlyNotes?: string | null;
 }
 
 interface ScoreBreakdown {
@@ -105,21 +121,30 @@ interface EventCardProps {
   onUnlike?: (eventId: string) => Promise<void>;
   onFeedback?: (eventId: string, type: "MORE" | "LESS" | "HIDE") => Promise<void>;
   creatorFeatures?: CreatorFeature[];
+  compact?: boolean;
+  friendsGoing?: FriendUser[];
+  // Dog-friendly and sober-friendly
+  isDogFriendly?: boolean;
+  dogFriendlyDetails?: string | null;
+  isDrinkingOptional?: boolean;
+  isAlcoholFree?: boolean;
+  soberFriendlyNotes?: string | null;
 }
 
-const CATEGORY_COLORS: Record<Category, string> = {
-  ART: "bg-purple-100 text-purple-700",
-  LIVE_MUSIC: "bg-pink-100 text-pink-700",
-  BARS: "bg-amber-100 text-amber-700",
-  FOOD: "bg-orange-100 text-orange-700",
-  COFFEE: "bg-yellow-100 text-yellow-700",
-  OUTDOORS: "bg-green-100 text-green-700",
-  FITNESS: "bg-blue-100 text-blue-700",
-  SEASONAL: "bg-red-100 text-red-700",
-  POPUP: "bg-indigo-100 text-indigo-700",
-  OTHER: "bg-slate-100 text-slate-700",
-  RESTAURANT: "bg-orange-100 text-orange-700",
-  ACTIVITY_VENUE: "bg-cyan-100 text-cyan-700",
+// Category emoji mapping
+const CATEGORY_EMOJI: Record<Category, string> = {
+  ART: "🎨",
+  LIVE_MUSIC: "🎵",
+  BARS: "🍺",
+  FOOD: "🍽️",
+  COFFEE: "☕",
+  OUTDOORS: "🏔️",
+  FITNESS: "💪",
+  SEASONAL: "🎄",
+  POPUP: "✨",
+  OTHER: "📍",
+  RESTAURANT: "🍽️",
+  ACTIVITY_VENUE: "🎯",
 };
 
 const CATEGORY_LABELS: Record<Category, string> = {
@@ -144,54 +169,29 @@ const GOING_WITH_OPTIONS: { value: GoingWith; label: string; icon: string }[] = 
   { value: "FAMILY", label: "Family", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
 ];
 
-function formatDate(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("en-US", {
+function formatDateTime(start: Date | string, end?: Date | string | null): string {
+  const startDate = typeof start === "string" ? new Date(start) : start;
+  const dateStr = startDate.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
-}
-
-function formatTime(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleTimeString("en-US", {
+  const startTime = startDate.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
   });
-}
 
-function getCombinedRating(
-  googleRating?: number | null,
-  appleRating?: number | null
-): number | null {
-  if (googleRating && appleRating) {
-    return Math.round(((googleRating + appleRating) / 2) * 10) / 10;
+  if (end) {
+    const endDate = typeof end === "string" ? new Date(end) : end;
+    const endTime = endDate.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    return `${dateStr} • ${startTime} - ${endTime}`;
   }
-  return googleRating || appleRating || null;
-}
 
-// Preference match badge config
-const PREFERENCE_BADGES: Record<ReasonType, { emoji: string; label: string; color: string } | null> = {
-  DATE_NIGHT_MATCH: { emoji: "💕", label: "Date Night", color: "bg-pink-100 text-pink-700" },
-  FRIENDS_MATCH: { emoji: "👯", label: "Friends", color: "bg-blue-100 text-blue-700" },
-  FAMILY_MATCH: { emoji: "👨‍👩‍👧", label: "Family", color: "bg-green-100 text-green-700" },
-  SOLO_MATCH: { emoji: "🧘", label: "Solo", color: "bg-purple-100 text-purple-700" },
-  VIBE_MATCH: { emoji: "✨", label: "Your Vibe", color: "bg-amber-100 text-amber-700" },
-  SOCIAL_MATCH: { emoji: "🤝", label: "Social", color: "bg-cyan-100 text-cyan-700" },
-  BUDGET_MATCH: { emoji: "💰", label: "In Budget", color: "bg-emerald-100 text-emerald-700" },
-  GOING_WITH_MATCH: null,
-  CATEGORY_MATCH: null,
-  NEIGHBORHOOD_MATCH: null,
-  SIMILAR_TASTE: null,
-  TRENDING: null,
-  WEEKEND_PREFERENCE: null,
-  TIME_PREFERENCE: null,
-  VENUE_FAVORITE: null,
-  EXPLORATION: null,
-  HIGH_RATED: null,
-  FREE_EVENT: null,
-};
+  return `${dateStr} • ${startTime}`;
+}
 
 export default function EventCard({
   id,
@@ -208,16 +208,11 @@ export default function EventCard({
   sourceUrl,
   imageUrl,
   score,
-  scoreBreakdown,
-  reasonType,
   googleRating,
   googleRatingCount,
-  appleRating,
-  appleRatingCount,
   place,
   isSaved: initialSaved = false,
   isLiked: initialLiked = false,
-  recommendationReason,
   isExplorationPick,
   isTrendingPick,
   onSave,
@@ -226,35 +221,37 @@ export default function EventCard({
   onUnlike,
   onFeedback,
   creatorFeatures,
+  compact = false,
+  friendsGoing,
+  isDogFriendly,
+  dogFriendlyDetails,
+  isDrinkingOptional,
+  isAlcoholFree,
+  soberFriendlyNotes,
 }: EventCardProps) {
   const [isSaved, setIsSaved] = useState(initialSaved);
   const [isLiked, setIsLiked] = useState(initialLiked);
   const [isLoading, setIsLoading] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
-  const [showListDropdown, setShowListDropdown] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [showCalendarMenu, setShowCalendarMenu] = useState(false);
   const [showGoingWithModal, setShowGoingWithModal] = useState(false);
+  const [showCalendarSubmenu, setShowCalendarSubmenu] = useState(false);
   const [lists, setLists] = useState<UserList[]>([]);
   const [listsLoading, setListsLoading] = useState(false);
+  const [showListSubmenu, setShowListSubmenu] = useState(false);
   const [addedToList, setAddedToList] = useState<string | null>(null);
-  const [feedbackGiven, setFeedbackGiven] = useState<"MORE" | "LESS" | null>(null);
   const [copied, setCopied] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [calendarStatus, setCalendarStatus] = useState<"GOING" | "MAYBE" | null>(null);
+  const [addingToCalendar, setAddingToCalendar] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
-  const calendarMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdowns when clicking outside
+  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowListDropdown(false);
-      }
       if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
         setShowMoreMenu(false);
-      }
-      if (calendarMenuRef.current && !calendarMenuRef.current.contains(event.target as Node)) {
-        setShowCalendarMenu(false);
+        setShowCalendarSubmenu(false);
+        setShowListSubmenu(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -289,7 +286,8 @@ export default function EventCard({
         setAddedToList(data.action === "already_added" ? "Already in list" : "Added!");
         setTimeout(() => {
           setAddedToList(null);
-          setShowListDropdown(false);
+          setShowMoreMenu(false);
+          setShowListSubmenu(false);
         }, 1500);
       }
     } catch (error) {
@@ -297,13 +295,7 @@ export default function EventCard({
     }
   };
 
-  const handleListDropdownToggle = () => {
-    const newState = !showListDropdown;
-    setShowListDropdown(newState);
-    if (newState) fetchLists();
-  };
-
-  const handleSaveToggle = async () => {
+  const handleQuickSave = async () => {
     if (isLoading) return;
     setIsLoading(true);
     try {
@@ -311,37 +303,16 @@ export default function EventCard({
         await onUnsave?.(id);
         setIsSaved(false);
       } else {
-        // Show going with modal first
-        setShowGoingWithModal(true);
+        await onSave?.(id);
+        setIsSaved(true);
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSaveWithGoingWith = async (goingWith: GoingWith) => {
-    setShowGoingWithModal(false);
-    setIsLoading(true);
-    try {
-      await onSave?.(id, goingWith);
-      setIsSaved(true);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleQuickSave = async () => {
-    if (isLoading) return;
-    setIsLoading(true);
-    try {
-      await onSave?.(id);
-      setIsSaved(true);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleLikeToggle = async () => {
+    setShowMoreMenu(false);
     if (isLoading) return;
     setIsLoading(true);
     try {
@@ -361,15 +332,13 @@ export default function EventCard({
     setShowMoreMenu(false);
     if (type === "HIDE") {
       setIsHidden(true);
-    } else {
-      setFeedbackGiven(type);
-      setTimeout(() => setFeedbackGiven(null), 2000);
     }
     await onFeedback?.(id, type);
   };
 
   const handleAddToCalendar = (provider: CalendarProvider) => {
-    setShowCalendarMenu(false);
+    setShowMoreMenu(false);
+    setShowCalendarSubmenu(false);
     const startDate = typeof startTime === "string" ? new Date(startTime) : startTime;
     const endDate = endTime
       ? typeof endTime === "string"
@@ -390,7 +359,32 @@ export default function EventCard({
     );
   };
 
+  const handleAddToPulseCalendar = async (status: "GOING" | "MAYBE") => {
+    setShowMoreMenu(false);
+    setShowCalendarSubmenu(false);
+    setAddingToCalendar(true);
+    try {
+      const res = await fetch("/api/calendar/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId: id, calendarStatus: status }),
+      });
+      if (res.ok) {
+        setCalendarStatus(status);
+        // Also mark as saved if not already
+        if (!isSaved) {
+          setIsSaved(true);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to add to calendar:", error);
+    } finally {
+      setAddingToCalendar(false);
+    }
+  };
+
   const handleShare = async () => {
+    setShowMoreMenu(false);
     const url = getEventShareUrl(id);
     const shared = await shareEvent({
       title,
@@ -405,6 +399,7 @@ export default function EventCard({
   };
 
   const handleCopyLink = async () => {
+    setShowMoreMenu(false);
     const url = getEventShareUrl(id);
     const success = await copyEventLink(url);
     if (success) {
@@ -415,8 +410,8 @@ export default function EventCard({
 
   if (isHidden) {
     return (
-      <article className="card bg-slate-50 text-center py-8">
-        <p className="text-slate-500 mb-2">Event hidden</p>
+      <article className="bg-white rounded-xl border border-slate-100 text-center py-6">
+        <p className="text-slate-500 text-sm mb-2">Event hidden</p>
         <button
           onClick={() => setIsHidden(false)}
           className="text-sm text-primary hover:underline"
@@ -427,43 +422,41 @@ export default function EventCard({
     );
   }
 
-  // Get the best available image (event image, place image, or fallback gradient)
-  const displayImageUrl = imageUrl || place?.pulseDescription; // place.primaryImageUrl would need to be added to PlaceData
+  // Get best rating to display (prefer Google)
+  const displayRating = googleRating || place?.googleRating;
+  const displayRatingCount = googleRatingCount || place?.googleReviewCount;
 
   return (
-    <article className="card group relative overflow-hidden transition hover:shadow-md">
-      {/* Event Image */}
+    <article className="bg-white rounded-xl border border-slate-100 hover:shadow-md transition-shadow relative">
+      {/* Image - Compact height */}
       {imageUrl && (
-        <Link href={`/events/${id}`} className="block -mx-4 -mt-4 mb-4">
-          <div className="relative h-40 overflow-hidden">
+        <Link href={`/events/${id}`} className="block">
+          <div className={`relative overflow-hidden ${compact ? "h-28" : "h-36"}`}>
             <Image
               src={imageUrl}
               alt={title}
               fill
-              className="object-cover transition group-hover:scale-105"
+              className="object-cover transition-transform hover:scale-105"
             />
-            {/* Gradient overlay for text readability */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-
-            {/* Special badges - positioned on image */}
+            {/* Special badges on image */}
             {(isExplorationPick || isTrendingPick || (creatorFeatures && creatorFeatures.length > 0)) && (
-              <div className="absolute top-0 right-0">
+              <div className="absolute top-2 right-2">
                 {creatorFeatures && creatorFeatures.length > 0 && (
-                  <span className="bg-gradient-to-r from-rose-500 to-pink-500 text-white text-xs font-medium px-2 py-1 rounded-bl-lg flex items-center gap-1">
+                  <span className="bg-gradient-to-r from-rose-500 to-pink-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1">
                     <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                     </svg>
-                    Creator Pick
+                    Pick
                   </span>
                 )}
                 {isTrendingPick && !creatorFeatures?.length && (
-                  <span className="bg-gradient-to-r from-orange-500 to-pink-500 text-white text-xs font-medium px-2 py-1 rounded-bl-lg">
+                  <span className="bg-gradient-to-r from-orange-500 to-pink-500 text-white text-xs font-medium px-2 py-1 rounded-full">
                     Trending
                   </span>
                 )}
                 {isExplorationPick && !creatorFeatures?.length && !isTrendingPick && (
-                  <span className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-xs font-medium px-2 py-1 rounded-bl-lg">
-                    Try New
+                  <span className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-xs font-medium px-2 py-1 rounded-full">
+                    New
                   </span>
                 )}
               </div>
@@ -472,471 +465,337 @@ export default function EventCard({
         </Link>
       )}
 
-      {/* Special badges - when no image */}
-      {!imageUrl && (isExplorationPick || isTrendingPick || (creatorFeatures && creatorFeatures.length > 0)) && (
-        <div className="absolute top-0 right-0">
-          {creatorFeatures && creatorFeatures.length > 0 && (
-            <span className="bg-gradient-to-r from-rose-500 to-pink-500 text-white text-xs font-medium px-2 py-1 rounded-bl-lg flex items-center gap-1">
-              <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-              </svg>
-              Creator Pick
+      <div className={compact ? "p-3" : "p-4"}>
+        {/* Line 1: Category + Neighborhood + Score */}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm">
+            <span className="font-medium text-slate-900">
+              {CATEGORY_EMOJI[category]} {CATEGORY_LABELS[category]}
             </span>
-          )}
-          {isTrendingPick && !creatorFeatures?.length && (
-            <span className="bg-gradient-to-r from-orange-500 to-pink-500 text-white text-xs font-medium px-2 py-1 rounded-bl-lg">
-              Trending
-            </span>
-          )}
-          {isExplorationPick && !creatorFeatures?.length && !isTrendingPick && (
-            <span className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-xs font-medium px-2 py-1 rounded-bl-lg">
-              Try New
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Creator hosts section */}
-      {creatorFeatures && creatorFeatures.length > 0 && (
-        <div className="mb-3 flex items-center gap-2">
-          <div className="flex -space-x-2">
-            {creatorFeatures.slice(0, 3).map((feature) => (
-              <Link
-                key={feature.influencer.id}
-                href={`/influencers/${feature.influencer.handle}`}
-                className="relative h-8 w-8 rounded-full overflow-hidden border-2 border-white shadow-sm hover:z-10 transition-transform hover:scale-110"
-                style={{
-                  background: feature.influencer.profileColor || '#f1f5f9',
-                }}
-              >
-                {feature.influencer.profileImageUrl ? (
-                  <Image
-                    src={feature.influencer.profileImageUrl}
-                    alt={feature.influencer.displayName}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center text-xs font-bold text-slate-600">
-                    {feature.influencer.displayName.charAt(0)}
-                  </div>
-                )}
-              </Link>
-            ))}
-          </div>
-          <div className="text-xs text-slate-600">
-            <span className="font-medium">
-              {creatorFeatures.some(f => f.isHost) ? "Hosted by " : "Featured by "}
-            </span>
-            {creatorFeatures.map((feature, idx) => (
-              <span key={feature.influencer.id}>
-                <Link
-                  href={`/influencers/${feature.influencer.handle}`}
-                  className="text-primary hover:underline font-medium"
-                >
-                  @{feature.influencer.handle}
-                </Link>
-                {idx < creatorFeatures.length - 1 && (
-                  idx === creatorFeatures.length - 2 ? " & " : ", "
-                )}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Category & Neighborhood badges */}
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span
-            className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${CATEGORY_COLORS[category]}`}
-          >
-            {CATEGORY_LABELS[category]}
+            {neighborhood && (
+              <>
+                <span className="mx-1.5 text-slate-300">•</span>
+                <span className="text-slate-500">{neighborhood}</span>
+              </>
+            )}
           </span>
-          {neighborhood && (
-            <span className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-              {neighborhood}
-            </span>
+          {score !== undefined && score >= 50 && (
+            <ScoreBadge score={score} size="sm" showLabel={false} />
           )}
         </div>
-        {score !== undefined && (
-          <span className="text-xs text-slate-400">Score: {score}</span>
+
+        {/* Title */}
+        <Link href={`/events/${id}`}>
+          <h3 className={`font-semibold text-slate-900 hover:text-primary transition line-clamp-2 ${
+            compact ? "text-sm mb-1" : "text-base mb-2"
+          }`}>
+            {title}
+          </h3>
+        </Link>
+
+        {/* Description - 2 lines max, hidden in compact */}
+        {!compact && (
+          <p className="text-sm text-slate-600 line-clamp-2 mb-3">{description}</p>
         )}
-      </div>
 
-      {/* Preference match badges */}
-      {(reasonType || scoreBreakdown) && (
-        <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          {/* Primary reason badge */}
-          {reasonType && PREFERENCE_BADGES[reasonType] && (
-            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${PREFERENCE_BADGES[reasonType]!.color}`}>
-              <span>{PREFERENCE_BADGES[reasonType]!.emoji}</span>
-              {PREFERENCE_BADGES[reasonType]!.label}
-            </span>
-          )}
-          {/* Secondary badges based on score breakdown */}
-          {scoreBreakdown?.companionScore && scoreBreakdown.companionScore >= 10 && !reasonType?.includes("MATCH") && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700">
-              <span>👥</span>
-              Match
-            </span>
-          )}
-          {scoreBreakdown?.vibeScore && scoreBreakdown.vibeScore >= 12 && reasonType !== "VIBE_MATCH" && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-              <span>✨</span>
-              Vibe
-            </span>
-          )}
-          {scoreBreakdown?.budgetScore && scoreBreakdown.budgetScore > 0 && reasonType !== "BUDGET_MATCH" && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-              <span>💰</span>
-              Free
-            </span>
-          )}
-          {scoreBreakdown?.socialScore && scoreBreakdown.socialScore >= 10 && reasonType !== "SOCIAL_MATCH" && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">
-              <span>🤝</span>
-              Social
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Recommendation reason */}
-      {recommendationReason && (
-        <p className="mb-2 text-xs text-primary/80 font-medium">
-          {recommendationReason}
-        </p>
-      )}
-
-      {/* Title */}
-      <Link href={`/events/${id}`}>
-        <h3 className="mb-2 text-lg font-semibold text-slate-900 line-clamp-2 hover:text-primary transition">
-          {title}
-        </h3>
-      </Link>
-
-      {/* Description */}
-      <p className="mb-4 text-sm text-slate-600 line-clamp-2">{description}</p>
-
-      {/* Event details */}
-      <div className="mb-4 space-y-2 text-sm text-slate-500">
-        <div className="flex items-center gap-2">
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <span>
-            {formatDate(startTime)} at {formatTime(startTime)}
-            {endTime && ` - ${formatTime(endTime)}`}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          <span className="line-clamp-1">{venueName}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span>{priceRange}</span>
-        </div>
-      </div>
-
-      {/* Place Vibe Tags & Description */}
-      {place && (place.vibeTags?.length || place.pulseDescription) && (
-        <div className="mb-3">
-          {place.vibeTags && place.vibeTags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-2">
-              {place.vibeTags.slice(0, 3).map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-block rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-600"
-                >
-                  {tag}
-                </span>
-              ))}
-              {place.companionTags && place.companionTags.length > 0 && (
-                place.companionTags.slice(0, 2).map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-block rounded-full bg-pink-50 px-2 py-0.5 text-xs font-medium text-pink-600"
-                  >
-                    {tag}
-                  </span>
-                ))
-              )}
-            </div>
-          )}
-          {place.pulseDescription && (
-            <p className="text-xs text-slate-500 italic line-clamp-2">
-              {place.pulseDescription}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Location Ratings */}
-      {(googleRating || appleRating || place?.googleRating) && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-          {(googleRating || place?.googleRating) && (
-            <span className="flex items-center gap-1 rounded bg-blue-50 px-2 py-1 text-blue-700">
-              <svg className="h-3 w-3 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-              </svg>
-              {(googleRating || place?.googleRating)?.toFixed(1)}
-              {(googleRatingCount || place?.googleReviewCount) && (
-                <span className="text-blue-500">({(googleRatingCount || place?.googleReviewCount)?.toLocaleString()})</span>
-              )}
-            </span>
-          )}
-          {place?.priceLevel && (
-            <span className="flex items-center gap-1 rounded bg-emerald-50 px-2 py-1 text-emerald-700">
-              {"$".repeat(place.priceLevel)}
-              <span className="text-emerald-400">{"$".repeat(4 - place.priceLevel)}</span>
-            </span>
-          )}
-          {googleRating && appleRating && (
-            <span className="flex items-center gap-1 rounded bg-green-50 px-2 py-1 font-medium text-green-700">
-              {getCombinedRating(googleRating, appleRating)} Combined
-            </span>
-          )}
-          {place?.googleMapsUrl && (
-            <a
-              href={place.googleMapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 rounded bg-slate-50 px-2 py-1 text-slate-600 hover:bg-slate-100 transition"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Map
-            </a>
-          )}
-        </div>
-      )}
-
-      {/* Source */}
-      <div className="mb-4 text-xs text-slate-400">
-        via{" "}
-        {sourceUrl ? (
-          <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline">
-            {source}
-          </a>
-        ) : (
-          source
-        )}
-      </div>
-
-      {/* Actions Row 1: Save, Like, Calendar, Share */}
-      <div className="flex items-center gap-2 border-t border-slate-100 pt-4">
-        <button
-          onClick={isSaved ? handleSaveToggle : handleQuickSave}
-          disabled={isLoading}
-          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
-            isSaved
-              ? "bg-primary text-white hover:bg-primary-dark"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-          } disabled:opacity-50`}
-        >
-          <svg className="h-4 w-4" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-          </svg>
-          {isSaved ? "Saved" : "Save"}
-        </button>
-
-        <button
-          onClick={handleLikeToggle}
-          disabled={isLoading}
-          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
-            isLiked
-              ? "bg-red-100 text-red-600 hover:bg-red-200"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-          } disabled:opacity-50`}
-        >
-          <svg className="h-4 w-4" fill={isLiked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-          </svg>
-        </button>
-
-        {/* Calendar Dropdown */}
-        <div className="relative" ref={calendarMenuRef}>
-          <button
-            onClick={() => setShowCalendarMenu(!showCalendarMenu)}
-            className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-200 transition"
-            title="Add to calendar"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {/* Meta Info - Compact */}
+        <div className={`space-y-1 text-sm text-slate-500 ${compact ? "mb-2" : "mb-3"}`}>
+          <div className="flex items-center">
+            <svg className="h-4 w-4 mr-2 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-          </button>
-          {showCalendarMenu && (
-            <div className="absolute bottom-full left-0 mb-2 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg z-50">
-              <button
-                onClick={() => handleAddToCalendar("google")}
-                className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-              >
-                Google Calendar
-              </button>
-              <button
-                onClick={() => handleAddToCalendar("outlook")}
-                className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-              >
-                Outlook
-              </button>
-              <button
-                onClick={() => handleAddToCalendar("apple")}
-                className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-              >
-                Apple Calendar
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Share Button */}
-        <button
-          onClick={handleShare}
-          className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-200 transition"
-          title={copied ? "Copied!" : "Share"}
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-          </svg>
-        </button>
-
-        {/* Add to List Dropdown */}
-        <div className="relative" ref={dropdownRef}>
-          <button
-            onClick={handleListDropdownToggle}
-            className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-200 transition"
-            title="Add to list"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <span className="truncate">{formatDateTime(startTime, compact ? null : endTime)}</span>
+          </div>
+          <div className="flex items-center">
+            <svg className="h-4 w-4 mr-2 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-          </button>
-          {showListDropdown && (
-            <div className="absolute bottom-full left-0 mb-2 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg z-50">
-              {addedToList ? (
-                <div className="px-3 py-2 text-sm text-green-600 font-medium">{addedToList}</div>
-              ) : listsLoading ? (
-                <div className="px-3 py-2 text-sm text-slate-500">Loading...</div>
-              ) : lists.length === 0 ? (
-                <div className="px-3 py-2">
-                  <p className="text-sm text-slate-500 mb-2">No lists yet</p>
-                  <Link href="/lists/new" className="text-sm text-primary hover:underline">Create a list</Link>
+            <span className="truncate">{venueName}</span>
+          </div>
+          {!compact && (
+            <>
+              <div className="flex items-center">
+                <svg className="h-4 w-4 mr-2 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {priceRange.toLowerCase() === "free" ? (
+                  <span className="text-green-600 font-medium">Free</span>
+                ) : (
+                  <span>{priceRange}</span>
+                )}
+              </div>
+              {displayRating && (
+                <div className="flex items-center">
+                  <svg className="h-4 w-4 mr-2 text-yellow-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  <span className="font-medium">{displayRating.toFixed(1)}</span>
+                  {displayRatingCount && (
+                    <span className="text-slate-400 ml-1">({displayRatingCount.toLocaleString()})</span>
+                  )}
                 </div>
-              ) : (
-                <>
-                  <div className="px-3 py-1.5 text-xs font-medium text-slate-400 uppercase">Add to list</div>
-                  {lists.map((list) => (
-                    <button
-                      key={list.id}
-                      onClick={() => handleAddToList(list.id)}
-                      className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                    >
-                      {list.isDefault && (
-                        <svg className="h-3 w-3 text-primary" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-                        </svg>
-                      )}
-                      <span className="truncate">{list.name}</span>
-                    </button>
-                  ))}
-                  <div className="border-t border-slate-100 mt-1 pt-1">
-                    <Link href="/lists/new" className="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-slate-50">
-                      + Create new list
-                    </Link>
-                  </div>
-                </>
               )}
-            </div>
+            </>
           )}
         </div>
 
-        {/* Add to Group Dropdown */}
-        <AddToGroupDropdown itemId={id} itemType="event" />
+        {/* Lifestyle Badges (Dog-Friendly, Sober-Friendly) */}
+        {(isDogFriendly || isAlcoholFree || isDrinkingOptional) && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {isDogFriendly && (
+              <DogFriendlyBadge details={dogFriendlyDetails} size={compact ? "sm" : "md"} />
+            )}
+            {isAlcoholFree && (
+              <SoberFriendlyBadge type="alcohol-free" notes={soberFriendlyNotes} size={compact ? "sm" : "md"} />
+            )}
+            {isDrinkingOptional && !isAlcoholFree && (
+              <SoberFriendlyBadge type="optional" notes={soberFriendlyNotes} size={compact ? "sm" : "md"} />
+            )}
+          </div>
+        )}
 
-        {/* More Menu (Tuning Controls) */}
-        <div className="relative ml-auto" ref={moreMenuRef}>
+        {/* Friends Going */}
+        {friendsGoing && friendsGoing.length > 0 && (
+          <div className="mb-3">
+            <FriendsGoingBadge friends={friendsGoing} size={compact ? "sm" : "md"} />
+          </div>
+        )}
+
+        {/* Actions: Save + Ellipsis Menu */}
+        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
           <button
-            onClick={() => setShowMoreMenu(!showMoreMenu)}
-            className="flex items-center rounded-md bg-slate-100 p-1.5 text-slate-600 hover:bg-slate-200 transition"
-            title="More options"
+            onClick={handleQuickSave}
+            disabled={isLoading}
+            className={`flex items-center gap-1.5 rounded-lg font-medium transition ${
+              compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"
+            } ${
+              isSaved
+                ? "bg-primary text-white hover:bg-primary/90"
+                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            } disabled:opacity-50`}
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+            <svg className="h-4 w-4" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
             </svg>
+            {isSaved ? "Saved" : "Save"}
           </button>
-          {showMoreMenu && (
-            <div className="absolute bottom-full right-0 mb-2 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg z-50">
-              <div className="px-3 py-1.5 text-xs font-medium text-slate-400 uppercase">Tune recommendations</div>
-              <button
-                onClick={() => handleFeedback("MORE")}
-                className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-green-50 hover:text-green-700 flex items-center gap-2"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
-                </svg>
-                More like this
-              </button>
-              <button
-                onClick={() => handleFeedback("LESS")}
-                className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-700 flex items-center gap-2"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" />
-                </svg>
-                Less like this
-              </button>
-              <div className="border-t border-slate-100 my-1" />
-              <button
-                onClick={() => handleFeedback("HIDE")}
-                className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-red-50 hover:text-red-700 flex items-center gap-2"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                </svg>
-                Hide this event
-              </button>
-              <div className="border-t border-slate-100 my-1" />
-              <button
-                onClick={handleCopyLink}
-                className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                {copied ? "Copied!" : "Copy link"}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Feedback toast */}
-      {feedbackGiven && (
-        <div className="mt-2 rounded-md bg-green-50 p-2 text-center text-sm text-green-700">
-          {feedbackGiven === "MORE" ? "We'll show you more like this" : "We'll show you less like this"}
+          {/* Ellipsis Menu */}
+          <div className="relative" ref={moreMenuRef}>
+            <button
+              onClick={() => setShowMoreMenu(!showMoreMenu)}
+              className="flex items-center justify-center w-9 h-9 rounded-lg text-slate-500 hover:bg-slate-100 transition"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+              </svg>
+            </button>
+
+            {showMoreMenu && (
+              <div className="absolute bottom-full right-0 mb-2 w-52 rounded-xl bg-white border border-slate-200 shadow-lg z-50 py-1">
+                {/* Like */}
+                <button
+                  onClick={handleLikeToggle}
+                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-3"
+                >
+                  <svg className={`h-4 w-4 ${isLiked ? "fill-red-500 text-red-500" : "text-slate-400"}`} fill={isLiked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                  {isLiked ? "Unlike" : "Like"}
+                </button>
+
+                {/* Add to Calendar */}
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      setShowCalendarSubmenu(!showCalendarSubmenu);
+                      setShowListSubmenu(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center justify-between"
+                  >
+                    <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    <span className="flex items-center gap-3">
+                      <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      {calendarStatus ? (calendarStatus === "GOING" ? "Going ✓" : "Maybe") : "Add to Calendar"}
+                    </span>
+                  </button>
+                  {showCalendarSubmenu && (
+                    <div className="absolute right-full top-0 mr-1 w-44 rounded-lg bg-white border border-slate-200 shadow-lg py-1 z-50">
+                      <div className="px-3 py-1.5 text-xs font-medium text-slate-400 uppercase">My Calendar</div>
+                      <button
+                        onClick={() => handleAddToPulseCalendar("GOING")}
+                        disabled={addingToCalendar}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 ${
+                          calendarStatus === "GOING" ? "text-green-700 bg-green-50" : "text-slate-700"
+                        }`}
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        I&apos;m Going
+                      </button>
+                      <button
+                        onClick={() => handleAddToPulseCalendar("MAYBE")}
+                        disabled={addingToCalendar}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 ${
+                          calendarStatus === "MAYBE" ? "text-yellow-700 bg-yellow-50" : "text-slate-700"
+                        }`}
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Maybe
+                      </button>
+                      <div className="border-t border-slate-100 my-1" />
+                      <div className="px-3 py-1.5 text-xs font-medium text-slate-400 uppercase">Export</div>
+                      <button onClick={() => handleAddToCalendar("google")} className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                        Google Calendar
+                      </button>
+                      <button onClick={() => handleAddToCalendar("apple")} className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                        Apple Calendar
+                      </button>
+                      <button onClick={() => handleAddToCalendar("outlook")} className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                        Outlook
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Share */}
+                <button
+                  onClick={handleShare}
+                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-3"
+                >
+                  <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  {copied ? "Copied!" : "Share"}
+                </button>
+
+                <div className="border-t border-slate-100 my-1" />
+
+                {/* Add to List */}
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      setShowListSubmenu(!showListSubmenu);
+                      setShowCalendarSubmenu(false);
+                      if (!showListSubmenu) fetchLists();
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center justify-between"
+                  >
+                    <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    <span className="flex items-center gap-3">
+                      <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      Add to List
+                    </span>
+                  </button>
+                  {showListSubmenu && (
+                    <div className="absolute right-full top-0 mr-1 w-44 rounded-lg bg-white border border-slate-200 shadow-lg py-1 max-h-48 overflow-y-auto z-50">
+                      {addedToList ? (
+                        <div className="px-4 py-2 text-sm text-green-600 font-medium">{addedToList}</div>
+                      ) : listsLoading ? (
+                        <div className="px-4 py-2 text-sm text-slate-500">Loading...</div>
+                      ) : lists.length === 0 ? (
+                        <div className="px-4 py-2 text-sm text-slate-500">No lists yet</div>
+                      ) : (
+                        lists.map((list) => (
+                          <button
+                            key={list.id}
+                            onClick={() => handleAddToList(list.id)}
+                            className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 truncate"
+                          >
+                            {list.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Suggest to Group - simplified */}
+                <Link
+                  href={`/groups?suggest=${id}`}
+                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-3"
+                  onClick={() => setShowMoreMenu(false)}
+                >
+                  <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  Suggest to Group
+                </Link>
+
+                <div className="border-t border-slate-100 my-1" />
+
+                {/* Copy Link */}
+                <button
+                  onClick={handleCopyLink}
+                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-3"
+                >
+                  <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Copy Link
+                </button>
+
+                {/* Hide */}
+                <button
+                  onClick={() => handleFeedback("HIDE")}
+                  className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                  </svg>
+                  Hide this event
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      )}
+
+        {/* Source - Subtle */}
+        {!compact && source && (
+          <div className="text-xs text-slate-400 mt-3">
+            via{" "}
+            {sourceUrl ? (
+              <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="hover:text-slate-600 hover:underline">
+                {source}
+              </a>
+            ) : (
+              source
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Going With Modal */}
       {showGoingWithModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-900 mb-4">Who are you going with?</h3>
             <div className="grid grid-cols-2 gap-3">
               {GOING_WITH_OPTIONS.map((option) => (
                 <button
                   key={option.value}
-                  onClick={() => handleSaveWithGoingWith(option.value)}
+                  onClick={async () => {
+                    setShowGoingWithModal(false);
+                    setIsLoading(true);
+                    try {
+                      await onSave?.(id, option.value);
+                      setIsSaved(true);
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
                   className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-slate-200 hover:border-primary hover:bg-primary/5 transition"
                 >
                   <svg className="h-6 w-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

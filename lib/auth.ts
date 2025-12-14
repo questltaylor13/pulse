@@ -8,6 +8,7 @@ declare module "next-auth" {
   interface User {
     username?: string | null;
     onboardingComplete: boolean;
+    isAdmin?: boolean;
   }
   interface Session {
     user: {
@@ -16,6 +17,7 @@ declare module "next-auth" {
       name?: string | null;
       username?: string | null;
       onboardingComplete: boolean;
+      isAdmin?: boolean;
     };
   }
 }
@@ -24,6 +26,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     username?: string | null;
     onboardingComplete: boolean;
+    isAdmin?: boolean;
   }
 }
 
@@ -68,6 +71,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name ?? undefined,
           username: user.username ?? undefined,
           onboardingComplete: user.onboardingComplete,
+          isAdmin: user.isAdmin,
         };
       },
     }),
@@ -83,17 +87,24 @@ export const authOptions: NextAuthOptions = {
         token.name = user.name;
         token.username = user.username;
         token.onboardingComplete = user.onboardingComplete;
+        token.isAdmin = user.isAdmin;
       }
-      // Refresh onboardingComplete and username on every request
+      // Refresh onboardingComplete, username, and isAdmin on every request
       if (trigger === "update" || !token.onboardingComplete || !token.username) {
         if (token.sub) {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: token.sub },
-            select: { onboardingComplete: true, username: true },
-          });
-          if (dbUser) {
-            token.onboardingComplete = dbUser.onboardingComplete;
-            token.username = dbUser.username;
+          try {
+            const dbUser = await prisma.user.findUnique({
+              where: { id: token.sub },
+              select: { onboardingComplete: true, username: true, isAdmin: true },
+            });
+            if (dbUser) {
+              token.onboardingComplete = dbUser.onboardingComplete;
+              token.username = dbUser.username;
+              token.isAdmin = dbUser.isAdmin;
+            }
+          } catch (error) {
+            console.error("Error fetching user in JWT callback:", error);
+            // Continue with existing token values on error
           }
         }
       }
@@ -106,6 +117,7 @@ export const authOptions: NextAuthOptions = {
         session.user.name = token.name as string | undefined;
         session.user.username = token.username as string | undefined;
         session.user.onboardingComplete = token.onboardingComplete ?? false;
+        session.user.isAdmin = token.isAdmin ?? false;
       }
       return session;
     },

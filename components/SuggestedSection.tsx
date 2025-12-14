@@ -157,7 +157,7 @@ export default function SuggestedSection() {
   const [suggestions, setSuggestions] = useState<SuggestionSet | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState<"week" | "month">("week");
 
   useEffect(() => {
     async function fetchSuggestions() {
@@ -202,39 +202,15 @@ export default function SuggestedSection() {
     return null; // No suggestions to show
   }
 
+  const activeSuggestions = activeTab === "week" ? suggestions.weeklyPicks : suggestions.monthlyPicks;
+
   return (
-    <div className="space-y-6 rounded-xl bg-gradient-to-br from-primary/5 to-primary/10 p-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-primary/10 p-2">
-            <svg
-              className="h-5 w-5 text-primary"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-              />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">
-              Suggested for you
-            </h2>
-            <p className="text-sm text-slate-600">{suggestions.summaryText}</p>
-          </div>
-        </div>
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="text-slate-400 hover:text-slate-600 p-1"
-        >
+    <div className="rounded-xl bg-gradient-to-br from-primary/5 to-primary/10 p-4">
+      {/* Header with tabs */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
           <svg
-            className={`h-5 w-5 transition-transform ${collapsed ? "rotate-180" : ""}`}
+            className="h-5 w-5 text-primary"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -243,41 +219,59 @@ export default function SuggestedSection() {
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M5 15l7-7 7 7"
+              d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
             />
           </svg>
-        </button>
+          <h2 className="text-lg font-bold text-slate-900">
+            Suggested for You
+          </h2>
+          {suggestions.isAiGenerated && (
+            <span className="px-2 py-0.5 bg-primary/10 text-primary text-xs font-medium rounded-full">
+              AI picks
+            </span>
+          )}
+        </div>
+
+        {/* Tab toggles */}
+        <div className="flex gap-1 bg-white/50 rounded-lg p-1">
+          <button
+            onClick={() => setActiveTab("week")}
+            className={`px-3 py-1 text-sm font-medium rounded-md transition ${
+              activeTab === "week"
+                ? "bg-white text-primary shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            This Week
+          </button>
+          <button
+            onClick={() => setActiveTab("month")}
+            className={`px-3 py-1 text-sm font-medium rounded-md transition ${
+              activeTab === "month"
+                ? "bg-white text-primary shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            This Month
+          </button>
+        </div>
       </div>
 
-      {/* Content */}
-      {!collapsed && (
-        <div className="space-y-6">
-          {/* Weekly picks */}
-          <SuggestedRow
-            title="This Week"
-            subtitle="Happening in the next 7 days"
-            suggestions={suggestions.weeklyPicks}
-            reasonsById={suggestions.reasonsById}
-          />
-
-          {/* Monthly picks */}
-          <SuggestedRow
-            title="This Month"
-            subtitle="Events and places to explore"
-            suggestions={suggestions.monthlyPicks}
-            reasonsById={suggestions.reasonsById}
-          />
+      {/* Single horizontal scroll row */}
+      {activeSuggestions.length > 0 ? (
+        <div className="flex gap-4 overflow-x-auto pb-2 -mx-2 px-2 scrollbar-hide">
+          {activeSuggestions.map((suggestion) => (
+            <SuggestionCard
+              key={suggestion.id}
+              suggestion={suggestion}
+              reason={suggestions.reasonsById[suggestion.id]}
+            />
+          ))}
         </div>
-      )}
-
-      {/* AI badge */}
-      {suggestions.isAiGenerated && (
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-          </svg>
-          <span>AI-curated picks</span>
-        </div>
+      ) : (
+        <p className="text-sm text-slate-500 py-4 text-center">
+          No suggestions for {activeTab === "week" ? "this week" : "this month"} yet
+        </p>
       )}
     </div>
   );

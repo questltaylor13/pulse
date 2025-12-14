@@ -88,12 +88,20 @@ export default function LeaderboardTable({
                   >
                     <div className="relative h-10 w-10 rounded-full overflow-hidden bg-slate-100 flex-shrink-0">
                       {entry.profileImageUrl ? (
-                        <Image
-                          src={entry.profileImageUrl}
-                          alt={entry.userName}
-                          fill
-                          className="object-cover"
-                        />
+                        entry.profileImageUrl.startsWith("http") ? (
+                          <img
+                            src={entry.profileImageUrl}
+                            alt={entry.userName}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Image
+                            src={entry.profileImageUrl}
+                            alt={entry.userName}
+                            fill
+                            className="object-cover"
+                          />
+                        )
                       ) : (
                         <div className="h-full w-full flex items-center justify-center text-slate-400 font-medium">
                           {entry.userName[0]?.toUpperCase()}

@@ -5,6 +5,23 @@ import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+// Helper to wait for session with retries
+async function waitForSession(maxRetries = 5, delayMs = 200) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const session = await getSession();
+      if (session?.user) {
+        return session;
+      }
+    } catch (err) {
+      console.warn(`Session fetch attempt ${i + 1} failed:`, err);
+    }
+    // Wait before retrying
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return null;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -17,25 +34,40 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const result = await signIn("credentials", {
-      redirect: false,
-      email,
-      password,
-    });
+    try {
+      const result = await signIn("credentials", {
+        redirect: false,
+        email,
+        password,
+      });
 
-    if (result?.error) {
-      setError("Invalid email or password");
+      if (result?.error) {
+        setError("Invalid email or password");
+        setLoading(false);
+        return;
+      }
+
+      // Wait for session to be established with retries
+      const session = await waitForSession();
+
+      if (!session) {
+        // Session not found after retries, redirect to feed anyway
+        // The middleware or feed page will handle redirecting if needed
+        router.push("/feed");
+        router.refresh();
+        return;
+      }
+
+      if (session.user?.onboardingComplete) {
+        router.push("/feed");
+      } else {
+        router.push("/onboarding");
+      }
+      router.refresh();
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("Something went wrong. Please try again.");
       setLoading(false);
-      return;
-    }
-
-    // Get session to check onboarding status
-    const session = await getSession();
-
-    if (session?.user?.onboardingComplete) {
-      router.push("/feed");
-    } else {
-      router.push("/onboarding");
     }
   };
 

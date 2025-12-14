@@ -29,7 +29,7 @@ interface VibePreference {
   intensity: number | null;
 }
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 const TENURE_OPTIONS: { value: DenverTenure; label: string; description: string }[] = [
   { value: "NEW_TO_DENVER", label: "New to Denver", description: "Just moved here!" },
@@ -131,6 +131,12 @@ export default function OnboardingPage() {
     VIBE_OPTIONS.map((v) => ({ key: v.key, intensity: null }))
   );
   const [socialIntent, setSocialIntent] = useState<SocialIntentOption>("EITHER");
+
+  // Step 8: Lifestyle Preferences
+  const [hasDog, setHasDog] = useState(false);
+  const [dogFriendlyOnly, setDogFriendlyOnly] = useState(false);
+  const [preferSoberFriendly, setPreferSoberFriendly] = useState(false);
+  const [avoidBars, setAvoidBars] = useState(false);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -236,6 +242,11 @@ export default function OnboardingPage() {
           budget,
           ...vibeData,
           socialIntent,
+          // Lifestyle preferences
+          hasDog,
+          dogFriendlyOnly,
+          preferSoberFriendly,
+          avoidBars,
         }),
       });
 
@@ -670,6 +681,116 @@ export default function OnboardingPage() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Step 8: Lifestyle Preferences */}
+      {step === 8 && (
+        <div className="space-y-8">
+          {/* Dog-Friendly Section */}
+          <div className="space-y-4">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-slate-900">
+                Do you have a furry friend?
+              </h1>
+              <p className="mt-2 text-slate-600">
+                We&apos;ll help you find dog-friendly spots
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setHasDog(!hasDog);
+                  if (hasDog) setDogFriendlyOnly(false);
+                }}
+                className={`w-full rounded-xl border-2 p-4 text-left transition ${
+                  hasDog
+                    ? "border-amber-500 bg-amber-50"
+                    : "border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">🐕</span>
+                  <div>
+                    <div className="font-semibold text-slate-900">I have a dog</div>
+                    <div className="text-sm text-slate-500">Show me pup-friendly options</div>
+                  </div>
+                </div>
+              </button>
+
+              {hasDog && (
+                <button
+                  onClick={() => setDogFriendlyOnly(!dogFriendlyOnly)}
+                  className={`w-full rounded-xl border-2 p-4 text-left transition ml-4 ${
+                    dogFriendlyOnly
+                      ? "border-amber-500 bg-amber-50"
+                      : "border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">✨</span>
+                    <div>
+                      <div className="font-semibold text-slate-900">Only show dog-friendly places</div>
+                      <div className="text-sm text-slate-500">Filter out places where dogs aren&apos;t welcome</div>
+                    </div>
+                  </div>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Sober-Friendly Section */}
+          <div className="space-y-4">
+            <div className="text-center">
+              <h2 className="text-xl font-bold text-slate-900">
+                Drinking preferences
+              </h2>
+              <p className="mt-2 text-slate-600">
+                Find events that match your lifestyle
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => setPreferSoberFriendly(!preferSoberFriendly)}
+                className={`w-full rounded-xl border-2 p-4 text-left transition ${
+                  preferSoberFriendly
+                    ? "border-teal-500 bg-teal-50"
+                    : "border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">🍹</span>
+                  <div>
+                    <div className="font-semibold text-slate-900">I prefer sober-friendly options</div>
+                    <div className="text-sm text-slate-500">Prioritize events that are great without drinking</div>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setAvoidBars(!avoidBars)}
+                className={`w-full rounded-xl border-2 p-4 text-left transition ${
+                  avoidBars
+                    ? "border-emerald-500 bg-emerald-50"
+                    : "border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">🚫</span>
+                  <div>
+                    <div className="font-semibold text-slate-900">Avoid bar-centric venues</div>
+                    <div className="text-sm text-slate-500">Skip places where drinking is the main activity</div>
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <p className="text-center text-sm text-slate-400">
+            This step is optional - skip if you prefer
+          </p>
         </div>
       )}
 

@@ -30,6 +30,12 @@ const detailedPreferencesSchema = z.object({
 
   // Social Intent
   socialIntent: z.enum(["MEET_PEOPLE", "OWN_THING", "EITHER"]).optional(),
+
+  // Lifestyle Preferences
+  hasDog: z.boolean().optional(),
+  dogFriendlyOnly: z.boolean().optional(),
+  preferSoberFriendly: z.boolean().optional(),
+  avoidBars: z.boolean().optional(),
 });
 
 // Get user's detailed preferences
@@ -100,6 +106,10 @@ export async function POST(request: NextRequest) {
         vibeModerate: validated.vibeModerate,
         vibeHighEnergy: validated.vibeHighEnergy,
         socialIntent: validated.socialIntent as SocialIntent | undefined,
+        hasDog: validated.hasDog,
+        dogFriendlyOnly: validated.dogFriendlyOnly,
+        preferSoberFriendly: validated.preferSoberFriendly,
+        avoidBars: validated.avoidBars,
       },
       create: {
         userId: session.user.id,
@@ -118,6 +128,10 @@ export async function POST(request: NextRequest) {
         vibeModerate: validated.vibeModerate ?? null,
         vibeHighEnergy: validated.vibeHighEnergy ?? null,
         socialIntent: (validated.socialIntent as SocialIntent) || "EITHER",
+        hasDog: validated.hasDog ?? false,
+        dogFriendlyOnly: validated.dogFriendlyOnly ?? false,
+        preferSoberFriendly: validated.preferSoberFriendly ?? false,
+        avoidBars: validated.avoidBars ?? false,
       },
     });
 
@@ -174,6 +188,10 @@ export async function PATCH(request: NextRequest) {
           vibeModerate: validated.vibeModerate ?? null,
           vibeHighEnergy: validated.vibeHighEnergy ?? null,
           socialIntent: (validated.socialIntent as SocialIntent) || "EITHER",
+          hasDog: validated.hasDog ?? false,
+          dogFriendlyOnly: validated.dogFriendlyOnly ?? false,
+          preferSoberFriendly: validated.preferSoberFriendly ?? false,
+          avoidBars: validated.avoidBars ?? false,
         },
       });
       return NextResponse.json({ success: true, preferences });
@@ -196,6 +214,10 @@ export async function PATCH(request: NextRequest) {
     if (validated.vibeModerate !== undefined) updateData.vibeModerate = validated.vibeModerate;
     if (validated.vibeHighEnergy !== undefined) updateData.vibeHighEnergy = validated.vibeHighEnergy;
     if (validated.socialIntent !== undefined) updateData.socialIntent = validated.socialIntent;
+    if (validated.hasDog !== undefined) updateData.hasDog = validated.hasDog;
+    if (validated.dogFriendlyOnly !== undefined) updateData.dogFriendlyOnly = validated.dogFriendlyOnly;
+    if (validated.preferSoberFriendly !== undefined) updateData.preferSoberFriendly = validated.preferSoberFriendly;
+    if (validated.avoidBars !== undefined) updateData.avoidBars = validated.avoidBars;
 
     const preferences = await prisma.detailedPreferences.update({
       where: { userId: session.user.id },
