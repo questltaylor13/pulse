@@ -1,12 +1,38 @@
 import type { Metadata } from "next";
+import { Space_Grotesk, Inter } from "next/font/google";
+import "./globals.css";
 import Link from "next/link";
 import Providers from "@/components/Providers";
 import AuthActions from "@/components/AuthActions";
 import NavLinks from "@/components/NavLinks";
 
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-display",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-body",
+});
+
 export const metadata: Metadata = {
-  title: "Pulse",
-  description: "Discover the best events around Denver.",
+  title: {
+    default: "Pulse | Discover Denver",
+    template: "%s | Pulse",
+  },
+  description: "Discover Denver's best events and places, personalized to your vibe. AI-powered recommendations from local tastemakers.",
+  openGraph: {
+    title: "Pulse | Discover Denver",
+    description: "Discover Denver's best events and places, personalized to your vibe.",
+    siteName: "Pulse",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Pulse | Discover Denver",
+    description: "Discover Denver's best events and places, personalized to your vibe.",
+  },
 };
 
 export default function RootLayout({
@@ -16,7 +42,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-slate-50 text-slate-900">
+      <body className={`${spaceGrotesk.variable} ${inter.variable} font-body min-h-screen bg-slate-50 text-slate-900`}>
         <Providers>
           <div className="flex min-h-screen flex-col">
             <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">

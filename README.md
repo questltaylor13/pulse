@@ -1,50 +1,96 @@
-# Pulse (MVP)
+# Pulse
 
-A Next.js + TypeScript starter for the Pulse events app. This initial setup includes Tailwind CSS, Prisma, and the PostgreSQL data model needed for onboarding, preferences, event feeds, and user lists.
+Discover Denver's best events and places, personalized to your vibe.
 
-## Getting started
+Pulse is an AI-powered local discovery platform that helps Denver residents find events, restaurants, bars, outdoor activities, and hidden gems — tailored to their interests, schedule, and lifestyle preferences.
+
+## Tech Stack
+
+- **Framework:** Next.js 14 (App Router)
+- **Language:** TypeScript
+- **Database:** PostgreSQL with Prisma ORM
+- **Auth:** NextAuth.js (credentials provider)
+- **Styling:** Tailwind CSS
+- **AI:** OpenAI (event curation and enrichment)
+- **Storage:** Vercel Blob
+- **Deployment:** Vercel
+
+## Getting Started
 
 ### Prerequisites
+
 - Node.js 18+
-- Yarn or npm
 - PostgreSQL database
+- npm or yarn
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and fill in your values:
+
+```bash
+cp .env.example .env
+```
 
 ### Installation
-```bash
-yarn install
-```
-> If your environment restricts package downloads, configure your registry or proxy settings accordingly before installing.
 
-### Development server
 ```bash
-yarn dev
-```
-The app runs at http://localhost:3000.
-
-### Environment variables
-Create a `.env` file based on `.env.example` with your database and auth secrets.
-- `DATABASE_URL` - PostgreSQL connection string (e.g., `postgresql://USER:PASSWORD@localhost:5432/pulse`)
-- `NEXTAUTH_SECRET` - secret for NextAuth JWT/session signing
-- `NEXTAUTH_URL` - base URL for NextAuth callbacks (e.g., http://localhost:3000)
-
-### Prisma
-Generate the Prisma client and run migrations once your database is reachable.
-```bash
-yarn prisma:generate
-yarn prisma:migrate --name init
-```
-To inspect data locally:
-```bash
-yarn prisma:studio
+npm install
 ```
 
-## Project structure
-- `app/` - App Router pages and shared layout
-- `prisma/schema.prisma` - database models and relations
-- `prisma/migrations/` - initial SQL migration for the MVP schema
-- `tailwind.config.ts` - Tailwind theme and content scanning paths
+### Database Setup
 
-## Next steps
-- Wire up authentication with NextAuth
-- Build onboarding flow for city, relationship status, and interests
-- Implement personalized event feeds and admin event management
+```bash
+npx prisma generate
+npx prisma migrate dev
+```
+
+### Development Server
+
+```bash
+npm run dev
+```
+
+The app runs at [http://localhost:3000](http://localhost:3000).
+
+## Project Structure
+
+```
+app/                  # Next.js App Router pages and API routes
+  api/                # API endpoints (auth, feed, events, etc.)
+  auth/               # Login and signup pages
+  feed/               # Personalized event feed
+  onboarding/         # 8-step user onboarding
+components/           # React components
+  landing/            # Landing page sections
+  feed/               # Feed-specific components
+lib/                  # Shared utilities and configuration
+  auth.ts             # NextAuth configuration
+  prisma.ts           # Prisma client
+  scoring.ts          # Event scoring algorithm
+  scrapers/           # Event scraping infrastructure
+prisma/
+  schema.prisma       # Database schema
+scripts/              # Seed scripts and utilities
+```
+
+## Features
+
+- **Personalized Feed:** AI-scored event recommendations based on user preferences
+- **8-Step Onboarding:** Captures interests, schedule, budget, vibe, and lifestyle preferences
+- **Category Filtering:** Browse by food, music, art, outdoors, nightlife, and more
+- **Neighborhood Discovery:** Explore events by Denver neighborhood
+- **Curator Dashboard:** Local tastemakers curate and highlight events
+- **Community Features:** Badges, groups, leaderboards, and friend activity
+- **Lists & Sharing:** Save events, create shareable lists, suggest to groups
+- **Calendar Integration:** Add events to Google, Apple, or Outlook calendars
+- **Dog-Friendly & Sober-Friendly Filters:** Lifestyle-aware recommendations
+
+## Deployment
+
+This project is configured for Vercel deployment:
+
+```bash
+npm run build    # Runs prisma generate + next build
+```
+
+Set your environment variables in the Vercel dashboard and deploy.

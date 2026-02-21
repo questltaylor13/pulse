@@ -4,6 +4,7 @@ import {
   FeatureHighlightsSection,
   ExploreSection,
   StatsBar,
+  CoFounderCTASection,
   FinalCTASection,
   LandingFooter,
 } from "@/components/landing";
@@ -57,6 +58,9 @@ export default async function HomePage() {
 
       {/* Stats Bar */}
       <StatsBar stats={data.stats} />
+
+      {/* Co-Founder CTA */}
+      <CoFounderCTASection />
 
       {/* Final CTA */}
       <FinalCTASection />

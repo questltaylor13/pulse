@@ -6,7 +6,7 @@ export default function FinalCTASection() {
       <div className="container">
         <div className="max-w-3xl mx-auto text-center">
           {/* Headline */}
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6 font-display">
             Ready to discover Denver?
           </h2>
 

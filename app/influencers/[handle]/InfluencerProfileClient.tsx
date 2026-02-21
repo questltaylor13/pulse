@@ -37,7 +37,7 @@ interface PickSet {
 
 interface EventFeature {
   id: string;
-  quote: string;
+  quote: string | null;
   isHost: boolean;
   isFeatured: boolean;
   event: {

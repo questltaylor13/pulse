@@ -36,7 +36,7 @@ interface CreatorFeature {
     profileImageUrl: string | null;
     profileColor?: string | null;
   };
-  quote: string;
+  quote: string | null;
   isFeatured: boolean;
   isHost: boolean;
 }

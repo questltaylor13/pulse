@@ -8,12 +8,21 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        display: ["var(--font-display)", "sans-serif"],
+        body: ["var(--font-body)", "sans-serif"],
+      },
       colors: {
         primary: {
-          DEFAULT: "#2563eb",
-          light: "#3b82f6",
-          dark: "#1d4ed8"
-        }
+          DEFAULT: "#FF4D4F",
+          light: "#FF7875",
+          dark: "#D9363E",
+        },
+        secondary: {
+          DEFAULT: "#00D4AA",
+          light: "#33DFBE",
+          dark: "#00A884",
+        },
       }
     }
   },

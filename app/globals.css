@@ -4,16 +4,12 @@
 
 :root {
   color-scheme: light;
-
-  /* Landing page brand colors */
-  --landing-green: #2D5A3D;
-  --landing-green-light: #4A7A5C;
-  --landing-green-dark: #1E3D2A;
-  --landing-coral: #E87461;
-  --landing-coral-light: #F09A8D;
-  --landing-coral-dark: #D45A47;
-  --landing-beige: #F5EDE6;
-  --landing-beige-dark: #E8DDD3;
+  --pulse-coral: #FF4D4F;
+  --pulse-coral-light: #FF7875;
+  --pulse-coral-dark: #D9363E;
+  --pulse-teal: #00D4AA;
+  --pulse-teal-light: #33DFBE;
+  --pulse-teal-dark: #00A884;
 }
 
 body {
@@ -38,7 +34,7 @@ body {
 }
 
 .landing-heading {
-  @apply text-3xl md:text-4xl font-bold tracking-tight;
+  @apply text-3xl md:text-4xl font-bold tracking-tight font-display;
 }
 
 .landing-subheading {
@@ -47,37 +43,37 @@ body {
 
 .btn-landing-primary {
   @apply inline-flex items-center justify-center rounded-lg px-6 py-3 text-base font-semibold text-white shadow-md transition hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
-  background-color: var(--landing-green);
+  background-color: var(--pulse-coral);
 }
 
 .btn-landing-primary:hover {
-  background-color: var(--landing-green-dark);
+  background-color: var(--pulse-coral-dark);
 }
 
 .btn-landing-secondary {
   @apply inline-flex items-center justify-center rounded-lg px-6 py-3 text-base font-semibold transition border-2 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
-  color: var(--landing-green);
-  border-color: var(--landing-green);
+  color: var(--pulse-coral);
+  border-color: var(--pulse-coral);
 }
 
 .btn-landing-secondary:hover {
-  background-color: var(--landing-beige);
+  background-color: #FFF1F0;
 }
 
-.bg-landing-beige {
-  background-color: var(--landing-beige);
-}
-
-.bg-landing-green {
-  background-color: var(--landing-green);
-}
-
-.text-landing-green {
-  color: var(--landing-green);
+.bg-landing-coral {
+  background-color: var(--pulse-coral);
 }
 
 .text-landing-coral {
-  color: var(--landing-coral);
+  color: var(--pulse-coral);
+}
+
+.bg-landing-teal {
+  background-color: var(--pulse-teal);
+}
+
+.text-landing-teal {
+  color: var(--pulse-teal);
 }
 
 /* Toast animation */

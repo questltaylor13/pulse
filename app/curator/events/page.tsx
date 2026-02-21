@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -30,7 +30,7 @@ const TABS = [
   { key: "drafts", label: "Drafts" },
 ];
 
-export default function CuratorEventsPage() {
+function CuratorEventsContent() {
   const { status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -274,5 +274,19 @@ export default function CuratorEventsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function CuratorEventsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      }
+    >
+      <CuratorEventsContent />
+    </Suspense>
   );
 }

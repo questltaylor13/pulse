@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
     hours: place.hours,
     imageUrl: place.imageUrl,
     googleRating: place.googleRating,
-    googleReviewCount: place.googleReviewCount,
+    googleReviewCount: place.googleRatingCount,
     vibeTags: place.vibeTags || [],
     companionTags: place.companionTags || [],
   }));

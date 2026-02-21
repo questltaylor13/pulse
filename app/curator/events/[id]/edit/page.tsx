@@ -27,7 +27,7 @@ interface EventData {
   companionTags: string[];
   placeId: string | null;
   isHost: boolean;
-  quote: string;
+  quote: string | null;
   isFeatured: boolean;
   socialVideos: {
     id: string;

@@ -137,7 +137,7 @@ export async function getEventWithStatus(eventId: string) {
       userPreferences = {
         categories: categoryPrefs.map(p => p.category),
         vibes,
-        budgetMax: preferences?.budget === "FREE" ? 0 : preferences?.budget === "BUDGET" ? 20 : null,
+        budgetMax: preferences?.budget === "FREE" ? 0 : preferences?.budget === "UNDER_25" ? 25 : null,
       };
     }
   }
@@ -174,7 +174,6 @@ export async function submitEventFeedback(
     },
     update: {
       feedbackType,
-      updatedAt: new Date(),
     },
     create: {
       userId: session.user.id,

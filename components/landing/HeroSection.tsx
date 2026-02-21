@@ -23,7 +23,7 @@ export default function HeroSection() {
           </div>
 
           {/* Headline */}
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white mb-6">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white mb-6 font-display">
             Discover Denver&apos;s Best{" "}
             <span className="text-primary">Events</span> &{" "}
             <span className="text-primary-light">Places</span>

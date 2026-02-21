@@ -66,7 +66,7 @@ export default function HowItWorksSection() {
               </div>
 
               {/* Content */}
-              <h3 className="text-xl font-semibold text-slate-900 mb-2">{step.title}</h3>
+              <h3 className="text-xl font-semibold text-slate-900 mb-2 font-display">{step.title}</h3>
               <p className="text-slate-600">{step.description}</p>
             </div>
           ))}

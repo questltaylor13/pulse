@@ -33,7 +33,7 @@ interface EventFormData {
   coverImage: string;
   images: string[];
   socialVideos: SocialVideo[];
-  quote: string;
+  quote: string | null;
   isHost: boolean;
   isFeatured: boolean;
   vibeTags: string[];
@@ -693,7 +693,7 @@ export default function EventForm({ initialData, eventId, mode }: EventFormProps
                   Your Quote (optional but encouraged)
                 </label>
                 <textarea
-                  value={form.quote}
+                  value={form.quote ?? ""}
                   onChange={(e) => updateForm("quote", e.target.value)}
                   placeholder="This is my favorite spot for... or Don't miss this because..."
                   rows={3}
@@ -701,7 +701,7 @@ export default function EventForm({ initialData, eventId, mode }: EventFormProps
                   className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none resize-none"
                 />
                 <div className="text-right text-xs text-slate-500 mt-1">
-                  {form.quote.length}/200
+                  {(form.quote ?? "").length}/200
                 </div>
               </div>
 
