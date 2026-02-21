@@ -85,7 +85,7 @@ const BUDGET_OPTIONS: { value: BudgetOption; label: string; description: string 
 const VIBE_OPTIONS: { key: "chill" | "moderate" | "highEnergy"; label: string; emoji: string; description: string }[] = [
   { key: "chill", label: "Chill", emoji: "🧘", description: "Relaxed, low-key, easy going" },
   { key: "moderate", label: "Moderate", emoji: "⚡", description: "Fun but not crazy" },
-  { key: "highEnergy", label: "High Energy", emoji: "🔥", description: "Let&apos;s go all out" },
+  { key: "highEnergy", label: "High Energy", emoji: "🔥", description: "Let's go all out" },
 ];
 
 const SOCIAL_OPTIONS: { value: SocialIntentOption; label: string; description: string }[] = [

@@ -369,11 +369,11 @@ export default function FeedPage() {
     });
 
     if (dogFriendlyFilter) {
-      filters.push({ type: "lifestyle", value: "dogFriendly", label: "🐕 Dog Friendly" });
+      filters.push({ type: "lifestyle", value: "dogFriendly", label: "Dog Friendly" });
     }
 
     if (soberFriendlyFilter) {
-      filters.push({ type: "lifestyle", value: "soberFriendly", label: "🍹 Drinking Optional" });
+      filters.push({ type: "lifestyle", value: "soberFriendly", label: "Drinking Optional" });
     }
 
     return filters;
@@ -468,7 +468,6 @@ export default function FeedPage() {
               : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
           }`}
         >
-          <span>🐕</span>
           Dog Friendly
         </button>
         <button
@@ -482,7 +481,6 @@ export default function FeedPage() {
               : "bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100"
           }`}
         >
-          <span>🍹</span>
           Drinking Optional
         </button>
       </div>

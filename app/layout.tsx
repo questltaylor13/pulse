@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import "./globals.css";
 import Link from "next/link";
 import Providers from "@/components/Providers";
 import AuthActions from "@/components/AuthActions";
@@ -41,7 +40,7 @@ export default function RootLayout({
               <div className="container py-10">{children}</div>
             </main>
             <footer className="border-t border-slate-200 bg-white py-6 text-center text-sm text-slate-500">
-              Built for Denver explorers — MVP setup
+              Built for Denver
             </footer>
           </div>
         </Providers>
