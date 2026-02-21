@@ -47,8 +47,10 @@ const FILTER_CATEGORIES: Category[] = [
   "OUTDOORS",
   "FITNESS",
   "RESTAURANT",
+  "ACTIVITY_VENUE",
   "POPUP",
   "SEASONAL",
+  "OTHER",
 ];
 
 export default function WantListPage() {

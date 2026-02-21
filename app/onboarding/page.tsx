@@ -53,6 +53,8 @@ const CATEGORY_INFO: { category: Category; label: string; emoji: string }[] = [
   { category: "FITNESS", label: "Fitness & Wellness", emoji: "💪" },
   { category: "SEASONAL", label: "Seasonal Events", emoji: "🎄" },
   { category: "POPUP", label: "Pop-ups & Markets", emoji: "✨" },
+  { category: "RESTAURANT", label: "Restaurants & Dining", emoji: "🍴" },
+  { category: "ACTIVITY_VENUE", label: "Activities & Venues", emoji: "🎳" },
   { category: "OTHER", label: "Other", emoji: "🎪" },
 ];
 

@@ -16,6 +16,8 @@ const LABELS: Record<Category, string> = {
   [Category.SEASONAL]: "Seasonal / pop-up events",
   [Category.POPUP]: "Seasonal / pop-up events",
   [Category.OTHER]: "Other",
+  [Category.RESTAURANT]: "Restaurants & dining",
+  [Category.ACTIVITY_VENUE]: "Activities & venues",
 };
 
 const relationshipCopy: Record<RelationshipStatus, string> = {

@@ -24,6 +24,8 @@ const CATEGORIES: { value: Category | "ALL"; label: string }[] = [
   { value: "FITNESS", label: "Fitness" },
   { value: "SEASONAL", label: "Seasonal" },
   { value: "POPUP", label: "Pop-ups" },
+  { value: "RESTAURANT", label: "Restaurants" },
+  { value: "ACTIVITY_VENUE", label: "Activities" },
   { value: "OTHER", label: "Other" },
 ];
 
