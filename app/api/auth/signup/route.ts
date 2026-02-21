@@ -62,8 +62,14 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Signup error", error);
-    return NextResponse.json({ error: "Unable to sign up right now" }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.error("Signup error:", err.message);
+    console.error("Signup error stack:", err.stack);
+    console.error("Full signup error:", JSON.stringify(error, Object.getOwnPropertyNames(error as object)));
+    return NextResponse.json(
+      { error: "Unable to sign up right now", details: err.message },
+      { status: 500 }
+    );
   }
 }
