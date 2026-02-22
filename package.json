@@ -21,6 +21,7 @@
     "@vercel/blob": "^2.0.0",
     "autoprefixer": "^10.4.20",
     "bcryptjs": "^2.4.3",
+    "cheerio": "^1.2.0",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.561.0",
     "nanoid": "^3.3.11",

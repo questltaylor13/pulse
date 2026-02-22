@@ -1,9 +1,34 @@
 import { prisma } from "@/lib/prisma";
-import { ScrapedEvent, ScraperResult } from "./types";
-import { scrapeEventbrite } from "./eventbrite";
+import { ScrapedEvent, ScraperResult, Scraper } from "./types";
+import { scrape303Magazine } from "./303magazine";
 import { scrapeDenverEvents } from "./denver-events";
 
-const scrapers = [scrapeEventbrite, scrapeDenverEvents];
+const scrapers: { name: string; fn: Scraper }[] = [
+  { name: "303magazine", fn: scrape303Magazine },
+  { name: "do303", fn: scrapeDenverEvents },
+];
+
+const PER_SCRAPER_TIMEOUT = 15_000;
+
+async function runWithTimeout(
+  name: string,
+  fn: Scraper
+): Promise<ScraperResult> {
+  return Promise.race([
+    fn(),
+    new Promise<ScraperResult>((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            source: name,
+            events: [],
+            errors: [`${name}: timed out after ${PER_SCRAPER_TIMEOUT / 1000}s`],
+          }),
+        PER_SCRAPER_TIMEOUT
+      )
+    ),
+  ]);
+}
 
 function deduplicateEvents(events: ScrapedEvent[]): ScrapedEvent[] {
   const seen = new Map<string, ScrapedEvent>();
@@ -28,11 +53,11 @@ export async function runAllScrapers(): Promise<{
 
   for (const scraper of scrapers) {
     try {
-      const result = await scraper();
+      const result = await runWithTimeout(scraper.name, scraper.fn);
       allResults.push(result);
     } catch (error) {
       allResults.push({
-        source: "unknown",
+        source: scraper.name,
         events: [],
         errors: [error instanceof Error ? error.message : "Unknown error"],
       });
