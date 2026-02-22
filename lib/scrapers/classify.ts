@@ -6,7 +6,8 @@ import { Category } from "@prisma/client";
 
 const VENUE_MAP: [RegExp, Category][] = [
   // Denver live music venues
-  [/\b(gothic|ogden|bluebird|fox|cervantes)\b/i, "LIVE_MUSIC"],
+  [/\b(gothic|ogden|bluebird|cervantes)\b/i, "LIVE_MUSIC"],
+  [/\bfox\s+theat(re|er)\b/i, "LIVE_MUSIC"],
   [/\bmission\s+ballroom\b/i, "LIVE_MUSIC"],
   [/\bred\s+rocks\b/i, "LIVE_MUSIC"],
   [/\bball\s*arena\b/i, "LIVE_MUSIC"],
@@ -16,13 +17,34 @@ const VENUE_MAP: [RegExp, Category][] = [
   [/\bhi-?dive\b/i, "LIVE_MUSIC"],
   [/\blarimer\s+lounge\b/i, "LIVE_MUSIC"],
   [/\bglobe\s+hall\b/i, "LIVE_MUSIC"],
-  [/\bmarquis\s+theater\b/i, "LIVE_MUSIC"],
+  [/\bmarquis\b/i, "LIVE_MUSIC"],
   [/\bsoiled\s+dove\b/i, "LIVE_MUSIC"],
   [/\bparamount\s+theat(re|er)\b/i, "LIVE_MUSIC"],
   [/\bdazzle\b/i, "LIVE_MUSIC"],
   [/\b1stbank\s+center\b/i, "LIVE_MUSIC"],
   [/\bfiddler'?s\s+green\b/i, "LIVE_MUSIC"],
   [/\bbellco\s+theat(re|er)\b/i, "LIVE_MUSIC"],
+  [/\bchurch\s+nightclub\b/i, "LIVE_MUSIC"],
+  [/\bclub\s+vinyl\b/i, "LIVE_MUSIC"],
+  [/\bblack\s+box\b/i, "LIVE_MUSIC"],
+  [/\bnocturne\b/i, "LIVE_MUSIC"],
+  [/\betown\s+hall\b/i, "LIVE_MUSIC"],
+  [/\bmoxi\s+theater\b/i, "LIVE_MUSIC"],
+  [/\bboulder\s+theater\b/i, "LIVE_MUSIC"],
+  [/\bophelia'?s\b/i, "LIVE_MUSIC"],
+  [/\btwo\s+moons\b/i, "LIVE_MUSIC"],
+  [/\bswallow\s+hill\b/i, "LIVE_MUSIC"],
+  [/\bnissi'?s\b/i, "LIVE_MUSIC"],
+  [/\boriental\s+theater\b/i, "LIVE_MUSIC"],
+  [/\bvelvet\s+elk\b/i, "LIVE_MUSIC"],
+  [/\btrinidad\s+lounge\b/i, "LIVE_MUSIC"],
+  [/\b3\s*kings\b/i, "LIVE_MUSIC"],
+  [/\bgrizzly\s+rose\b/i, "LIVE_MUSIC"],
+  [/\blevitt\s+pavilion\b/i, "LIVE_MUSIC"],
+  [/\bboettcher\s+concert\b/i, "LIVE_MUSIC"],
+  [/\bmercury\s+cafe\b/i, "LIVE_MUSIC"],
+  [/\bpepsi\s+center\b/i, "LIVE_MUSIC"],
+  [/\bla\s+rumba\b/i, "LIVE_MUSIC"],
 
   // Performing arts / theater venues
   [/\bbuell\s+theat(re|er)\b/i, "ART"],
@@ -38,13 +60,21 @@ const VENUE_MAP: [RegExp, Category][] = [
   [/\bdangerous\s+theat(re|er)\b/i, "ART"],
   [/\bfederal\s+theat(re|er)\b/i, "ART"],
   [/\bbovine\s+metropolis\b/i, "ART"],
+  [/\bcomedy\s+works\b/i, "ART"],
+  [/\brise\s+comedy\b/i, "ART"],
+  [/\bpunch\s*line\b/i, "ART"],
+  [/\bsie\s+film/i, "ART"],
+  [/\bdickens\s+opera\b/i, "ART"],
+  [/\bpikes\s+peak\s+center\b/i, "ART"],
 
   // Generic venue-type patterns
   [/\bbrewery\b/i, "BARS"],
   [/\btaproom\b/i, "BARS"],
   [/\bbrewing\b/i, "BARS"],
+  [/\bbeerworks\b/i, "BARS"],
   [/\bwinery\b/i, "BARS"],
   [/\bdistillery\b/i, "BARS"],
+  [/\bwatering\s+bowl\b/i, "BARS"],
 ];
 
 // ---------------------------------------------------------------------------
@@ -55,24 +85,24 @@ type KeywordMap = { keywords: string[]; weight: number };
 
 const CATEGORY_KEYWORDS: Record<string, KeywordMap[]> = {
   LIVE_MUSIC: [
-    { keywords: ["concert", "live music", "band", "singer", "dj set", "tour", "album release"], weight: 3 },
-    { keywords: ["music", "dj", "rapper", "hip hop", "jazz", "rock", "funk", "soul", "electronic"], weight: 2 },
-    { keywords: ["gig", "performance"], weight: 1 },
+    { keywords: ["concert", "live music", "band", "singer", "dj set", "album release"], weight: 3 },
+    { keywords: ["music", "dj", "rapper", "hip hop", "jazz", "funk", "soul", "electronic", "bluegrass", "country", "reggae", "latin", "salsa"], weight: 2 },
+    { keywords: ["gig", "open mic", "quintet", "quartet", "trio"], weight: 1 },
   ],
   ART: [
-    { keywords: ["art walk", "gallery opening", "art exhibit", "museum", "sculpture", "broadway", "musical", "ballet", "opera", "symphony", "orchestra", "theater", "theatre", "improv", "comedy show", "stand-up", "standup"], weight: 3 },
+    { keywords: ["art walk", "gallery opening", "art exhibit", "museum", "sculpture", "broadway", "musical", "ballet", "opera", "symphony", "orchestra", "improv", "comedy show", "stand-up", "standup"], weight: 3 },
     { keywords: ["art", "gallery", "exhibition", "painting", "photography", "mural", "art show", "performing arts", "dance performance", "comedy", "playwright", "drama"], weight: 2 },
     { keywords: ["creative", "artist", "craft", "stage"], weight: 1 },
   ],
   FOOD: [
-    { keywords: ["food festival", "tasting", "dinner party", "brunch", "supper club", "food truck"], weight: 3 },
-    { keywords: ["food", "restaurant", "dining", "chef", "culinary", "cooking class", "wine tasting"], weight: 2 },
+    { keywords: ["food festival", "food tasting", "dinner party", "brunch", "supper club", "food truck"], weight: 3 },
+    { keywords: ["food", "restaurant", "dining", "chef", "culinary", "cooking class", "ramen", "sushi", "taco"], weight: 2 },
     { keywords: ["menu", "kitchen"], weight: 1 },
   ],
   BARS: [
-    { keywords: ["happy hour", "bar crawl", "cocktail", "brewery tour", "beer festival"], weight: 3 },
-    { keywords: ["bar", "brewery", "taproom", "pub", "drinks", "nightlife", "club night"], weight: 2 },
-    { keywords: ["drink", "beer", "wine", "spirits"], weight: 1 },
+    { keywords: ["happy hour", "bar crawl", "cocktail", "brewery tour", "beer festival", "whiskey tasting", "mezcal tasting", "tequila tasting", "beer tasting"], weight: 3 },
+    { keywords: ["bar", "brewery", "taproom", "pub", "drinks", "nightlife", "club night", "wine tasting"], weight: 2 },
+    { keywords: ["drink", "beer", "wine", "spirits", "tasting"], weight: 1 },
   ],
   COFFEE: [
     { keywords: ["coffee tasting", "latte art", "coffee class"], weight: 3 },
