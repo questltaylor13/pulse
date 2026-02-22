@@ -48,6 +48,14 @@ const nextConfig = {
         protocol: "https",
         hostname: "images.303magazine.com",
       },
+      {
+        protocol: "https",
+        hostname: "assets0.dostuffmedia.com",
+      },
+      {
+        protocol: "https",
+        hostname: "assets1.dostuffmedia.com",
+      },
     ],
   },
 };

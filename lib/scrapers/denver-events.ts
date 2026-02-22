@@ -19,63 +19,53 @@ export async function scrapeDenverEvents(): Promise<ScraperResult> {
     const $ = cheerio.load(html);
     const events: ScrapedEvent[] = [];
 
-    // Do303 event cards — look for event links with year-based URL patterns
-    const eventLinks = new Set<string>();
-
-    $("a[href]").each((_, el) => {
-      const href = $(el).attr("href") || "";
-      // Match /events/YYYY/... or full URLs containing /events/YYYY/
-      if (/\/events\/20\d{2}\//.test(href)) {
-        const fullUrl = href.startsWith("http") ? href : `https://do303.com${href}`;
-        eventLinks.add(fullUrl);
-      }
-    });
-
-    // Parse event cards from the listing page
-    $(".ds-listing, .ds-event-card, [class*='event-card'], [class*='listing']").each((_, el) => {
+    // Do303 uses schema.org microdata with itemtype="http://schema.org/Event"
+    $('[itemtype="http://schema.org/Event"]').each((_, el) => {
       try {
         const $el = $(el);
 
-        const linkEl = $el.find("a[href*='/events/']").first();
-        const sourceUrl = linkEl.attr("href") || "";
-        const fullUrl = sourceUrl.startsWith("http") ? sourceUrl : `https://do303.com${sourceUrl}`;
+        // Title: first itemprop="name" that isn't inside a Place
+        const $place = $el.find('[itemtype="http://schema.org/Place"]');
+        const placeNameText = $place.find('[itemprop="name"]').first().text().trim();
 
-        const title =
-          $el.find(".ds-listing-event-title, h3, h2, [class*='title']").first().text().trim() ||
-          linkEl.text().trim();
+        // Get event name - find itemprop="name" NOT inside the Place scope
+        let title = "";
+        $el.find('[itemprop="name"]').each((_, nameEl) => {
+          const t = $(nameEl).text().trim();
+          if (t && t !== placeNameText && !title) {
+            title = t;
+          }
+        });
         if (!title || title.length < 3) return;
 
-        const venueEl = $el.find("a[href*='/venues/'], [class*='venue']").first();
-        const venueName = venueEl.text().trim();
+        // URL: event link
+        const linkEl = $el.find("a[href*='/events/20']").first();
+        const href = linkEl.attr("href") || "";
+        const sourceUrl = href.startsWith("http") ? href : `https://do303.com${href}`;
 
-        const timeText =
-          $el.find(".ds-event-time, time, [class*='date'], [class*='time']").first().text().trim() ||
-          $el.find("time").attr("datetime") ||
-          "";
+        // Start time: itemprop="startDate" with datetime attribute
+        const startDateEl = $el.find('[itemprop="startDate"]');
+        const datetimeStr = startDateEl.attr("datetime") || startDateEl.attr("content") || "";
+        const startTime = datetimeStr ? new Date(datetimeStr) : null;
+        if (!startTime || isNaN(startTime.getTime())) return;
 
-        let startTime: Date;
-        const datetimeAttr = $el.find("time[datetime]").attr("datetime");
-        if (datetimeAttr) {
-          startTime = new Date(datetimeAttr);
-        } else {
-          // Try to extract date from URL pattern /events/YYYY/MM/DD/
-          const urlMatch = fullUrl.match(/\/events\/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
-          if (urlMatch) {
-            // Default to noon Mountain time (19:00 UTC) when no specific time available
-            startTime = new Date(
-              Date.UTC(
-                parseInt(urlMatch[1]),
-                parseInt(urlMatch[2]) - 1,
-                parseInt(urlMatch[3]),
-                19, 0, 0
-              )
-            );
-          } else {
-            startTime = new Date(timeText);
-          }
-        }
+        // Venue from Place schema
+        const venueName = placeNameText || "";
 
-        if (isNaN(startTime.getTime())) return;
+        // Address from Place schema
+        const street = $place.find('[itemprop="streetAddress"]').attr("content") || "";
+        const locality = $place.find('[itemprop="addressLocality"]').attr("content") || "";
+        const region = $place.find('[itemprop="addressRegion"]').attr("content") || "";
+        const address = [street, locality, region].filter(Boolean).join(", ") || "Denver, CO";
+
+        // Image from background-image CSS
+        let imageUrl: string | undefined;
+        $el.find("[style*='background-image']").each((_, imgEl) => {
+          if (imageUrl) return;
+          const style = $(imgEl).attr("style") || "";
+          const match = style.match(/background-image:\s*url\('(https:\/\/assets[^']+)'\)/);
+          if (match) imageUrl = match[1];
+        });
 
         events.push({
           title,
@@ -83,71 +73,21 @@ export async function scrapeDenverEvents(): Promise<ScraperResult> {
           category: classifyEvent(title, venueName),
           tags: extractTags(title, venueName),
           venueName,
-          address: "Denver, CO",
+          address,
           startTime,
           priceRange: "Check source",
           source: SOURCE,
-          sourceUrl: fullUrl,
-          externalId: stableId(fullUrl),
+          sourceUrl,
+          externalId: stableId(sourceUrl),
+          imageUrl,
         });
       } catch {
         // skip individual parse failures
       }
     });
 
-    // If card parsing didn't work, try a broader approach using the collected links
-    if (events.length === 0 && eventLinks.size > 0) {
-      // Extract any event data from the page using a looser approach
-      $("a[href*='/events/20']").each((_, el) => {
-        try {
-          const $a = $(el);
-          const href = $a.attr("href") || "";
-          const fullUrl = href.startsWith("http") ? href : `https://do303.com${href}`;
-
-          // Get title from the link text or parent heading
-          const title = $a.text().trim() || $a.closest("div").find("h2, h3, h4").first().text().trim();
-          if (!title || title.length < 3 || title.length > 200) return;
-
-          // Skip navigation links (usually short generic text)
-          if (["events", "see all", "more", "view all"].includes(title.toLowerCase())) return;
-
-          const urlMatch = fullUrl.match(/\/events\/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
-          if (!urlMatch) return;
-
-          const startTime = new Date(
-            Date.UTC(
-              parseInt(urlMatch[1]),
-              parseInt(urlMatch[2]) - 1,
-              parseInt(urlMatch[3]),
-              2, 0, 0
-            )
-          );
-          if (isNaN(startTime.getTime())) return;
-
-          // Deduplicate by URL
-          if (events.some((e) => e.sourceUrl === fullUrl)) return;
-
-          events.push({
-            title,
-            description: "",
-            category: classifyEvent(title, ""),
-            tags: extractTags(title, ""),
-            venueName: "",
-            address: "Denver, CO",
-            startTime,
-            priceRange: "Check source",
-            source: SOURCE,
-            sourceUrl: fullUrl,
-            externalId: stableId(fullUrl),
-          });
-        } catch {
-          // skip
-        }
-      });
-    }
-
     if (events.length === 0) {
-      errors.push("Do303: no events found on listing page");
+      errors.push("Do303: no events found via schema.org microdata");
     }
 
     return { source: SOURCE, events, errors };
