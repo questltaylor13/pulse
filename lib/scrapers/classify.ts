@@ -79,6 +79,25 @@ const TAG_PATTERNS: [RegExp, string][] = [
   [/\bhappy\s*hour/i, "happy-hour"],
   [/\blate[- ]night/i, "late-night"],
   [/\bweekend/i, "weekend"],
+  // Scoring-compatible tags (match lib/scoring.ts tag sets)
+  [/\bconcert|live\s+music\b/i, "concert"],
+  [/\bcomedy|stand[- ]up|improv\b/i, "comedy"],
+  [/\btrivia|quiz\s*night/i, "trivia"],
+  [/\byoga\b/i, "yoga"],
+  [/\bmeditat/i, "meditation"],
+  [/\bworkshop|master\s*class/i, "workshop"],
+  [/\bfestival\b/i, "festival"],
+  [/\bparty|parties\b/i, "party"],
+  [/\bdanc(e|ing)\b/i, "dancing"],
+  [/\bnetwork(ing)?\b/i, "networking"],
+  [/\bsocial\b/i, "social"],
+  [/\bfitness|workout|bootcamp|crossfit/i, "fitness"],
+  [/\bdog[- ]friendly|pup[- ]friendly|bring\s+your\s+(dog|pup)/i, "dog-friendly"],
+  [/\bclass\b/i, "class"],
+  [/\bmeetup|meet[- ]up/i, "meetup"],
+  [/\bgame\s*night/i, "game-night"],
+  [/\bsolo/i, "solo-friendly"],
+  [/\bromantic|date\s*night/i, "romantic"],
 ];
 
 export function extractTags(title: string, description: string): string[] {

@@ -56,6 +56,22 @@ const nextConfig = {
         protocol: "https",
         hostname: "assets1.dostuffmedia.com",
       },
+      {
+        protocol: "https",
+        hostname: "www.westword.com",
+      },
+      {
+        protocol: "https",
+        hostname: "media.westword.com",
+      },
+      {
+        protocol: "https",
+        hostname: "www.denver.org",
+      },
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
     ],
   },
 };

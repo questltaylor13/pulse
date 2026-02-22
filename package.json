@@ -13,7 +13,8 @@
     "seed": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/seed.ts",
     "db:seed": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/seed.ts",
     "places:ingest": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/ingest-places.ts",
-    "places:enrich": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/enrich-places.ts"
+    "places:enrich": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/enrich-places.ts",
+    "events:enrich": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/enrich-events.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -2,10 +2,15 @@ import { prisma } from "@/lib/prisma";
 import { ScrapedEvent, ScraperResult, Scraper } from "./types";
 import { scrape303Magazine } from "./303magazine";
 import { scrapeDenverEvents } from "./denver-events";
+import { scrapeWestword } from "./westword";
+import { scrapeVisitDenver } from "./visitdenver";
+import { enrichEvent } from "@/lib/enrich-event";
 
 const scrapers: { name: string; fn: Scraper }[] = [
   { name: "303magazine", fn: scrape303Magazine },
   { name: "do303", fn: scrapeDenverEvents },
+  { name: "westword", fn: scrapeWestword },
+  { name: "visitdenver", fn: scrapeVisitDenver },
 ];
 
 const PER_SCRAPER_TIMEOUT = 15_000;
@@ -43,12 +48,17 @@ function deduplicateEvents(events: ScrapedEvent[]): ScrapedEvent[] {
   return Array.from(seen.values());
 }
 
+// Budget (in seconds) reserved for inline enrichment after scraping
+const ENRICHMENT_TIME_BUDGET = 15;
+
 export async function runAllScrapers(): Promise<{
   total: number;
   inserted: number;
   updated: number;
+  enriched: number;
   errors: string[];
 }> {
+  const startTime = Date.now();
   const allResults: ScraperResult[] = [];
 
   for (const scraper of scrapers) {
@@ -70,11 +80,12 @@ export async function runAllScrapers(): Promise<{
 
   let inserted = 0;
   let updated = 0;
+  const newEventIds: string[] = [];
 
   // Get the default city ID (Denver)
   const city = await prisma.city.findFirst({ where: { name: "Denver" } });
   if (!city) {
-    return { total: 0, inserted: 0, updated: 0, errors: [...allErrors, "Denver city not found in database"] };
+    return { total: 0, inserted: 0, updated: 0, enriched: 0, errors: [...allErrors, "Denver city not found in database"] };
   }
 
   for (const event of deduplicated) {
@@ -104,7 +115,7 @@ export async function runAllScrapers(): Promise<{
       });
       updated++;
     } else {
-      await prisma.event.create({
+      const created = await prisma.event.create({
         data: {
           cityId: city.id,
           title: event.title,
@@ -123,9 +134,59 @@ export async function runAllScrapers(): Promise<{
           imageUrl: event.imageUrl,
         },
       });
+      newEventIds.push(created.id);
       inserted++;
     }
   }
 
-  return { total: deduplicated.length, inserted, updated, errors: allErrors };
+  // -----------------------------------------------------------------------
+  // Inline enrichment for newly inserted events (if time remains)
+  // -----------------------------------------------------------------------
+  let enriched = 0;
+  const elapsedSeconds = (Date.now() - startTime) / 1000;
+  const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
+
+  if (hasOpenAIKey && newEventIds.length > 0 && elapsedSeconds < 60 - ENRICHMENT_TIME_BUDGET) {
+    const newEvents = await prisma.event.findMany({
+      where: { id: { in: newEventIds } },
+    });
+
+    for (const ev of newEvents) {
+      // Check time budget before each call (~1.5s per call)
+      if ((Date.now() - startTime) / 1000 > 60 - 5) break;
+
+      try {
+        const result = await enrichEvent({
+          title: ev.title,
+          description: ev.description,
+          venueName: ev.venueName,
+          category: ev.category,
+          tags: ev.tags,
+          priceRange: ev.priceRange,
+          neighborhood: ev.neighborhood,
+        });
+
+        if (result) {
+          const mergedTags = Array.from(new Set([...ev.tags, ...result.tags]));
+          await prisma.event.update({
+            where: { id: ev.id },
+            data: {
+              description: result.description || ev.description,
+              tags: mergedTags,
+              vibeTags: result.vibeTags,
+              companionTags: result.companionTags,
+              isDogFriendly: result.isDogFriendly,
+              isDrinkingOptional: result.isDrinkingOptional,
+              isAlcoholFree: result.isAlcoholFree,
+            },
+          });
+          enriched++;
+        }
+      } catch {
+        // Don't let enrichment failures break the scraper
+      }
+    }
+  }
+
+  return { total: deduplicated.length, inserted, updated, enriched, errors: allErrors };
 }
