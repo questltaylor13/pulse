@@ -2,57 +2,39 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const cities = await prisma.city.findMany({
-    select: { id: true, name: true, slug: true },
-  });
-
-  const denverBySlug = await prisma.city.findUnique({
+  const denver = await prisma.city.findUnique({
     where: { slug: "denver" },
   });
 
-  const denverByName = await prisma.city.findFirst({
-    where: { name: "Denver" },
-  });
+  // Match the feed's timezone-aware date logic
+  const denverDateStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Denver",
+  }).format(new Date());
+  const startOfTodayDenver = new Date(denverDateStr + "T00:00:00.000Z");
+  const twoWeeks = new Date(startOfTodayDenver.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-  const now = new Date();
-  now.setUTCHours(0, 0, 0, 0);
-  const twoWeeks = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-
-  // Count events matching feed query with slug-based city
-  const feedCount = denverBySlug
+  const feedCount = denver
     ? await prisma.event.count({
         where: {
-          cityId: denverBySlug.id,
-          startTime: { gte: now, lte: twoWeeks },
+          cityId: denver.id,
+          startTime: { gte: startOfTodayDenver, lte: twoWeeks },
         },
       })
-    : "no city by slug";
+    : "no city";
 
-  // Count events matching feed query with name-based city
-  const scraperCount = denverByName
-    ? await prisma.event.count({
-        where: {
-          cityId: denverByName.id,
-          startTime: { gte: now, lte: twoWeeks },
-        },
-      })
-    : "no city by name";
-
-  // Sample a scraped event's cityId
-  const sampleEvent = await prisma.event.findFirst({
-    where: { source: "do303" },
-    select: { id: true, title: true, cityId: true, startTime: true },
+  const sampleEvents = await prisma.event.findMany({
+    where: { source: { in: ["do303", "303magazine"] } },
+    select: { title: true, startTime: true, source: true },
+    orderBy: { startTime: "asc" },
+    take: 5,
   });
 
   return NextResponse.json({
-    cities,
-    denverBySlugId: denverBySlug?.id,
-    denverByNameId: denverByName?.id,
-    sameCity: denverBySlug?.id === denverByName?.id,
-    feedCount,
-    scraperCount,
-    sampleEvent,
-    now: now.toISOString(),
+    denverDate: denverDateStr,
+    startOfTodayDenver: startOfTodayDenver.toISOString(),
     twoWeeks: twoWeeks.toISOString(),
+    utcNow: new Date().toISOString(),
+    feedCount,
+    sampleEvents,
   });
 }

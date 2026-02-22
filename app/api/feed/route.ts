@@ -60,16 +60,18 @@ export async function GET(request: NextRequest) {
   const userAvoidsBars = user?.detailedPreferences?.avoidBars ?? false;
 
   // Build the event query
-  // Use start of today (UTC) so events happening later today still appear
-  const now = new Date();
-  now.setUTCHours(0, 0, 0, 0);
-  const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  // Use start of today in Denver time so events today always appear
+  const denverDateStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: denver.timezone || "America/Denver",
+  }).format(new Date());
+  const startOfTodayDenver = new Date(denverDateStr + "T00:00:00.000Z");
+  const twoWeeksFromNow = new Date(startOfTodayDenver.getTime() + 14 * 24 * 60 * 60 * 1000);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const whereClause: any = {
     cityId: denver.id,
     startTime: {
-      gte: now,
+      gte: startOfTodayDenver,
       lte: twoWeeksFromNow,
     },
     ...(categoryFilter && { category: categoryFilter }),
