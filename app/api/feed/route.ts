@@ -60,7 +60,9 @@ export async function GET(request: NextRequest) {
   const userAvoidsBars = user?.detailedPreferences?.avoidBars ?? false;
 
   // Build the event query
+  // Use start of today (UTC) so events happening later today still appear
   const now = new Date();
+  now.setUTCHours(0, 0, 0, 0);
   const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

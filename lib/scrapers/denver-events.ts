@@ -61,10 +61,14 @@ export async function scrapeDenverEvents(): Promise<ScraperResult> {
           // Try to extract date from URL pattern /events/YYYY/MM/DD/
           const urlMatch = fullUrl.match(/\/events\/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
           if (urlMatch) {
+            // Default to 7 PM Denver time (UTC-7) = next day 2 AM UTC
             startTime = new Date(
-              parseInt(urlMatch[1]),
-              parseInt(urlMatch[2]) - 1,
-              parseInt(urlMatch[3])
+              Date.UTC(
+                parseInt(urlMatch[1]),
+                parseInt(urlMatch[2]) - 1,
+                parseInt(urlMatch[3]),
+                2, 0, 0
+              )
             );
           } else {
             startTime = new Date(timeText);
@@ -111,9 +115,12 @@ export async function scrapeDenverEvents(): Promise<ScraperResult> {
           if (!urlMatch) return;
 
           const startTime = new Date(
-            parseInt(urlMatch[1]),
-            parseInt(urlMatch[2]) - 1,
-            parseInt(urlMatch[3])
+            Date.UTC(
+              parseInt(urlMatch[1]),
+              parseInt(urlMatch[2]) - 1,
+              parseInt(urlMatch[3]),
+              2, 0, 0
+            )
           );
           if (isNaN(startTime.getTime())) return;
 
