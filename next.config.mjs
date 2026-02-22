@@ -64,14 +64,6 @@ const nextConfig = {
         protocol: "https",
         hostname: "media.westword.com",
       },
-      {
-        protocol: "https",
-        hostname: "www.denver.org",
-      },
-      {
-        protocol: "https",
-        hostname: "res.cloudinary.com",
-      },
     ],
   },
 };

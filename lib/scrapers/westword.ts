@@ -5,200 +5,119 @@ import { classifyEvent, extractTags } from "./classify";
 import { createHash } from "crypto";
 
 const SOURCE = "westword";
-const EVENTS_URL = "https://www.westword.com/events";
+const EVENTS_URL = "https://www.westword.com/things-to-do/";
 
 function stableId(url: string): string {
   return createHash("sha256").update(url).digest("hex").slice(0, 16);
 }
 
-// ---------------------------------------------------------------------------
-// JSON-LD parser (same Events Calendar plugin as 303 Magazine)
-// ---------------------------------------------------------------------------
+/**
+ * Parse a Westword date string like "Sun., Feb 22, 1:00 pm" or
+ * "Sun., Feb 22, 6:00 pm – 8:00 pm" or "Every Sunday, 10:30 AM"
+ * into a Date. Returns null if unparseable.
+ */
+function parseWestwordDate(dateStr: string): { start: Date; end?: Date } | null {
+  // Clean HTML entities
+  const cleaned = dateStr.replace(/&#8211;/g, "–").replace(/\s+/g, " ").trim();
 
-interface JsonLdEvent {
-  "@type"?: string;
-  name?: string;
-  startDate?: string;
-  endDate?: string;
-  description?: string;
-  url?: string;
-  image?: string | string[] | { url?: string };
-  location?:
-    | {
-        name?: string;
-        address?:
-          | string
-          | {
-              streetAddress?: string;
-              addressLocality?: string;
-              addressRegion?: string;
-            };
-      }
-    | {
-        name?: string;
-        address?:
-          | string
-          | {
-              streetAddress?: string;
-              addressLocality?: string;
-              addressRegion?: string;
-            };
-      }[];
-  offers?:
-    | { price?: string; priceCurrency?: string }
-    | { price?: string; priceCurrency?: string }[];
+  // "Every <day>" recurring events — anchor to next occurrence
+  const recurringMatch = cleaned.match(
+    /every\s+(\w+),?\s*(\d{1,2}:\d{2}\s*(?:AM|PM))/i,
+  );
+  if (recurringMatch) {
+    const dayName = recurringMatch[1];
+    const timeStr = recurringMatch[2];
+    const now = new Date();
+    const dayMap: Record<string, number> = {
+      sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+      thursday: 4, friday: 5, saturday: 6,
+    };
+    const targetDay = dayMap[dayName.toLowerCase()];
+    if (targetDay === undefined) return null;
+
+    const daysAhead = (targetDay - now.getDay() + 7) % 7 || 7;
+    const nextDate = new Date(now);
+    nextDate.setDate(now.getDate() + daysAhead);
+
+    const parsed = new Date(
+      `${nextDate.toDateString()} ${timeStr}`,
+    );
+    return isNaN(parsed.getTime()) ? null : { start: parsed };
+  }
+
+  // "Mon., Feb 22, 1:00 pm" or "Mon., Feb 22, 1:00 pm – 3:00 pm"
+  // Strip the day abbreviation prefix
+  const withoutDay = cleaned.replace(/^\w+\.,?\s*/, "");
+  const currentYear = new Date().getFullYear();
+
+  // Split on dash for start/end
+  const parts = withoutDay.split(/\s*[–-]\s*/);
+  const startStr = `${parts[0]}, ${currentYear}`;
+  const start = new Date(startStr);
+  if (isNaN(start.getTime())) return null;
+
+  let end: Date | undefined;
+  if (parts[1]) {
+    // End time might be just "8:00 pm" (same day) or a full date
+    const endStr = parts[1].match(/^\d{1,2}:\d{2}\s*(?:AM|PM)$/i)
+      ? `${parts[0].replace(/\d{1,2}:\d{2}\s*(?:AM|PM)/i, parts[1])}, ${currentYear}`
+      : `${parts[1]}, ${currentYear}`;
+    end = new Date(endStr);
+    if (isNaN(end.getTime())) end = undefined;
+  }
+
+  return { start, end };
 }
-
-function parseJsonLdEvents(html: string): ScrapedEvent[] {
-  const $ = cheerio.load(html);
-  const events: ScrapedEvent[] = [];
-
-  $('script[type="application/ld+json"]').each((_, el) => {
-    try {
-      const raw = $(el).text();
-      const data = JSON.parse(raw);
-
-      const items: JsonLdEvent[] = [];
-      if (Array.isArray(data)) items.push(...data);
-      else if (data["@graph"] && Array.isArray(data["@graph"]))
-        items.push(...data["@graph"]);
-      else items.push(data);
-
-      for (const item of items) {
-        if (item["@type"] !== "Event") continue;
-        if (!item.name || !item.startDate) continue;
-
-        const title = item.name;
-        const description = item.description || "";
-        const startTime = new Date(item.startDate);
-        if (isNaN(startTime.getTime())) continue;
-
-        const endTime = item.endDate ? new Date(item.endDate) : undefined;
-        const sourceUrl = item.url || EVENTS_URL;
-
-        let imageUrl: string | undefined;
-        if (typeof item.image === "string") imageUrl = item.image;
-        else if (Array.isArray(item.image)) imageUrl = item.image[0];
-        else if (item.image?.url) imageUrl = item.image.url;
-
-        let venueName = "";
-        let address = "";
-        const loc = Array.isArray(item.location)
-          ? item.location[0]
-          : item.location;
-        if (loc) {
-          venueName = loc.name || "";
-          if (typeof loc.address === "string") {
-            address = loc.address;
-          } else if (loc.address) {
-            address = [
-              loc.address.streetAddress,
-              loc.address.addressLocality,
-              loc.address.addressRegion,
-            ]
-              .filter(Boolean)
-              .join(", ");
-          }
-        }
-
-        let priceRange = "Check source";
-        if (item.offers) {
-          const offer = Array.isArray(item.offers)
-            ? item.offers[0]
-            : item.offers;
-          if (offer?.price === "0" || offer?.price === "0.00") {
-            priceRange = "Free";
-          } else if (offer?.price) {
-            priceRange = `$${offer.price}`;
-          }
-        }
-
-        events.push({
-          title,
-          description: description.slice(0, 500),
-          category: classifyEvent(title, description),
-          tags: extractTags(title, description),
-          venueName,
-          address: address || "Denver, CO",
-          startTime,
-          endTime: endTime && !isNaN(endTime.getTime()) ? endTime : undefined,
-          priceRange,
-          source: SOURCE,
-          sourceUrl,
-          externalId: stableId(sourceUrl),
-          imageUrl,
-        });
-      }
-    } catch {
-      // skip malformed JSON-LD blocks
-    }
-  });
-
-  return events;
-}
-
-// ---------------------------------------------------------------------------
-// DOM fallback — The Events Calendar plugin selectors
-// ---------------------------------------------------------------------------
 
 function parseDomEvents(html: string): ScrapedEvent[] {
   const $ = cheerio.load(html);
   const events: ScrapedEvent[] = [];
 
-  $(
-    ".tribe-events-calendar-list__event, .tribe-common-g-row, .type-tribe_events",
-  ).each((_, el) => {
+  $("a.event-item").each((_, el) => {
     try {
       const $el = $(el);
 
-      const titleEl = $el
-        .find(
-          ".tribe-events-calendar-list__event-title a, .tribe-events-list-event-title a, h2 a, h3 a",
-        )
-        .first();
-      const title = titleEl.text().trim();
-      if (!title) return;
+      // Title
+      const title = $el.find(".event-title").text().trim();
+      if (!title || title.length < 3) return;
 
-      const sourceUrl = titleEl.attr("href") || EVENTS_URL;
+      // URL
+      const sourceUrl = $el.attr("href") || EVENTS_URL;
 
-      const timeEl = $el.find(
-        "time[datetime], .tribe-events-schedule, .tribe-events-calendar-list__event-datetime",
-      );
-      const dateStr = timeEl.attr("datetime") || timeEl.text().trim();
-      const startTime = new Date(dateStr);
-      if (isNaN(startTime.getTime())) return;
+      // Date/time
+      const dateStr = $el.find(".event-occurrences").text().trim();
+      const parsed = parseWestwordDate(dateStr);
+      if (!parsed) return;
 
-      const venueName = $el
-        .find(
-          ".tribe-events-venue-details a, .tribe-venue, .tribe-events-calendar-list__event-venue",
-        )
-        .first()
-        .text()
-        .trim();
+      // Venue
+      const venueName = $el.find(".location-name").text().trim();
+      const address = $el.find(".location-address").text().trim() || "Denver, CO";
 
-      const description = $el
-        .find(
-          ".tribe-events-list-event-description, .tribe-events-calendar-list__event-description",
-        )
-        .first()
-        .text()
-        .trim()
-        .slice(0, 500);
+      // Neighborhood
+      const neighborhoodText = $el.find(".location-neighbourhood strong").text().trim();
+      const neighborhood = neighborhoodText || undefined;
 
-      const imageUrl =
-        $el.find("img").first().attr("src") ||
-        $el.find("img").first().attr("data-src") ||
-        undefined;
+      // Price
+      const priceText = $el.find(".ticket-price").text().trim();
+      const priceRange = priceText || "Check source";
+
+      // Image (skip placeholder images)
+      const imgEl = $el.find(".event-image img").first();
+      const imgSrc = imgEl.attr("src") || undefined;
+      const isPlaceholder = imgEl.hasClass("thumbnail-placeholder");
+      const imageUrl = isPlaceholder ? undefined : imgSrc;
 
       events.push({
         title,
-        description,
-        category: classifyEvent(title, description),
-        tags: extractTags(title, description),
+        description: "",
+        category: classifyEvent(title, venueName),
+        tags: extractTags(title, venueName),
         venueName: venueName || "",
-        address: "Denver, CO",
-        startTime,
-        priceRange: "Check source",
+        address,
+        neighborhood,
+        startTime: parsed.start,
+        endTime: parsed.end,
+        priceRange,
         source: SOURCE,
         sourceUrl,
         externalId: stableId(sourceUrl),
@@ -212,26 +131,15 @@ function parseDomEvents(html: string): ScrapedEvent[] {
   return events;
 }
 
-// ---------------------------------------------------------------------------
-// Public scraper
-// ---------------------------------------------------------------------------
-
 export async function scrapeWestword(): Promise<ScraperResult> {
   const errors: string[] = [];
 
   try {
     const html = await fetchPage(EVENTS_URL);
-
-    // Try JSON-LD first (most reliable)
-    let events = parseJsonLdEvents(html);
-
-    // Fall back to DOM parsing
-    if (events.length === 0) {
-      events = parseDomEvents(html);
-    }
+    const events = parseDomEvents(html);
 
     if (events.length === 0) {
-      errors.push("Westword: no events found via JSON-LD or DOM parsing");
+      errors.push("Westword: no events found on /things-to-do/");
     }
 
     return { source: SOURCE, events, errors };

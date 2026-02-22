@@ -3,14 +3,12 @@ import { ScrapedEvent, ScraperResult, Scraper } from "./types";
 import { scrape303Magazine } from "./303magazine";
 import { scrapeDenverEvents } from "./denver-events";
 import { scrapeWestword } from "./westword";
-import { scrapeVisitDenver } from "./visitdenver";
 import { enrichEvent } from "@/lib/enrich-event";
 
 const scrapers: { name: string; fn: Scraper }[] = [
   { name: "303magazine", fn: scrape303Magazine },
   { name: "do303", fn: scrapeDenverEvents },
   { name: "westword", fn: scrapeWestword },
-  { name: "visitdenver", fn: scrapeVisitDenver },
 ];
 
 const PER_SCRAPER_TIMEOUT = 15_000;
