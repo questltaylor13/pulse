@@ -87,8 +87,8 @@ function parseJsonLdEvents(html: string): ScrapedEvent[] {
         events.push({
           title,
           description: description.slice(0, 500),
-          category: classifyEvent(title, description),
-          tags: extractTags(title, description),
+          category: classifyEvent(title, venueName),
+          tags: extractTags(title, venueName),
           venueName,
           address,
           startTime,
@@ -148,8 +148,8 @@ function parseDomEvents(html: string): ScrapedEvent[] {
       events.push({
         title,
         description,
-        category: classifyEvent(title, description),
-        tags: extractTags(title, description),
+        category: classifyEvent(title, venueName),
+        tags: extractTags(title, venueName),
         venueName,
         address: "Denver, CO",
         startTime,
