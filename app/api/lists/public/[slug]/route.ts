@@ -78,10 +78,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
   }
 
-  // Calculate summary statistics
-  const neighborhoods = [...new Set(list.items.map((item) => item.event.neighborhood).filter(Boolean))];
-  const freeCount = list.items.filter((item) =>
-    item.event.priceRange?.toLowerCase() === "free" || item.event.priceRange === "$0"
+  // Calculate summary statistics (only for event-based items)
+  const eventItems = list.items.filter((item) => item.event != null);
+  const neighborhoods = [...new Set(eventItems.map((item) => item.event!.neighborhood).filter(Boolean))];
+  const freeCount = eventItems.filter((item) =>
+    item.event!.priceRange?.toLowerCase() === "free" || item.event!.priceRange === "$0"
   ).length;
 
   return NextResponse.json({
@@ -101,28 +102,28 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       profileImageUrl: list.user.profileImageUrl,
       isInfluencer: list.user.isInfluencer,
     },
-    items: list.items.map((item, index) => ({
-      id: item.event.id,
+    items: eventItems.map((item, index) => ({
+      id: item.event!.id,
       listItemId: item.id,
       order: item.order || index,
       notes: item.notes,
-      title: item.event.title,
-      description: item.event.description,
-      category: item.event.category,
-      tags: item.event.tags,
-      venueName: item.event.venueName,
-      address: item.event.address,
-      neighborhood: item.event.neighborhood,
-      startTime: item.event.startTime,
-      endTime: item.event.endTime,
-      priceRange: item.event.priceRange,
-      source: item.event.source,
-      sourceUrl: item.event.sourceUrl,
-      googleRating: item.event.googleRating,
-      googleRatingCount: item.event.googleRatingCount,
-      appleRating: item.event.appleRating,
-      appleRatingCount: item.event.appleRatingCount,
-      place: item.event.place,
+      title: item.event!.title,
+      description: item.event!.description,
+      category: item.event!.category,
+      tags: item.event!.tags,
+      venueName: item.event!.venueName,
+      address: item.event!.address,
+      neighborhood: item.event!.neighborhood,
+      startTime: item.event!.startTime,
+      endTime: item.event!.endTime,
+      priceRange: item.event!.priceRange,
+      source: item.event!.source,
+      sourceUrl: item.event!.sourceUrl,
+      googleRating: item.event!.googleRating,
+      googleRatingCount: item.event!.googleRatingCount,
+      appleRating: item.event!.appleRating,
+      appleRatingCount: item.event!.appleRatingCount,
+      place: item.event!.place,
       addedAt: item.createdAt,
     })),
     summary: {

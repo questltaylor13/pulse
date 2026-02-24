@@ -57,18 +57,20 @@ export async function GET(request: NextRequest) {
       totalCost: plan.totalCost,
       neighborhoods: plan.neighborhoods,
       isPublic: plan.isPublic,
-      events: plan.events.map((pe) => ({
-        id: pe.event.id,
-        title: pe.event.title,
-        category: pe.event.category,
-        venueName: pe.event.venueName,
-        neighborhood: pe.event.neighborhood,
-        startTime: pe.event.startTime,
-        endTime: pe.event.endTime,
-        priceRange: pe.event.priceRange,
-        order: pe.order,
-        notes: pe.notes,
-      })),
+      events: plan.events
+        .filter((pe) => pe.event != null)
+        .map((pe) => ({
+          id: pe.event!.id,
+          title: pe.event!.title,
+          category: pe.event!.category,
+          venueName: pe.event!.venueName,
+          neighborhood: pe.event!.neighborhood,
+          startTime: pe.event!.startTime,
+          endTime: pe.event!.endTime,
+          priceRange: pe.event!.priceRange,
+          order: pe.order,
+          notes: pe.notes,
+        })),
       createdAt: plan.createdAt,
     })),
   });
@@ -164,14 +166,16 @@ export async function POST(request: NextRequest) {
         dateEnd: plan.dateEnd,
         totalCost: plan.totalCost,
         neighborhoods: plan.neighborhoods,
-        events: plan.events.map((pe) => ({
-          id: pe.event.id,
-          title: pe.event.title,
-          category: pe.event.category,
-          venueName: pe.event.venueName,
-          startTime: pe.event.startTime,
-          order: pe.order,
-        })),
+        events: plan.events
+          .filter((pe) => pe.event != null)
+          .map((pe) => ({
+            id: pe.event!.id,
+            title: pe.event!.title,
+            category: pe.event!.category,
+            venueName: pe.event!.venueName,
+            startTime: pe.event!.startTime,
+            order: pe.order,
+          })),
       },
     });
   } catch (error) {

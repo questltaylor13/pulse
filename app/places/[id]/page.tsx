@@ -2,7 +2,10 @@ import { redirect, notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getListItemsNearby, discoverNearby } from "@/lib/proximity";
+import { DEFAULT_RADIUS_MILES } from "@/lib/geo";
 import PlaceDetailClient from "./PlaceDetailClient";
+import NearbySection from "@/components/nearby/NearbySection";
 
 interface PlaceDetailPageProps {
   params: { id: string };
@@ -61,23 +64,45 @@ export default async function PlaceDetailPage({ params }: PlaceDetailPageProps) 
     },
   });
 
-  // Get similar places for recommendations
-  const similarPlaces = await prisma.place.findMany({
-    where: {
-      id: { not: place.id },
-      category: place.category,
-      openingStatus: "OPEN",
-    },
-    take: 6,
-    orderBy: { googleRating: "desc" },
-  });
+  const hasCoords = place.lat != null && place.lng != null;
+  const center = hasCoords ? { lat: place.lat!, lng: place.lng! } : null;
+
+  // Get similar places + nearby data in parallel
+  const [similarPlaces, nearbyGroups, nearbyDiscovery] = await Promise.all([
+    prisma.place.findMany({
+      where: {
+        id: { not: place.id },
+        category: place.category,
+        openingStatus: "OPEN",
+      },
+      take: 6,
+      orderBy: { googleRating: "desc" },
+    }),
+    center
+      ? getListItemsNearby(session.user.id, center, DEFAULT_RADIUS_MILES)
+      : Promise.resolve([]),
+    center
+      ? discoverNearby(session.user.id, center, DEFAULT_RADIUS_MILES)
+      : Promise.resolve([]),
+  ]);
 
   return (
-    <PlaceDetailClient
-      place={place}
-      hasNotification={!!userAlert}
-      userId={session.user.id}
-      similarPlaces={similarPlaces}
-    />
+    <div className="space-y-8">
+      <PlaceDetailClient
+        place={place}
+        hasNotification={!!userAlert}
+        userId={session.user.id}
+        similarPlaces={similarPlaces}
+      />
+
+      {center && (
+        <NearbySection
+          lat={center.lat}
+          lng={center.lng}
+          initialListGroups={nearbyGroups}
+          initialDiscoveryItems={nearbyDiscovery}
+        />
+      )}
+    </div>
   );
 }

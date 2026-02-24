@@ -61,6 +61,8 @@ export async function getEventWithStatus(eventId: string) {
       place: {
         select: {
           id: true,
+          lat: true,
+          lng: true,
           googleRating: true,
           googleReviewCount: true,
           priceLevel: true,

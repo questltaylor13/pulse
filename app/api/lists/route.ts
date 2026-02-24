@@ -51,13 +51,15 @@ export async function GET(request: NextRequest) {
       viewCount: list.viewCount,
       saveCount: list.saveCount,
       itemCount: list._count.items,
-      recentItems: list.items.map((item) => ({
-        id: item.event.id,
-        title: item.event.title,
-        category: item.event.category,
-        venueName: item.event.venueName,
-        startTime: item.event.startTime,
-      })),
+      recentItems: list.items
+        .filter((item) => item.event != null)
+        .map((item) => ({
+          id: item.event!.id,
+          title: item.event!.title,
+          category: item.event!.category,
+          venueName: item.event!.venueName,
+          startTime: item.event!.startTime,
+        })),
       createdAt: list.createdAt,
       updatedAt: list.updatedAt,
     })),
