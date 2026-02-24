@@ -62,8 +62,8 @@ export function InviteFriendsModal({
 
       setFriends(friendsData.friends || []);
       setGroups(groupsData.groups || []);
-    } catch (error) {
-      console.error("Failed to fetch friends and groups:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setLoading(false);
     }
@@ -92,8 +92,8 @@ export function InviteFriendsModal({
           onClose();
         }, 1500);
       }
-    } catch (error) {
-      console.error("Failed to send invitations:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setSending(false);
     }

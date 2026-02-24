@@ -1,15 +1,6 @@
 import Link from "next/link";
 import { Category, OpeningStatus } from "@prisma/client";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  RESTAURANT: "Restaurant",
-  BARS: "Bar",
-  COFFEE: "Coffee",
-  FOOD: "Food",
-  ART: "Art",
-  ACTIVITY_VENUE: "Activity",
-  OTHER: "Other",
-};
+import { CATEGORY_LABELS } from "@/lib/constants/categories";
 
 interface NewPlace {
   id: string;

@@ -78,7 +78,7 @@ export default function FromListsTab({ groups, radiusMiles }: FromListsTabProps)
                         name: item.name,
                       })
                     }
-                    className="text-xs font-medium text-[#FF4D4F] hover:text-[#FF4D4F]/80 transition"
+                    className="text-xs font-medium text-primary hover:text-primary/80 transition"
                   >
                     + Add to Plan
                   </button>

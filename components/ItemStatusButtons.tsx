@@ -35,8 +35,8 @@ export default function ItemStatusButtons({
         setStatus(newStatus);
         onStatusChange?.(newStatus);
       }
-    } catch (error) {
-      console.error("Failed to update status:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setLoading(false);
     }

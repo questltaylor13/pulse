@@ -84,8 +84,8 @@ export function CalendarSidebar() {
         .slice(0, 5);
 
       setUpcoming(allUpcoming);
-    } catch (error) {
-      console.error("Failed to fetch sidebar data:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setLoading(false);
     }

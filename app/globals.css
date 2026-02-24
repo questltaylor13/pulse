@@ -4,9 +4,9 @@
 
 :root {
   color-scheme: light;
-  --pulse-coral: #FF4D4F;
-  --pulse-coral-light: #FF7875;
-  --pulse-coral-dark: #D9363E;
+  --pulse-coral: #2563EB;
+  --pulse-coral-light: #3B82F6;
+  --pulse-coral-dark: #1D4ED8;
   --pulse-teal: #00D4AA;
   --pulse-teal-light: #33DFBE;
   --pulse-teal-dark: #00A884;
@@ -57,7 +57,7 @@ body {
 }
 
 .btn-landing-secondary:hover {
-  background-color: #FFF1F0;
+  background-color: #EFF6FF;
 }
 
 .bg-landing-coral {

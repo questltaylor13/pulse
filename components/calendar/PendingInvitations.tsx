@@ -42,8 +42,8 @@ export function PendingInvitations() {
       const res = await fetch("/api/calendar/invitations?status=PENDING");
       const data = await res.json();
       setInvitations(data.invitations || []);
-    } catch (error) {
-      console.error("Failed to fetch invitations:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setLoading(false);
     }
@@ -64,8 +64,8 @@ export function PendingInvitations() {
       if (res.ok) {
         setInvitations(invitations.filter((i) => i.id !== invitationId));
       }
-    } catch (error) {
-      console.error("Failed to respond to invitation:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setResponding(null);
     }

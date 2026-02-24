@@ -46,8 +46,8 @@ export default function ShareModal({
         },
       });
       setQrCodeUrl(dataUrl);
-    } catch (err) {
-      console.error("Failed to generate QR code:", err);
+    } catch {
+      /* silently handled */
     }
   };
 
@@ -56,8 +56,8 @@ export default function ShareModal({
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy:", err);
+    } catch {
+      /* silently handled */
     }
   };
 

@@ -6,7 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getUserStats, TimeRange } from "@/lib/actions/stats";
 import { Category } from "@prisma/client";
+import { CATEGORY_LABELS } from "@/lib/constants/categories";
 
+// Stats page uses solid background colors for chart bars (different from shared CATEGORY_COLORS)
 const CATEGORY_COLORS: Record<Category, string> = {
   ART: "bg-purple-500",
   LIVE_MUSIC: "bg-pink-500",
@@ -20,21 +22,6 @@ const CATEGORY_COLORS: Record<Category, string> = {
   OTHER: "bg-slate-500",
   RESTAURANT: "bg-orange-500",
   ACTIVITY_VENUE: "bg-cyan-500",
-};
-
-const CATEGORY_LABELS: Record<Category, string> = {
-  ART: "Art",
-  LIVE_MUSIC: "Live Music",
-  BARS: "Bars",
-  FOOD: "Food",
-  COFFEE: "Coffee",
-  OUTDOORS: "Outdoors",
-  FITNESS: "Fitness",
-  SEASONAL: "Seasonal",
-  POPUP: "Pop-up",
-  OTHER: "Other",
-  RESTAURANT: "Restaurant",
-  ACTIVITY_VENUE: "Activity",
 };
 
 const TIME_RANGES: { value: TimeRange; label: string }[] = [

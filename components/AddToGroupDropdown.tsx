@@ -50,8 +50,8 @@ export default function AddToGroupDropdown({
         const data = await response.json();
         setGroups(data.groups || []);
       }
-    } catch (error) {
-      console.error("Failed to fetch groups:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setLoading(false);
     }
@@ -92,8 +92,7 @@ export default function AddToGroupDropdown({
         }
         setTimeout(() => setFeedback(null), 2000);
       }
-    } catch (error) {
-      console.error("Failed to add to group:", error);
+    } catch {
       setFeedback("Failed");
       setTimeout(() => setFeedback(null), 2000);
     } finally {

@@ -128,7 +128,7 @@ export default function LabsItemCard({
       }
       onUpdate?.();
     } catch {
-      console.error("RSVP failed");
+      /* silently handled */
     } finally {
       setIsRsvping(false);
     }
@@ -154,7 +154,7 @@ export default function LabsItemCard({
       }
       onUpdate?.();
     } catch {
-      console.error("Save failed");
+      /* silently handled */
     } finally {
       setIsSaving(false);
     }

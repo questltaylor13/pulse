@@ -5,6 +5,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { Category, ItemStatus } from "@prisma/client";
 import { DogFriendlyBadge, SoberFriendlyBadge } from "@/components/badges";
+import { setItemStatus, removeItemStatus } from "@/lib/actions/items";
+import { CATEGORY_EMOJI, CATEGORY_LABELS } from "@/lib/constants/categories";
 
 interface PlaceCardProps {
   id: string;
@@ -34,37 +36,6 @@ interface PlaceCardProps {
   hasMocktailMenu?: boolean;
   soberFriendlyNotes?: string | null;
 }
-
-// Category emoji mapping
-const CATEGORY_EMOJI: Record<Category, string> = {
-  ART: "🎨",
-  LIVE_MUSIC: "🎵",
-  BARS: "🍺",
-  FOOD: "🍽️",
-  COFFEE: "☕",
-  OUTDOORS: "🏔️",
-  FITNESS: "💪",
-  SEASONAL: "🎄",
-  POPUP: "✨",
-  OTHER: "📍",
-  RESTAURANT: "🍽️",
-  ACTIVITY_VENUE: "🎯",
-};
-
-const CATEGORY_LABELS: Record<Category, string> = {
-  ART: "Art",
-  LIVE_MUSIC: "Live Music",
-  BARS: "Bars",
-  FOOD: "Food",
-  COFFEE: "Coffee",
-  OUTDOORS: "Outdoors",
-  FITNESS: "Fitness",
-  SEASONAL: "Seasonal",
-  POPUP: "Pop-up",
-  OTHER: "Other",
-  RESTAURANT: "Restaurant",
-  ACTIVITY_VENUE: "Experience",
-};
 
 export default function PlaceCard({
   id,
@@ -116,27 +87,25 @@ export default function PlaceCard({
     setShowMoreMenu(false);
 
     try {
-      const response = await fetch("/api/items/status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: id, status: newStatus }),
-      });
-
-      if (response.ok) {
-        setCurrentStatus(newStatus);
-        onStatusChange?.(newStatus, shouldRemove);
-
-        // Show toast for Done or Pass
-        if (newStatus === "DONE") {
-          setShowToast("Nice! Added to your Done list");
-          setTimeout(() => setShowToast(null), 2000);
-        } else if (newStatus === "PASS") {
-          setShowToast("Got it, hidden from feed");
-          setTimeout(() => setShowToast(null), 2000);
-        }
+      if (newStatus === null) {
+        await removeItemStatus(id);
+      } else {
+        await setItemStatus(id, newStatus);
       }
-    } catch (error) {
-      console.error("Failed to update status:", error);
+
+      setCurrentStatus(newStatus);
+      onStatusChange?.(newStatus, shouldRemove);
+
+      if (newStatus === "DONE") {
+        setShowToast("Nice! Added to your Done list");
+        setTimeout(() => setShowToast(null), 2000);
+      } else if (newStatus === "PASS") {
+        setShowToast("Got it, hidden from feed");
+        setTimeout(() => setShowToast(null), 2000);
+      }
+    } catch {
+      setShowToast("Failed to update. Please try again.");
+      setTimeout(() => setShowToast(null), 2000);
     } finally {
       setIsLoading(false);
     }
@@ -184,7 +153,7 @@ export default function PlaceCard({
   );
 
   return (
-    <article className="bg-white rounded-xl border border-slate-100 overflow-hidden hover:shadow-md transition-shadow relative">
+    <article className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow relative">
       {/* Toast */}
       {showToast && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2 rounded-full shadow-lg">

@@ -33,6 +33,13 @@ export async function GET(request: NextRequest) {
               startTime: true,
             },
           },
+          place: {
+            select: {
+              id: true,
+              name: true,
+              category: true,
+            },
+          },
         },
       },
     },
@@ -52,14 +59,27 @@ export async function GET(request: NextRequest) {
       saveCount: list.saveCount,
       itemCount: list._count.items,
       recentItems: list.items
-        .filter((item) => item.event != null)
-        .map((item) => ({
-          id: item.event!.id,
-          title: item.event!.title,
-          category: item.event!.category,
-          venueName: item.event!.venueName,
-          startTime: item.event!.startTime,
-        })),
+        .filter((item) => item.event != null || item.place != null)
+        .map((item) => {
+          if (item.event) {
+            return {
+              id: item.event.id,
+              type: "event" as const,
+              title: item.event.title,
+              category: item.event.category,
+              venueName: item.event.venueName,
+              startTime: item.event.startTime,
+            };
+          }
+          return {
+            id: item.place!.id,
+            type: "place" as const,
+            title: item.place!.name,
+            category: item.place!.category,
+            venueName: item.place!.name,
+            startTime: null,
+          };
+        }),
       createdAt: list.createdAt,
       updatedAt: list.updatedAt,
     })),

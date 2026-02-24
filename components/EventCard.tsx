@@ -14,6 +14,7 @@ import {
 import ScoreBadge from "@/components/ScoreBadge";
 import { FriendsGoingBadge } from "@/components/FriendsGoingBadge";
 import { DogFriendlyBadge, SoberFriendlyBadge } from "@/components/badges";
+import { CATEGORY_EMOJI, CATEGORY_LABELS } from "@/lib/constants/categories";
 
 interface FriendUser {
   id: string;
@@ -131,37 +132,6 @@ interface EventCardProps {
   soberFriendlyNotes?: string | null;
 }
 
-// Category emoji mapping
-const CATEGORY_EMOJI: Record<Category, string> = {
-  ART: "🎨",
-  LIVE_MUSIC: "🎵",
-  BARS: "🍺",
-  FOOD: "🍽️",
-  COFFEE: "☕",
-  OUTDOORS: "🏔️",
-  FITNESS: "💪",
-  SEASONAL: "🎄",
-  POPUP: "✨",
-  OTHER: "📍",
-  RESTAURANT: "🍽️",
-  ACTIVITY_VENUE: "🎯",
-};
-
-const CATEGORY_LABELS: Record<Category, string> = {
-  ART: "Art",
-  LIVE_MUSIC: "Live Music",
-  BARS: "Bars",
-  FOOD: "Food",
-  COFFEE: "Coffee",
-  OUTDOORS: "Outdoors",
-  FITNESS: "Fitness",
-  SEASONAL: "Seasonal",
-  POPUP: "Pop-up",
-  OTHER: "Other",
-  RESTAURANT: "Restaurant",
-  ACTIVITY_VENUE: "Activity",
-};
-
 const GOING_WITH_OPTIONS: { value: GoingWith; label: string; icon: string }[] = [
   { value: "SOLO", label: "Solo", icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" },
   { value: "DATE", label: "Date", icon: "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" },
@@ -267,8 +237,8 @@ export default function EventCard({
         const data = await response.json();
         setLists(data.lists);
       }
-    } catch (error) {
-      console.error("Failed to fetch lists:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setListsLoading(false);
     }
@@ -290,8 +260,8 @@ export default function EventCard({
           setShowListSubmenu(false);
         }, 1500);
       }
-    } catch (error) {
-      console.error("Failed to add to list:", error);
+    } catch {
+      /* silently handled */
     }
   };
 
@@ -376,8 +346,8 @@ export default function EventCard({
           setIsSaved(true);
         }
       }
-    } catch (error) {
-      console.error("Failed to add to calendar:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setAddingToCalendar(false);
     }
@@ -410,7 +380,7 @@ export default function EventCard({
 
   if (isHidden) {
     return (
-      <article className="bg-white rounded-xl border border-slate-100 text-center py-6">
+      <article className="bg-white rounded-xl border border-slate-200 text-center py-6">
         <p className="text-slate-500 text-sm mb-2">Event hidden</p>
         <button
           onClick={() => setIsHidden(false)}
@@ -427,7 +397,7 @@ export default function EventCard({
   const displayRatingCount = googleRatingCount || place?.googleReviewCount;
 
   return (
-    <article className="bg-white rounded-xl border border-slate-100 hover:shadow-md transition-shadow relative">
+    <article className="bg-white rounded-xl border border-slate-200 hover:shadow-md transition-shadow relative">
       {/* Image - Compact height */}
       {imageUrl && (
         <Link href={`/events/${id}`} className="block">
@@ -442,7 +412,7 @@ export default function EventCard({
             {(isExplorationPick || isTrendingPick || (creatorFeatures && creatorFeatures.length > 0)) && (
               <div className="absolute top-2 right-2">
                 {creatorFeatures && creatorFeatures.length > 0 && (
-                  <span className="bg-gradient-to-r from-rose-500 to-pink-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1">
+                  <span className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1">
                     <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                     </svg>

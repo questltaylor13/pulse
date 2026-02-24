@@ -14,6 +14,7 @@ import {
   CalendarProvider,
 } from "@/lib/calendar";
 import { InviteFriendsModal } from "@/components/calendar";
+import { CATEGORY_COLORS, CATEGORY_LABELS } from "@/lib/constants/categories";
 
 interface PlaceData {
   id: string;
@@ -74,36 +75,6 @@ interface EventDetailClientProps {
     creatorFeatures?: CreatorFeature[];
   };
 }
-
-const CATEGORY_COLORS: Record<Category, string> = {
-  ART: "bg-purple-100 text-purple-700",
-  LIVE_MUSIC: "bg-pink-100 text-pink-700",
-  BARS: "bg-amber-100 text-amber-700",
-  FOOD: "bg-orange-100 text-orange-700",
-  COFFEE: "bg-yellow-100 text-yellow-700",
-  OUTDOORS: "bg-green-100 text-green-700",
-  FITNESS: "bg-blue-100 text-blue-700",
-  SEASONAL: "bg-red-100 text-red-700",
-  POPUP: "bg-indigo-100 text-indigo-700",
-  OTHER: "bg-slate-100 text-slate-700",
-  RESTAURANT: "bg-orange-100 text-orange-700",
-  ACTIVITY_VENUE: "bg-cyan-100 text-cyan-700",
-};
-
-const CATEGORY_LABELS: Record<Category, string> = {
-  ART: "Art",
-  LIVE_MUSIC: "Live Music",
-  BARS: "Bars",
-  FOOD: "Food",
-  COFFEE: "Coffee",
-  OUTDOORS: "Outdoors",
-  FITNESS: "Fitness",
-  SEASONAL: "Seasonal",
-  POPUP: "Pop-up",
-  OTHER: "Other",
-  RESTAURANT: "Restaurant",
-  ACTIVITY_VENUE: "Activity",
-};
 
 const GOING_WITH_OPTIONS: { value: GoingWith; label: string; icon: string }[] = [
   { value: "SOLO", label: "Solo", icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" },
@@ -335,8 +306,8 @@ export default function EventDetailClient({ event }: EventDetailClientProps) {
     }
     try {
       await submitEventFeedback(event.id, type);
-    } catch (error) {
-      console.error("Failed to submit feedback:", error);
+    } catch {
+      /* silently handled */
     }
   };
 
@@ -356,8 +327,8 @@ export default function EventDetailClient({ event }: EventDetailClientProps) {
           setStatus("WANT");
         }
       }
-    } catch (error) {
-      console.error("Failed to add to calendar:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setAddingToCalendar(false);
     }
@@ -405,16 +376,16 @@ export default function EventDetailClient({ event }: EventDetailClientProps) {
 
       {/* Creator Features Section */}
       {event.creatorFeatures && event.creatorFeatures.length > 0 && (
-        <div className="mb-6 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-100 p-4">
+        <div className="mb-6 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 p-4">
           {/* Creator Pick Badge */}
           <div className="flex items-center gap-2 mb-3">
-            <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+            <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">
               <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
               Creator Pick
             </span>
-            <span className="text-sm text-rose-600 font-medium">
+            <span className="text-sm text-blue-600 font-medium">
               {event.creatorFeatures.some(f => f.isHost) ? "Hosted by local creators" : "Featured by local creators"}
             </span>
           </div>
@@ -446,11 +417,11 @@ export default function EventDetailClient({ event }: EventDetailClientProps) {
                 <div className="flex-1">
                   <Link
                     href={`/influencers/${feature.influencer.handle}`}
-                    className="text-sm font-semibold text-rose-700 hover:underline"
+                    className="text-sm font-semibold text-blue-700 hover:underline"
                   >
                     @{feature.influencer.handle}
                     {feature.isHost && (
-                      <span className="ml-1 text-xs text-rose-500 font-normal">(Host)</span>
+                      <span className="ml-1 text-xs text-blue-500 font-normal">(Host)</span>
                     )}
                   </Link>
                   <p className="text-sm text-slate-700 mt-0.5 italic">"{feature.quote}"</p>

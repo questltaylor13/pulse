@@ -57,6 +57,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
               },
             },
           },
+          place: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              neighborhood: true,
+              category: true,
+              priceLevel: true,
+              googleRating: true,
+              googleReviewCount: true,
+              primaryImageUrl: true,
+              vibeTags: true,
+              isNew: true,
+            },
+          },
         },
       },
     },
@@ -78,11 +93,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
   }
 
-  // Calculate summary statistics (only for event-based items)
-  const eventItems = list.items.filter((item) => item.event != null);
-  const neighborhoods = [...new Set(eventItems.map((item) => item.event!.neighborhood).filter(Boolean))];
-  const freeCount = eventItems.filter((item) =>
-    item.event!.priceRange?.toLowerCase() === "free" || item.event!.priceRange === "$0"
+  // Calculate summary statistics
+  const allItems = list.items.filter((item) => item.event != null || item.place != null);
+  const neighborhoods = [...new Set(
+    allItems.map((item) => item.event?.neighborhood || item.place?.neighborhood).filter(Boolean)
+  )];
+  const freeCount = allItems.filter((item) =>
+    item.event?.priceRange?.toLowerCase() === "free" || item.event?.priceRange === "$0"
   ).length;
 
   return NextResponse.json({
@@ -92,7 +109,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     coverImageUrl: list.coverImageUrl,
     template: list.template,
     shareSlug: list.shareSlug,
-    viewCount: list.viewCount + (isOwner ? 0 : 1), // Include current view
+    viewCount: list.viewCount + (isOwner ? 0 : 1),
     saveCount: list.saveCount,
     isOwner,
     creator: {
@@ -102,30 +119,62 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       profileImageUrl: list.user.profileImageUrl,
       isInfluencer: list.user.isInfluencer,
     },
-    items: eventItems.map((item, index) => ({
-      id: item.event!.id,
-      listItemId: item.id,
-      order: item.order || index,
-      notes: item.notes,
-      title: item.event!.title,
-      description: item.event!.description,
-      category: item.event!.category,
-      tags: item.event!.tags,
-      venueName: item.event!.venueName,
-      address: item.event!.address,
-      neighborhood: item.event!.neighborhood,
-      startTime: item.event!.startTime,
-      endTime: item.event!.endTime,
-      priceRange: item.event!.priceRange,
-      source: item.event!.source,
-      sourceUrl: item.event!.sourceUrl,
-      googleRating: item.event!.googleRating,
-      googleRatingCount: item.event!.googleRatingCount,
-      appleRating: item.event!.appleRating,
-      appleRatingCount: item.event!.appleRatingCount,
-      place: item.event!.place,
-      addedAt: item.createdAt,
-    })),
+    items: allItems.map((item, index) => {
+      if (item.place && !item.event) {
+        return {
+          id: item.place.id,
+          listItemId: item.id,
+          type: "place" as const,
+          order: item.order || index,
+          notes: item.notes,
+          title: item.place.name,
+          description: null,
+          category: item.place.category,
+          tags: item.place.vibeTags || [],
+          venueName: item.place.name,
+          address: item.place.address,
+          neighborhood: item.place.neighborhood,
+          startTime: null,
+          endTime: null,
+          priceRange: null,
+          source: null,
+          sourceUrl: null,
+          googleRating: item.place.googleRating,
+          googleRatingCount: item.place.googleReviewCount,
+          appleRating: null,
+          appleRatingCount: null,
+          place: null,
+          imageUrl: item.place.primaryImageUrl,
+          addedAt: item.createdAt,
+        };
+      }
+      return {
+        id: item.event!.id,
+        listItemId: item.id,
+        type: "event" as const,
+        order: item.order || index,
+        notes: item.notes,
+        title: item.event!.title,
+        description: item.event!.description,
+        category: item.event!.category,
+        tags: item.event!.tags,
+        venueName: item.event!.venueName,
+        address: item.event!.address,
+        neighborhood: item.event!.neighborhood,
+        startTime: item.event!.startTime,
+        endTime: item.event!.endTime,
+        priceRange: item.event!.priceRange,
+        source: item.event!.source,
+        sourceUrl: item.event!.sourceUrl,
+        googleRating: item.event!.googleRating,
+        googleRatingCount: item.event!.googleRatingCount,
+        appleRating: item.event!.appleRating,
+        appleRatingCount: item.event!.appleRatingCount,
+        place: item.event!.place,
+        imageUrl: null,
+        addedAt: item.createdAt,
+      };
+    }),
     summary: {
       itemCount: list.items.length,
       neighborhoods,

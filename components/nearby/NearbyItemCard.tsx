@@ -69,7 +69,7 @@ export default function NearbyItemCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <Link href={href} className="min-w-0">
-            <h4 className="font-medium text-slate-900 text-sm truncate hover:text-[#FF4D4F] transition">
+            <h4 className="font-medium text-slate-900 text-sm truncate hover:text-primary transition">
               {name}
             </h4>
           </Link>

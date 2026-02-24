@@ -35,21 +35,6 @@ interface FeedSidebarProps {
   onClearFilters?: () => void;
 }
 
-const CATEGORY_EMOJI: Record<Category, string> = {
-  ART: "🎨",
-  LIVE_MUSIC: "🎵",
-  BARS: "🍸",
-  FOOD: "🍽️",
-  COFFEE: "☕",
-  OUTDOORS: "🌲",
-  FITNESS: "💪",
-  SEASONAL: "🎄",
-  POPUP: "🎪",
-  OTHER: "✨",
-  RESTAURANT: "🍽️",
-  ACTIVITY_VENUE: "🎯",
-};
-
 const NEIGHBORHOODS = [
   "RiNo",
   "LoDo",
@@ -97,8 +82,8 @@ export default function FeedSidebar({
         });
         setCreators(sorted.slice(0, 4));
       }
-    } catch (error) {
-      console.error("Failed to fetch sidebar data:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setLoading(false);
     }
@@ -123,8 +108,8 @@ export default function FeedSidebar({
           )
         );
       }
-    } catch (error) {
-      console.error("Failed to toggle follow:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setFollowLoading(null);
     }

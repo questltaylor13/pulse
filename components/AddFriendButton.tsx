@@ -61,8 +61,8 @@ export function AddFriendButton({
           onStatusChange?.(newStatus);
         }
       }
-    } catch (error) {
-      console.error("Friend action failed:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setLoading(false);
     }
@@ -76,8 +76,8 @@ export function AddFriendButton({
         setStatus("none");
         onStatusChange?.("none");
       }
-    } catch (error) {
-      console.error("Remove friend failed:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setLoading(false);
     }

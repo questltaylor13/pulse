@@ -59,8 +59,8 @@ export default function SaveToListDropdown({
         const data = await response.json();
         setLists(data.lists || []);
       }
-    } catch (error) {
-      console.error("Failed to fetch lists:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setLoading(false);
     }
@@ -95,8 +95,7 @@ export default function SaveToListDropdown({
         setFeedback(null);
         setShowDropdown(false);
       }, 1200);
-    } catch (error) {
-      console.error("Failed to update status:", error);
+    } catch {
       setFeedback("Failed");
       setTimeout(() => setFeedback(null), 1500);
     }
@@ -126,8 +125,7 @@ export default function SaveToListDropdown({
         setFeedback("Failed to add");
         setTimeout(() => setFeedback(null), 1500);
       }
-    } catch (error) {
-      console.error("Failed to add to list:", error);
+    } catch {
       setFeedback("Failed");
       setTimeout(() => setFeedback(null), 1500);
     } finally {

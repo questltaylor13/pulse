@@ -42,8 +42,8 @@ export default function RatingControl({
         setRating(starValue);
         onRatingChange?.(starValue, notes || null);
       }
-    } catch (error) {
-      console.error("Failed to update rating:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setLoading(false);
     }
@@ -56,8 +56,8 @@ export default function RatingControl({
     try {
       await rateItem(itemId, rating, notes || undefined, false);
       onRatingChange?.(rating, notes || null);
-    } catch (error) {
-      console.error("Failed to update notes:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setLoading(false);
     }

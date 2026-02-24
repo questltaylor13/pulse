@@ -176,7 +176,7 @@ export default function DiscoverTab({
                     name: item.name,
                   })
                 }
-                className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-[#FF4D4F] hover:bg-red-50 transition"
+                className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-primary hover:bg-blue-50 transition"
                 disabled={!item.pulseId}
                 title={item.pulseId ? undefined : "Only saved places can be added to plans"}
               >

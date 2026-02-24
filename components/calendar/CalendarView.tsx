@@ -97,8 +97,8 @@ export function CalendarView({ onEventClick }: CalendarViewProps) {
       ];
 
       setEvents(allEvents);
-    } catch (error) {
-      console.error("Failed to fetch calendar events:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setLoading(false);
     }

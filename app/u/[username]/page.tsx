@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Category, BadgeTier, GroupRole } from "@prisma/client";
+import { CATEGORY_LABELS } from "@/lib/constants/categories";
 
 interface PublicList {
   id: string;
@@ -71,21 +72,6 @@ interface UserProfile {
   badges: ProfileBadge[];
   groups: ProfileGroup[];
 }
-
-const CATEGORY_LABELS: Record<Category, string> = {
-  ART: "Art",
-  LIVE_MUSIC: "Live Music",
-  BARS: "Bars",
-  FOOD: "Food",
-  COFFEE: "Coffee",
-  OUTDOORS: "Outdoors",
-  FITNESS: "Fitness",
-  SEASONAL: "Seasonal",
-  POPUP: "Pop-up",
-  OTHER: "Other",
-  RESTAURANT: "Restaurant",
-  ACTIVITY_VENUE: "Activity",
-};
 
 const TIER_COLORS: Record<BadgeTier, string> = {
   BRONZE: "border-amber-600 bg-amber-50",

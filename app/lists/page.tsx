@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Category } from "@prisma/client";
+import { CATEGORY_EMOJI } from "@/lib/constants/categories";
 import { getUnifiedList, UnifiedListItem } from "@/lib/actions/lists";
 
 interface RecentItem {
@@ -31,21 +32,6 @@ interface UserList {
   createdAt: string;
   updatedAt: string;
 }
-
-const CATEGORY_EMOJI: Record<Category, string> = {
-  ART: "🎨",
-  LIVE_MUSIC: "🎵",
-  BARS: "🍸",
-  FOOD: "🍽️",
-  COFFEE: "☕",
-  OUTDOORS: "🌲",
-  FITNESS: "💪",
-  SEASONAL: "🎄",
-  POPUP: "🎪",
-  OTHER: "✨",
-  RESTAURANT: "🍽️",
-  ACTIVITY_VENUE: "🎯",
-};
 
 export default function ListsHubPage() {
   const { data: session, status } = useSession();

@@ -86,7 +86,7 @@ export default function NearbySection({
     <section className="bg-slate-50 rounded-2xl p-4 sm:p-5">
       {/* Header */}
       <div className="flex items-center gap-2 mb-4">
-        <Compass className="w-5 h-5 text-[#FF4D4F]" />
+        <Compass className="w-5 h-5 text-primary" />
         <h3 className="font-semibold text-slate-900">Plan Around This</h3>
       </div>
 
@@ -124,7 +124,7 @@ export default function NearbySection({
               onClick={() => handleRadiusChange(opt.value)}
               className={`text-[11px] font-medium px-2 py-1 rounded-full transition ${
                 radius === opt.value
-                  ? "bg-[#FF4D4F] text-white"
+                  ? "bg-primary text-white"
                   : "bg-white border border-slate-200 text-slate-500 hover:border-slate-300"
               }`}
             >
@@ -137,7 +137,7 @@ export default function NearbySection({
       {/* Loading overlay */}
       {loading && (
         <div className="flex items-center justify-center py-6">
-          <div className="w-5 h-5 border-2 border-slate-300 border-t-[#FF4D4F] rounded-full animate-spin" />
+          <div className="w-5 h-5 border-2 border-slate-300 border-t-primary rounded-full animate-spin" />
         </div>
       )}
 

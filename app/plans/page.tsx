@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Category } from "@prisma/client";
+import { CATEGORY_EMOJI } from "@/lib/constants/categories";
 
 type GoingWith = "SOLO" | "DATE" | "FRIENDS" | "FAMILY";
 type PlanType = "DATE_NIGHT" | "SOCIAL" | "SOLO_CHILL" | "FAMILY_FUN" | "CUSTOM";
-type Category = "ART" | "LIVE_MUSIC" | "BARS" | "FOOD" | "COFFEE" | "OUTDOORS" | "FITNESS" | "SEASONAL" | "POPUP" | "OTHER" | "RESTAURANT" | "ACTIVITY_VENUE";
 
 interface PlanEvent {
   id: string;
@@ -64,21 +65,6 @@ const PLAN_TYPE_LABELS: Record<PlanType, string> = {
   SOLO_CHILL: "Solo Chill",
   FAMILY_FUN: "Family Fun",
   CUSTOM: "Custom",
-};
-
-const CATEGORY_EMOJI: Record<Category, string> = {
-  ART: "🎨",
-  LIVE_MUSIC: "🎵",
-  BARS: "🍸",
-  FOOD: "🍽️",
-  COFFEE: "☕",
-  OUTDOORS: "🏔️",
-  FITNESS: "💪",
-  SEASONAL: "🎄",
-  POPUP: "✨",
-  OTHER: "🎪",
-  RESTAURANT: "🍴",
-  ACTIVITY_VENUE: "🎯",
 };
 
 export default function PlansPage() {

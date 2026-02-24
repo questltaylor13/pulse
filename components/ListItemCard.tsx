@@ -7,6 +7,7 @@ import { toggleWant, toggleDone } from "@/lib/actions/lists";
 import { setItemStatus, removeItemStatus } from "@/lib/actions/items";
 import { useState } from "react";
 import AddToGroupDropdown from "./AddToGroupDropdown";
+import { CATEGORY_COLORS, CATEGORY_LABELS, CATEGORY_EMOJI } from "@/lib/constants/categories";
 
 interface ListItemCardProps {
   id: string;
@@ -25,51 +26,6 @@ interface ListItemCardProps {
   updatedAt: Date;
   onStatusChange?: () => void;
 }
-
-const CATEGORY_COLORS: Record<Category, string> = {
-  ART: "bg-purple-100 text-purple-700",
-  LIVE_MUSIC: "bg-pink-100 text-pink-700",
-  BARS: "bg-amber-100 text-amber-700",
-  FOOD: "bg-orange-100 text-orange-700",
-  COFFEE: "bg-yellow-100 text-yellow-700",
-  OUTDOORS: "bg-green-100 text-green-700",
-  FITNESS: "bg-blue-100 text-blue-700",
-  SEASONAL: "bg-red-100 text-red-700",
-  POPUP: "bg-indigo-100 text-indigo-700",
-  OTHER: "bg-slate-100 text-slate-700",
-  RESTAURANT: "bg-orange-100 text-orange-700",
-  ACTIVITY_VENUE: "bg-cyan-100 text-cyan-700",
-};
-
-const CATEGORY_LABELS: Record<Category, string> = {
-  ART: "Art",
-  LIVE_MUSIC: "Live Music",
-  BARS: "Bars",
-  FOOD: "Food",
-  COFFEE: "Coffee",
-  OUTDOORS: "Outdoors",
-  FITNESS: "Fitness",
-  SEASONAL: "Seasonal",
-  POPUP: "Pop-up",
-  OTHER: "Other",
-  RESTAURANT: "Restaurant",
-  ACTIVITY_VENUE: "Activity",
-};
-
-const CATEGORY_EMOJI: Record<Category, string> = {
-  ART: "🎨",
-  LIVE_MUSIC: "🎵",
-  BARS: "🍸",
-  FOOD: "🍽️",
-  COFFEE: "☕",
-  OUTDOORS: "🌲",
-  FITNESS: "💪",
-  SEASONAL: "🎄",
-  POPUP: "🎪",
-  OTHER: "✨",
-  RESTAURANT: "🍽️",
-  ACTIVITY_VENUE: "🎯",
-};
 
 function formatDate(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
@@ -141,8 +97,8 @@ export default function ListItemCard({
       }
 
       onStatusChange?.();
-    } catch (error) {
-      console.error("Failed to toggle status:", error);
+    } catch {
+      /* silently handled */
     } finally {
       setIsLoading(false);
     }
@@ -171,7 +127,7 @@ export default function ListItemCard({
             {/* Status badge on image */}
             <div className="absolute top-2 right-2">
               <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                status === "DONE" ? "bg-green-500 text-white" : "bg-amber-500 text-white"
+                status === "DONE" ? "bg-green-500 text-white" : "bg-primary text-white"
               }`}>
                 {status === "DONE" ? "Done" : "Saved"}
               </span>
@@ -197,7 +153,7 @@ export default function ListItemCard({
             {/* Status badge */}
             <div className="absolute top-2 right-2">
               <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                status === "DONE" ? "bg-green-500 text-white" : "bg-amber-500 text-white"
+                status === "DONE" ? "bg-green-500 text-white" : "bg-primary text-white"
               }`}>
                 {status === "DONE" ? "Done" : "Saved"}
               </span>
@@ -303,7 +259,7 @@ export default function ListItemCard({
               disabled={isLoading}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
                 currentStatus === "WANT"
-                  ? "bg-amber-500 text-white hover:bg-amber-600"
+                  ? "bg-primary text-white hover:bg-primary-dark"
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               } disabled:opacity-50`}
             >
