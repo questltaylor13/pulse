@@ -1,6 +1,6 @@
 # Pulse Project Status
 
-> Last updated: 2026-02-22
+> Last updated: 2026-02-23
 > Live at: https://pulse-three-eta.vercel.app
 
 ## What is Pulse?
@@ -105,6 +105,21 @@ All of these must be set in Vercel Environment Variables for production.
 - **RSVP system** — going/maybe/cancelled
 - **Capacity tracking** — spots remaining
 
+### Proximity-Aware Discovery (NEW — 2026-02-23)
+- **"Plan Around This" section** — renders on event and place detail pages when coordinates are available
+- **From Your Lists tab** — shows items from owned/shared lists near the viewed event/place, grouped by list with distance badges
+- **Discover Nearby tab** — Google Places results (cached 24h), excluding already-saved items, with "New!" badges for recent openings
+- **Radius selector** — toggle between 1 mi / 3 mi / 5 mi, triggers client-side refetch
+- **Type filters** — All / Restaurants / Bars / Coffee / Activities on discovery tab
+- **Add to Plan** — inline modal to add any nearby item to an existing plan
+- **Save to List** — inline modal to save a discovery item to a user's list
+- **Geo utilities** (`lib/geo.ts`) — haversine distance, bounding box for SQL pre-filtering, distance formatting
+- **Proximity engine** (`lib/proximity.ts`) — `getListItemsNearby()` and `discoverNearby()` with bounding box pre-filter + haversine post-filter
+- **List collaboration** — `ListCollaborator` model with VIEWER/EDITOR roles, share endpoint at `/api/lists/[id]/share`
+- **Place support in Lists & Plans** — `ListItem` and `PlanEvent` now support `placeId` alongside `eventId`
+- **Google Places cache** — `GooglePlacesCache` model with 24h TTL, daily cleanup cron at 4am UTC
+- **Spatial index** — `@@index([lat, lng])` on Place model for efficient proximity queries
+
 ### Other
 - **Landing page** — hero, featured events, creator spotlight, neighborhood section, stats bar, co-founder CTA
 - **Curator dashboard** — create/edit/publish events (admin only)
@@ -158,7 +173,9 @@ vercel.json cron (daily 6am UTC)
 
 **Interaction models:** UserEventInteraction, EventUserStatus, UserItemStatus, UserItemRating, EventFeedView, UserFeedback
 
-**Social models:** UserFollow, Friendship, Group, GroupMember, GroupEvent, GroupPlace, EventInvitation
+**Social models:** UserFollow, Friendship, Group, GroupMember, GroupEvent, GroupPlace, EventInvitation, ListCollaborator
+
+**Proximity/Cache models:** GooglePlacesCache
 
 **Community models:** Badge, UserBadge, LeaderboardEntry
 
@@ -167,6 +184,8 @@ vercel.json cron (daily 6am UTC)
 **Prisma notes:**
 - `binaryTargets = ["native", "rhel-openssl-3.0.x"]` in generator — required for Vercel
 - `@@unique([externalId, source])` on Event — prevents duplicate scrapes
+- `ListItem.eventId` and `PlanEvent.eventId` are nullable (items can reference a Place instead)
+- `@@index([lat, lng])` on Place for spatial queries
 - Build script: `"build": "prisma generate && next build"`
 
 ---
@@ -221,6 +240,12 @@ pulse/
 │   │   ├── constraints/route.ts      # User constraints
 │   │   ├── feedback/route.ts         # Recommendation tuning
 │   │   ├── lists/                    # User lists CRUD
+│   │   │   └── [id]/share/route.ts   # List collaboration management
+│   │   ├── nearby/
+│   │   │   ├── lists/route.ts        # Nearby items from user's lists
+│   │   │   └── discover/route.ts     # Google Places discovery
+│   │   ├── plans/[id]/items/route.ts # Add event/place to plan
+│   │   ├── cron/cleanup-cache/route.ts # Daily cache cleanup
 │   │   └── landing/route.ts          # Landing page data
 │   ├── feed/page.tsx                 # Main event feed
 │   ├── events/[eventId]/             # Event detail page
@@ -244,6 +269,13 @@ pulse/
 │   ├── landing/                      # Landing page sections
 │   ├── calendar/                     # Calendar components
 │   ├── badges/                       # Badge display components
+│   ├── nearby/                       # Proximity discovery components
+│   │   ├── NearbySection.tsx         # Main container with tabs + radius selector
+│   │   ├── FromListsTab.tsx          # "From Your Lists" tab content
+│   │   ├── DiscoverTab.tsx           # "Discover Nearby" tab with type filters
+│   │   ├── NearbyItemCard.tsx        # Reusable compact item card
+│   │   ├── AddToPlanModal.tsx        # Add to plan modal
+│   │   └── SaveToListModal.tsx       # Save to list modal
 │   └── feed/FeedSidebar.tsx          # Feed filters sidebar
 ├── lib/
 │   ├── scoring.ts                    # Event scoring engine (15+ factors, ~200 points)
@@ -253,6 +285,8 @@ pulse/
 │   ├── prisma.ts                    # Prisma client singleton
 │   ├── auth.ts                      # NextAuth config
 │   ├── google-places.ts             # Google Places API
+│   ├── geo.ts                       # Haversine distance, bounding box, formatting
+│   ├── proximity.ts                 # Proximity query engine (nearby lists + discovery)
 │   ├── badges.ts                    # Badge logic
 │   ├── friends.ts                   # Friends logic
 │   ├── groups.ts                    # Groups logic
@@ -306,7 +340,7 @@ npm run prisma:migrate   # Run database migrations
 - Team: `quest-taylors-projects` (team_PjUVyAOdxMVrR2FRVblI26Cz)
 - Git repo: `questltaylor13/pulse` (repoId: 1114781842)
 - Production URL: https://pulse-three-eta.vercel.app
-- Cron: daily 6am UTC, hits `/api/events/scrape` with `CRON_SECRET` header
+- Crons: daily 6am UTC scrape (`/api/events/scrape`), daily 4am UTC cache cleanup (`/api/cron/cleanup-cache`)
 - `maxDuration = 60` on scrape route (60s Vercel function limit)
 
 **Deploying via API** (workaround for CLI auth bug):
