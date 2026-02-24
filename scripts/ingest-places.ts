@@ -15,119 +15,20 @@
  *   DATABASE_URL - PostgreSQL connection string
  */
 
-import { PrismaClient, Category } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import {
   getPlaceDetails,
   calculateCombinedScore,
   extractNeighborhood,
   getPhotoUrl,
+  searchPlacesAllPages,
 } from "../lib/google-places";
+import {
+  CATEGORIES,
+  type CategoryConfig,
+} from "../lib/places-refresh";
 
 const prisma = new PrismaClient();
-
-// Denver center coordinates
-const DENVER_CENTER = { lat: 39.7392, lng: -104.9903 };
-const SEARCH_RADIUS = 24140; // ~15 miles in meters
-
-// Category definitions with quality filters
-const CATEGORIES = [
-  {
-    key: "restaurant",
-    query: "restaurants Denver",
-    type: "restaurant",
-    minRating: 4.2,
-    minReviews: 100,
-    category: "RESTAURANT" as Category,
-  },
-  {
-    key: "bar",
-    query: "bars Denver",
-    type: "bar",
-    minRating: 4.2,
-    minReviews: 50,
-    category: "BARS" as Category,
-  },
-  {
-    key: "coffee",
-    query: "coffee shops Denver",
-    type: "cafe",
-    minRating: 4.3,
-    minReviews: 75,
-    category: "COFFEE" as Category,
-  },
-  {
-    key: "brewery",
-    query: "breweries Denver",
-    type: "bar", // Google doesn't have brewery type
-    minRating: 4.2,
-    minReviews: 50,
-    category: "BARS" as Category,
-  },
-  {
-    key: "art",
-    query: "art galleries Denver",
-    type: "art_gallery",
-    minRating: 4.0,
-    minReviews: 25,
-    category: "ART" as Category,
-  },
-  {
-    key: "museum",
-    query: "museums Denver",
-    type: "museum",
-    minRating: 4.0,
-    minReviews: 50,
-    category: "ART" as Category,
-  },
-  {
-    key: "park",
-    query: "parks Denver",
-    type: "park",
-    minRating: 4.0,
-    minReviews: 100,
-    category: "OUTDOORS" as Category,
-  },
-  {
-    key: "music_venue",
-    query: "live music venues Denver",
-    type: "night_club",
-    minRating: 4.0,
-    minReviews: 50,
-    category: "LIVE_MUSIC" as Category,
-  },
-  {
-    key: "bowling",
-    query: "bowling alleys Denver",
-    type: "bowling_alley",
-    minRating: 4.0,
-    minReviews: 50,
-    category: "ACTIVITY_VENUE" as Category,
-  },
-  {
-    key: "theater",
-    query: "movie theaters Denver",
-    type: "movie_theater",
-    minRating: 4.0,
-    minReviews: 75,
-    category: "ACTIVITY_VENUE" as Category,
-  },
-  {
-    key: "gym",
-    query: "gyms Denver",
-    type: "gym",
-    minRating: 4.0,
-    minReviews: 50,
-    category: "FITNESS" as Category,
-  },
-  {
-    key: "yoga",
-    query: "yoga studios Denver",
-    type: "gym",
-    minRating: 4.3,
-    minReviews: 30,
-    category: "FITNESS" as Category,
-  },
-];
 
 interface IngestionOptions {
   category?: string;
@@ -136,108 +37,8 @@ interface IngestionOptions {
   verbose?: boolean;
 }
 
-interface PlaceSearchResult {
-  place_id: string;
-  name: string;
-  formatted_address?: string;
-  vicinity?: string;
-  geometry: {
-    location: {
-      lat: number;
-      lng: number;
-    };
-  };
-  rating?: number;
-  user_ratings_total?: number;
-  price_level?: number;
-  types?: string[];
-  business_status?: string;
-}
-
-async function delay(ms: number): Promise<void> {
+function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function getApiKey(): string {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) {
-    throw new Error("GOOGLE_PLACES_API_KEY environment variable is not set");
-  }
-  return apiKey;
-}
-
-async function searchPlaces(
-  query: string,
-  type: string,
-  pageToken?: string
-): Promise<{ results: PlaceSearchResult[]; nextPageToken?: string }> {
-  const apiKey = getApiKey();
-
-  const params = new URLSearchParams({
-    query,
-    location: `${DENVER_CENTER.lat},${DENVER_CENTER.lng}`,
-    radius: SEARCH_RADIUS.toString(),
-    type,
-    key: apiKey,
-  });
-
-  if (pageToken) {
-    params.append("pagetoken", pageToken);
-  }
-
-  const response = await fetch(
-    `https://maps.googleapis.com/maps/api/place/textsearch/json?${params}`
-  );
-
-  if (!response.ok) {
-    throw new Error(`Google Places API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
-    if (data.status === "INVALID_REQUEST" && pageToken) {
-      // Page token not ready yet, return empty
-      return { results: [] };
-    }
-    throw new Error(`Google Places API error: ${data.status} - ${data.error_message || ""}`);
-  }
-
-  return {
-    results: data.results || [],
-    nextPageToken: data.next_page_token,
-  };
-}
-
-async function searchAllPages(
-  query: string,
-  type: string,
-  maxPages: number = 3
-): Promise<PlaceSearchResult[]> {
-  const allResults: PlaceSearchResult[] = [];
-  let nextPageToken: string | undefined;
-  let page = 0;
-
-  do {
-    if (nextPageToken) {
-      // Google requires a delay before using the next page token
-      await delay(2000);
-    }
-
-    const { results, nextPageToken: newToken } = await searchPlaces(
-      query,
-      type,
-      nextPageToken
-    );
-
-    allResults.push(...results);
-    nextPageToken = newToken;
-    page++;
-
-    console.log(`  Page ${page}: ${results.length} results`);
-  } while (nextPageToken && page < maxPages);
-
-  return allResults;
 }
 
 async function ingestPlaces(options: IngestionOptions = {}): Promise<void> {
@@ -268,15 +69,18 @@ async function ingestPlaces(options: IngestionOptions = {}): Promise<void> {
     console.log(`Min rating: ${catConfig.minRating}, Min reviews: ${catConfig.minReviews}\n`);
 
     try {
-      // Search for places
-      const results = await searchAllPages(catConfig.query, catConfig.type, 2);
+      // Search for places using the shared utility
+      const results = await searchPlacesAllPages(catConfig.query, {
+        type: catConfig.type,
+        maxPages: 2,
+      });
       console.log(`\nTotal results: ${results.length}`);
 
       // Filter by quality criteria
       const qualifiedResults = results.filter((place) => {
         const rating = place.rating || 0;
-        const reviews = place.user_ratings_total || 0;
-        const isOpen = place.business_status !== "CLOSED_PERMANENTLY";
+        const reviews = place.userRatingsTotal || 0;
+        const isOpen = place.businessStatus !== "CLOSED_PERMANENTLY";
 
         if (!isOpen) {
           if (verbose) console.log(`  Filtered (closed): ${place.name}`);
@@ -300,15 +104,15 @@ async function ingestPlaces(options: IngestionOptions = {}): Promise<void> {
       // Deduplicate by place_id
       const seenIds = new Set<string>();
       const uniqueResults = qualifiedResults.filter((place) => {
-        if (seenIds.has(place.place_id)) return false;
-        seenIds.add(place.place_id);
+        if (seenIds.has(place.placeId)) return false;
+        seenIds.add(place.placeId);
         return true;
       });
 
       // Sort by combined score and optionally limit
       const sortedResults = uniqueResults.sort((a, b) => {
-        const scoreA = (a.rating || 0) * Math.log10((a.user_ratings_total || 1) + 1);
-        const scoreB = (b.rating || 0) * Math.log10((b.user_ratings_total || 1) + 1);
+        const scoreA = (a.rating || 0) * Math.log10((a.userRatingsTotal || 1) + 1);
+        const scoreB = (b.rating || 0) * Math.log10((b.userRatingsTotal || 1) + 1);
         return scoreB - scoreA;
       });
 
@@ -325,7 +129,7 @@ async function ingestPlaces(options: IngestionOptions = {}): Promise<void> {
         try {
           // Check if place already exists
           const existing = await prisma.place.findUnique({
-            where: { googlePlaceId: result.place_id },
+            where: { googlePlaceId: result.placeId },
           });
 
           if (existing) {
@@ -335,7 +139,7 @@ async function ingestPlaces(options: IngestionOptions = {}): Promise<void> {
 
             if (!dryRun) {
               // Update existing place with fresh data
-              const details = await getPlaceDetails(result.place_id);
+              const details = await getPlaceDetails(result.placeId);
               const combinedScore = calculateCombinedScore(
                 details.rating,
                 details.userRatingsTotal
@@ -363,13 +167,13 @@ async function ingestPlaces(options: IngestionOptions = {}): Promise<void> {
           }
 
           if (dryRun) {
-            console.log(`  [DRY RUN] Would create: ${result.name} (${result.rating} stars, ${result.user_ratings_total} reviews)`);
+            console.log(`  [DRY RUN] Would create: ${result.name} (${result.rating} stars, ${result.userRatingsTotal} reviews)`);
             totalCreated++;
             continue;
           }
 
           // Fetch detailed information
-          const details = await getPlaceDetails(result.place_id);
+          const details = await getPlaceDetails(result.placeId);
 
           // Calculate combined score
           const combinedScore = calculateCombinedScore(

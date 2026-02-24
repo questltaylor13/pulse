@@ -8,6 +8,7 @@ import { Category, ItemStatus } from "@prisma/client";
 
 interface PlaceItem {
   id: string;
+  placeId: string;
   type: "PLACE";
   title: string;
   description: string;
@@ -25,6 +26,13 @@ interface PlaceItem {
   googleReviewCount: number | null;
   vibeTags: string[];
   companionTags: string[];
+  isNew: boolean;
+  isDogFriendly: boolean;
+  dogFriendlyNotes: string | null;
+  isDrinkingOptional: boolean;
+  isAlcoholFree: boolean;
+  hasMocktailMenu: boolean;
+  soberFriendlyNotes: string | null;
 }
 
 // Main category tabs
@@ -275,6 +283,7 @@ export default function PlacesPage() {
             <PlaceCard
               key={place.id}
               id={place.id}
+              placeId={place.placeId}
               title={place.title}
               description={place.description}
               category={place.category}
@@ -291,7 +300,13 @@ export default function PlacesPage() {
               companionTags={place.companionTags}
               status={statuses[place.id] || null}
               onStatusChange={(status, removed) => handleStatusChange(place.id, status, removed)}
-              isNew={activeTab === "new"}
+              isNew={place.isNew}
+              isDogFriendly={place.isDogFriendly}
+              dogFriendlyNotes={place.dogFriendlyNotes}
+              isDrinkingOptional={place.isDrinkingOptional}
+              isAlcoholFree={place.isAlcoholFree}
+              hasMocktailMenu={place.hasMocktailMenu}
+              soberFriendlyNotes={place.soberFriendlyNotes}
             />
           ))}
         </div>

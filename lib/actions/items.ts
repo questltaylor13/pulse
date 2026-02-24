@@ -153,6 +153,149 @@ export async function getUserItemsByStatus(status: ItemStatus, itemType?: ItemTy
 }
 
 // ============================================================================
+// Place-aware Status Actions (bridge Place -> Item -> UserItemStatus)
+// ============================================================================
+
+/**
+ * Set status for a Place by bridging through an Item record.
+ * Finds or creates a lightweight Item that links to the Place by name+address,
+ * then upserts UserItemStatus on that Item.
+ */
+export async function setPlaceStatus(placeId: string, status: ItemStatus) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  // Fetch the Place record
+  const place = await prisma.place.findUnique({
+    where: { id: placeId },
+    select: { name: true, address: true, category: true, neighborhood: true, citySlug: true },
+  });
+
+  if (!place) {
+    throw new Error("Place not found");
+  }
+
+  // Find the city for this place
+  const city = await prisma.city.findUnique({
+    where: { slug: place.citySlug },
+    select: { id: true },
+  });
+
+  if (!city) {
+    throw new Error("City not found");
+  }
+
+  // Find or create a bridging Item record
+  let item = await prisma.item.findFirst({
+    where: {
+      type: "PLACE",
+      venueName: place.name,
+      address: place.address,
+      cityId: city.id,
+    },
+    select: { id: true },
+  });
+
+  if (!item) {
+    item = await prisma.item.create({
+      data: {
+        type: "PLACE",
+        cityId: city.id,
+        title: place.name,
+        description: "",
+        category: place.category || "RESTAURANT",
+        tags: [],
+        venueName: place.name,
+        address: place.address,
+        priceRange: "",
+        source: "place-bridge",
+        neighborhood: place.neighborhood,
+      },
+      select: { id: true },
+    });
+  }
+
+  // Upsert UserItemStatus on the bridging Item
+  await prisma.userItemStatus.upsert({
+    where: {
+      userId_itemId: {
+        userId: session.user.id,
+        itemId: item.id,
+      },
+    },
+    update: { status },
+    create: {
+      userId: session.user.id,
+      itemId: item.id,
+      status,
+    },
+  });
+
+  revalidatePath("/feed");
+  revalidatePath("/places");
+  revalidatePath(`/places/${placeId}`);
+  revalidatePath("/lists");
+
+  return { success: true };
+}
+
+/**
+ * Remove status for a Place by finding the bridging Item and deleting the UserItemStatus.
+ */
+export async function removePlaceStatus(placeId: string) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  const place = await prisma.place.findUnique({
+    where: { id: placeId },
+    select: { name: true, address: true, citySlug: true },
+  });
+
+  if (!place) {
+    throw new Error("Place not found");
+  }
+
+  const city = await prisma.city.findUnique({
+    where: { slug: place.citySlug },
+    select: { id: true },
+  });
+
+  if (!city) {
+    throw new Error("City not found");
+  }
+
+  const item = await prisma.item.findFirst({
+    where: {
+      type: "PLACE",
+      venueName: place.name,
+      address: place.address,
+      cityId: city.id,
+    },
+    select: { id: true },
+  });
+
+  if (item) {
+    await prisma.userItemStatus.deleteMany({
+      where: {
+        userId: session.user.id,
+        itemId: item.id,
+      },
+    });
+  }
+
+  revalidatePath("/feed");
+  revalidatePath("/places");
+  revalidatePath(`/places/${placeId}`);
+  revalidatePath("/lists");
+
+  return { success: true };
+}
+
+// ============================================================================
 // Rating Actions
 // ============================================================================
 

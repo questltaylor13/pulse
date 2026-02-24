@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Category, ItemStatus } from "@prisma/client";
 import { DogFriendlyBadge, SoberFriendlyBadge } from "@/components/badges";
-import { setItemStatus, removeItemStatus } from "@/lib/actions/items";
+import { setItemStatus, removeItemStatus, setPlaceStatus, removePlaceStatus } from "@/lib/actions/items";
 import { CATEGORY_EMOJI, CATEGORY_LABELS } from "@/lib/constants/categories";
 
 interface PlaceCardProps {
@@ -24,6 +24,7 @@ interface PlaceCardProps {
   googleReviewCount?: number | null;
   vibeTags?: string[];
   companionTags?: string[];
+  placeId?: string;
   status?: ItemStatus | null;
   onStatusChange?: (status: ItemStatus | null, removed?: boolean) => void;
   isNew?: boolean;
@@ -57,6 +58,7 @@ export default function PlaceCard({
   onStatusChange,
   isNew,
   isTrending,
+  placeId,
   isDogFriendly,
   dogFriendlyNotes,
   isDrinkingOptional,
@@ -87,10 +89,20 @@ export default function PlaceCard({
     setShowMoreMenu(false);
 
     try {
-      if (newStatus === null) {
-        await removeItemStatus(id);
+      if (placeId) {
+        // Use place-aware status actions (bridges Place -> Item -> UserItemStatus)
+        if (newStatus === null) {
+          await removePlaceStatus(placeId);
+        } else {
+          await setPlaceStatus(placeId, newStatus);
+        }
       } else {
-        await setItemStatus(id, newStatus);
+        // Fallback to direct Item status actions
+        if (newStatus === null) {
+          await removeItemStatus(id);
+        } else {
+          await setItemStatus(id, newStatus);
+        }
       }
 
       setCurrentStatus(newStatus);

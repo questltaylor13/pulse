@@ -3,6 +3,8 @@ import { ScrapedEvent, ScraperResult, Scraper } from "./types";
 import { scrape303Magazine } from "./303magazine";
 import { scrapeDenverEvents } from "./denver-events";
 import { scrapeWestword } from "./westword";
+import { scrapeTicketmaster } from "./ticketmaster";
+import { scrapeEventbrite } from "./eventbrite";
 import { enrichEvent } from "@/lib/enrich-event";
 
 const scrapers: { name: string; fn: Scraper }[] = [
@@ -11,7 +13,15 @@ const scrapers: { name: string; fn: Scraper }[] = [
   { name: "westword", fn: scrapeWestword },
 ];
 
-const PER_SCRAPER_TIMEOUT = 15_000;
+// Conditionally include API scrapers when credentials are configured
+if (process.env.TICKETMASTER_API_KEY) {
+  scrapers.push({ name: "ticketmaster", fn: scrapeTicketmaster });
+}
+if (process.env.EVENTBRITE_TOKEN) {
+  scrapers.push({ name: "eventbrite", fn: scrapeEventbrite });
+}
+
+const PER_SCRAPER_TIMEOUT = 10_000;
 
 async function runWithTimeout(
   name: string,
@@ -33,11 +43,20 @@ async function runWithTimeout(
   ]);
 }
 
+/** Normalize a title for cross-source deduplication */
+function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/^(presents?:\s*|live:\s*)/i, "")
+    .replace(/\s+/g, " ");
+}
+
 function deduplicateEvents(events: ScrapedEvent[]): ScrapedEvent[] {
   const seen = new Map<string, ScrapedEvent>();
 
   for (const event of events) {
-    const key = `${event.title.toLowerCase().trim()}|${event.startTime.toISOString().slice(0, 10)}`;
+    const key = `${normalizeTitle(event.title)}|${event.startTime.toISOString().slice(0, 10)}`;
     if (!seen.has(key)) {
       seen.set(key, event);
     }

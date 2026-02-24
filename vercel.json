@@ -7,6 +7,18 @@
     {
       "path": "/api/cron/cleanup-cache",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-places?chunk=0",
+      "schedule": "0 7 * * 0"
+    },
+    {
+      "path": "/api/cron/refresh-places?chunk=1",
+      "schedule": "10 7 * * 0"
+    },
+    {
+      "path": "/api/cron/refresh-places?chunk=2",
+      "schedule": "20 7 * * 0"
     }
   ]
 }
