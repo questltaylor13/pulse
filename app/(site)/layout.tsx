@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import AuthActions from "@/components/AuthActions";
 import NavLinks from "@/components/NavLinks";
@@ -14,7 +15,9 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
             <span className="mr-2 hidden rounded-full bg-coral/10 px-3 py-1 text-xs font-medium text-coral sm:inline-block">
               Denver beta
             </span>
-            <NavLinks />
+            <Suspense fallback={null}>
+              <NavLinks />
+            </Suspense>
             <AuthActions />
           </div>
         </div>
