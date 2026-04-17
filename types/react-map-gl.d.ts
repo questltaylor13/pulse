@@ -1,4 +1,4 @@
-declare module "react-map-gl" {
+declare module "react-map-gl/mapbox" {
   import type { ComponentType, RefObject } from "react";
 
   export interface MapProps {

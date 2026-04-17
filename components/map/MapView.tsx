@@ -39,7 +39,7 @@ function MapboxMap({ items, onSelectItem, selectedId }: Props) {
   const containerRef = useCallback(
     (node: HTMLDivElement | null) => {
       if (!node || MapGL) return;
-      import("react-map-gl").then((mod) => {
+      import("react-map-gl/mapbox").then((mod) => {
         setMapGL(mod);
         setMapLoaded(true);
       });
