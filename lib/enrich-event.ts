@@ -45,6 +45,10 @@ const SOCIAL_TAGS = [
 
 export interface EventEnrichment {
   description: string;
+  oneLiner: string | null;
+  category: string | null;
+  qualityScore: number | null;
+  noveltyScore: number | null;
   tags: string[];
   vibeTags: string[];
   companionTags: string[];
@@ -81,17 +85,31 @@ Event:
 - Price: ${event.priceRange}
 - Neighborhood: ${event.neighborhood || "Denver"}
 
+IMPORTANT CATEGORY RULES:
+- Bars, cocktail lounges, speakeasies, breweries, taprooms, pubs, wine bars, beer gardens, and any venue where drinking is the PRIMARY activity should ALWAYS be categorized as BARS, never as ACTIVITY_VENUE or OTHER.
+- Comedy clubs, improv theaters = COMEDY
+- Run clubs, sports leagues, social groups = SOCIAL
+- Escape rooms, axe throwing, archery, curling, bowling = ACTIVITY_VENUE
+
 Provide a JSON response with:
-1. "description": A fun, engaging 1-2 sentence description of the event. Capture what makes it worth attending.
-2. "vibeTags": 2-4 tags from: ${VIBE_TAGS.join(", ")}
-3. "companionTags": 2-4 tags from: ${COMPANION_TAGS.join(", ")}
-4. "isDogFriendly": boolean - true if dogs are likely welcome (outdoor festivals, patios, parks)
-5. "isDrinkingOptional": boolean - true if the event works fine without drinking
-6. "isAlcoholFree": boolean - true if no alcohol is involved (yoga, fitness, museum, etc.)
+1. "description": A fun, engaging 1-2 sentence description. Capture what makes it worth attending.
+2. "oneLiner": A punchy 10-15 word hook that makes someone want to go. Be specific and compelling, not generic.
+3. "category": The correct category from [ART, LIVE_MUSIC, BARS, FOOD, COFFEE, OUTDOORS, FITNESS, SEASONAL, POPUP, ACTIVITY_VENUE, COMEDY, SOCIAL, WELLNESS, RESTAURANT, OTHER]
+4. "qualityScore": 1-10. How interesting/worth-attending is this for a young professional in Denver? 1-3=junk (webinars, MLM, corporate), 4-6=decent but generic, 7-10=genuinely interesting or unique.
+5. "noveltyScore": 1-10. How unique or surprising is this? Regular restaurant=2, coffee shop=1, curling club=9, archery dodgeball=10, rage room=8, hiking=4, escape room=7.
+6. "vibeTags": 2-4 tags from: ${VIBE_TAGS.join(", ")}
+7. "companionTags": 2-4 tags from: ${COMPANION_TAGS.join(", ")}
+8. "isDogFriendly": boolean - true if dogs are likely welcome
+9. "isDrinkingOptional": boolean - true if the event works fine without drinking
+10. "isAlcoholFree": boolean - true if no alcohol is involved
 
 Respond ONLY with valid JSON:
 {
   "description": "...",
+  "oneLiner": "...",
+  "category": "...",
+  "qualityScore": 5,
+  "noveltyScore": 5,
   "vibeTags": [],
   "companionTags": [],
   "isDogFriendly": false,
@@ -120,11 +138,11 @@ export async function enrichEvent(
     const openai = getOpenAI();
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5.4-nano-2026-03-17",
       messages: [{ role: "user", content: buildPrompt(event) }],
       response_format: { type: "json_object" },
       temperature: 0.7,
-      max_tokens: 400,
+      max_completion_tokens: 600,
     });
 
     const content = response.choices[0]?.message?.content;
@@ -150,6 +168,10 @@ export async function enrichEvent(
 
     return {
       description: typeof raw.description === "string" ? raw.description : "",
+      oneLiner: typeof raw.oneLiner === "string" ? raw.oneLiner : null,
+      category: typeof raw.category === "string" ? raw.category : null,
+      qualityScore: typeof raw.qualityScore === "number" ? Math.min(10, Math.max(1, Math.round(raw.qualityScore))) : null,
+      noveltyScore: typeof raw.noveltyScore === "number" ? Math.min(10, Math.max(1, Math.round(raw.noveltyScore))) : null,
       tags: Array.from(allTags),
       vibeTags,
       companionTags,

@@ -57,6 +57,9 @@ function generateVibeSummary(
     OTHER: "unique experiences",
     RESTAURANT: "dining experiences",
     ACTIVITY_VENUE: "fun activities",
+    COMEDY: "comedy shows",
+    SOCIAL: "social events",
+    WELLNESS: "wellness experiences",
   };
 
   // Get top 3 categories

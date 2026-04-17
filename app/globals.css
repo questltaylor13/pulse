@@ -4,16 +4,28 @@
 
 :root {
   color-scheme: light;
-  --pulse-coral: #2563EB;
-  --pulse-coral-light: #3B82F6;
-  --pulse-coral-dark: #1D4ED8;
-  --pulse-teal: #00D4AA;
+  --pulse-coral: #E85D3A;
+  --pulse-coral-light: #FF7855;
+  --pulse-coral-dark: #C7492A;
+  --pulse-teal: #00A884;
   --pulse-teal-light: #33DFBE;
-  --pulse-teal-dark: #00A884;
+  --pulse-teal-dark: #007d63;
 }
 
 body {
-  @apply min-h-screen bg-slate-50 text-slate-900 antialiased;
+  @apply min-h-screen bg-surface text-ink antialiased;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 .container {

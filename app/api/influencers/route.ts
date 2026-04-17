@@ -53,29 +53,36 @@ export async function GET(request: NextRequest) {
 
   const followedIds = new Set(userFollows.map((f) => f.influencerId));
 
-  // Format response
-  const formatted = influencers.map((inf) => ({
-    id: inf.id,
-    handle: inf.handle,
-    displayName: inf.displayName,
-    bio: inf.bio,
-    profileImageUrl: inf.profileImageUrl,
-    profileColor: inf.profileColor,
-    isFounder: inf.isFounder,
-    isDenverNative: inf.isDenverNative,
-    yearsInDenver: inf.yearsInDenver,
-    specialties: inf.specialties,
-    followerCount: inf._count.followers,
-    isFollowed: followedIds.has(inf.id),
-    latestPicks: inf.pickSets[0]?.picks.map((p) => ({
-      id: p.item.id,
-      title: p.item.title,
-      type: p.item.type,
-      category: p.item.category,
-      venueName: p.item.venueName,
-      reason: p.reason,
-    })) || [],
-  }));
+  // Format response — prioritize influencers with active picks
+  const formatted = influencers
+    .map((inf) => ({
+      id: inf.id,
+      handle: inf.handle,
+      displayName: inf.displayName,
+      bio: inf.bio,
+      profileImageUrl: inf.profileImageUrl,
+      profileColor: inf.profileColor,
+      isFounder: inf.isFounder,
+      isDenverNative: inf.isDenverNative,
+      yearsInDenver: inf.yearsInDenver,
+      specialties: inf.specialties,
+      followerCount: inf._count.followers,
+      isFollowed: followedIds.has(inf.id),
+      hasPicks: inf.pickSets.length > 0 && inf.pickSets[0].picks.length > 0,
+      latestPicks: inf.pickSets[0]?.picks.map((p) => ({
+        id: p.item.id,
+        title: p.item.title,
+        type: p.item.type,
+        category: p.item.category,
+        venueName: p.item.venueName,
+        reason: p.reason,
+      })) || [],
+    }))
+    // Sort: influencers with active picks first, then by follower count
+    .sort((a, b) => {
+      if (a.hasPicks !== b.hasPicks) return a.hasPicks ? -1 : 1;
+      return b.followerCount - a.followerCount;
+    });
 
   return NextResponse.json({ influencers: formatted });
 }

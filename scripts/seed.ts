@@ -281,6 +281,9 @@ const CATEGORY_DEFAULT_TAGS: Record<Category, string[]> = {
   [Category.OTHER]: ["moderate"],
   [Category.RESTAURANT]: ["date-friendly", "friends-group", "moderate"],
   [Category.ACTIVITY_VENUE]: ["friends-group", "family-friendly", "high-energy"],
+  [Category.COMEDY]: ["friends-group", "social", "moderate"],
+  [Category.SOCIAL]: ["friends-group", "social", "community", "moderate"],
+  [Category.WELLNESS]: ["solo-friendly", "chill", "self-care"],
 };
 
 /**
@@ -3000,6 +3003,9 @@ const PICK_REASONS: Record<Category, string[]> = {
   [Category.OTHER]: ["Something special", "Worth checking out", "Hidden treasure", "On my radar"],
   [Category.ACTIVITY_VENUE]: ["So much fun here", "Perfect for groups", "Entertainment central", "Great for a day out"],
   [Category.FOOD]: ["Delicious discovery", "Taste sensation", "Foodie heaven", "Flavor explosion"],
+  [Category.COMEDY]: ["Laugh out loud", "Comedy gold tonight", "Guaranteed good time", "Hilarious show"],
+  [Category.SOCIAL]: ["Meet your people", "Community vibes", "Social energy", "New friends await"],
+  [Category.WELLNESS]: ["Reset and recharge", "Self-care goals", "Mind-body connection", "Wellness essential"],
 };
 
 async function seedInfluencers() {

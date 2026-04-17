@@ -14,6 +14,12 @@ interface TrendingEvent {
   saveCount: number;
 }
 
+interface CreatorPick {
+  id: string;
+  title: string;
+  venueName: string;
+}
+
 interface Creator {
   id: string;
   handle: string;
@@ -22,6 +28,7 @@ interface Creator {
   bio: string;
   followersCount: number;
   isFollowed?: boolean;
+  latestPicks?: CreatorPick[];
 }
 
 interface ActiveFilter {
@@ -288,6 +295,43 @@ export default function FeedSidebar({
           See all trending →
         </Link>
       </div>
+
+      {/* From Creators You Follow */}
+      {(() => {
+        const followedWithPicks = creators.filter(
+          (c) => c.isFollowed && c.latestPicks && c.latestPicks.length > 0
+        );
+        if (followedWithPicks.length === 0) return null;
+        return (
+          <div className="card">
+            <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
+              <span>📌</span>
+              From Creators You Follow
+            </h3>
+            <div className="space-y-2.5">
+              {followedWithPicks.slice(0, 3).flatMap((creator) =>
+                (creator.latestPicks || []).slice(0, 1).map((pick) => (
+                  <Link
+                    key={`${creator.id}-${pick.id}`}
+                    href={`/events/${pick.id}`}
+                    className="flex items-start gap-2 p-2 -mx-2 rounded-lg hover:bg-slate-50 transition"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-slate-500">
+                        <span className="font-medium text-primary">@{creator.handle}</span>
+                        {" "}saved
+                      </p>
+                      <p className="text-sm font-medium text-slate-900 line-clamp-1">
+                        {pick.title}
+                      </p>
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Neighborhoods to Explore */}
       <div className="card">

@@ -7,6 +7,9 @@ import {
   BudgetPreference,
   GoingWith,
   SocialIntent,
+  type ContextSegment,
+  type SocialStyleType,
+  type BudgetTier,
 } from "@prisma/client";
 
 // ============================================================================
@@ -56,6 +59,9 @@ export interface ScoredEvent {
   scoreBreakdown: ScoreBreakdown;
   recommendationReason: string;
   reasonType: ReasonType;
+  isRecurring?: boolean;
+  oneLiner?: string | null;
+  noveltyScore?: number | null;
   isExplorationPick?: boolean;
   isTrendingPick?: boolean;
 }
@@ -196,6 +202,9 @@ interface EventForScoring {
   place?: PlaceData | null;
   saveCount?: number; // For trending calculation
   // Lifestyle fields
+  isRecurring?: boolean;
+  oneLiner?: string | null;
+  noveltyScore?: number | null;
   isDogFriendly?: boolean;
   dogFriendlyDetails?: string | null;
   isDrinkingOptional?: boolean;
@@ -1309,12 +1318,23 @@ export function scoreEvent(
 
   const { reason, reasonType } = generateRecommendationReason(event, breakdown, context);
 
+  // Normalize raw score to 0-100 percentage scale
+  // Max realistic positive score is ~190 (loved category + all bonuses)
+  // Min realistic is ~20 (disliked category, no bonuses)
+  // Use linear mapping with floor/ceiling for natural-feeling percentages
+  const normalizedScore = Math.max(0, Math.min(100,
+    Math.round((totalScore / 185) * 95 + 5)
+  ));
+
   return {
     ...event,
-    score: totalScore,
+    score: normalizedScore,
     scoreBreakdown: breakdown,
     recommendationReason: reason,
     reasonType,
+    isRecurring: event.isRecurring,
+    oneLiner: event.oneLiner,
+    noveltyScore: event.noveltyScore,
     isTrendingPick: trendingScore >= 10,
   };
 }
@@ -1512,6 +1532,85 @@ export function buildDetailedPreferencesData(
     dogFriendlyOnly: prefs.dogFriendlyOnly ?? false,
     preferSoberFriendly: prefs.preferSoberFriendly ?? false,
     avoidBars: prefs.avoidBars ?? false,
+  };
+}
+
+/**
+ * Build DetailedPreferencesData from the new UserProfile (psychographic onboarding).
+ * Maps UserProfile fields to the existing scoring interface so the scoring engine
+ * works without changes to internal scoring functions.
+ */
+export function buildDetailedPreferencesFromProfile(
+  profile: {
+    contextSegment: ContextSegment;
+    socialStyle: SocialStyleType;
+    vibePreferences: unknown; // JSON array of {pair, selected}
+    budgetTier: BudgetTier;
+    opennessScore: number;
+    extraversionScore: number;
+    noveltyScore: number;
+  } | null
+): DetailedPreferencesData | undefined {
+  if (!profile) return undefined;
+
+  // Map socialStyle → companion intensities (1-5 scale)
+  const companionMap: Record<SocialStyleType, { solo: number; date: number; friends: number; family: number }> = {
+    SOCIAL_CONNECTOR: { solo: 1, date: 3, friends: 5, family: 3 },
+    PASSIVE_SAVER: { solo: 2, date: 2, friends: 3, family: 2 },
+    SOLO_EXPLORER: { solo: 5, date: 1, friends: 2, family: 1 },
+    DIRECT_SHARER: { solo: 1, date: 5, friends: 2, family: 2 },
+  };
+  const companion = companionMap[profile.socialStyle];
+
+  // Map budgetTier → BudgetPreference
+  const budgetMap: Record<BudgetTier, BudgetPreference> = {
+    FREE_FOCUSED: "FREE",
+    MODERATE: "UNDER_25",
+    TREAT_YOURSELF: "ANY",
+  };
+
+  // Map socialStyle → SocialIntent
+  const socialMap: Record<SocialStyleType, SocialIntent> = {
+    SOCIAL_CONNECTOR: "MEET_PEOPLE",
+    PASSIVE_SAVER: "EITHER",
+    SOLO_EXPLORER: "OWN_THING",
+    DIRECT_SHARER: "EITHER",
+  };
+
+  // Derive vibe from openness/extraversion scores
+  // Higher openness → high energy, lower → chill
+  const vibeFromScores = {
+    chill: Math.round((1 - profile.opennessScore) * 5),
+    moderate: 3,
+    highEnergy: Math.round(profile.opennessScore * 5),
+  };
+
+  // Derive time preferences from vibe selections
+  const vibes = Array.isArray(profile.vibePreferences) ? profile.vibePreferences as Array<{pair: number; selected: string}> : [];
+  const pair4 = vibes.find((v) => v.pair === 4);
+  // Pair 4: A = "Farmers market morning" → morning person, B = "Late-night food truck rally" → night person
+  const isMorningPerson = pair4?.selected === "A";
+
+  return {
+    goingSolo: companion.solo,
+    goingDate: companion.date,
+    goingFriends: companion.friends,
+    goingFamily: companion.family,
+    timeWeeknight: 3,
+    timeWeekend: 4,
+    timeMorning: isMorningPerson ? 4 : 2,
+    timeDaytime: 3,
+    timeEvening: 4,
+    timeLateNight: isMorningPerson ? 1 : 4,
+    budget: budgetMap[profile.budgetTier],
+    vibeChill: vibeFromScores.chill,
+    vibeModerate: vibeFromScores.moderate,
+    vibeHighEnergy: vibeFromScores.highEnergy,
+    socialIntent: socialMap[profile.socialStyle],
+    hasDog: false,
+    dogFriendlyOnly: false,
+    preferSoberFriendly: false,
+    avoidBars: false,
   };
 }
 

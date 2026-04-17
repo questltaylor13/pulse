@@ -13,6 +13,9 @@ export const CATEGORY_EMOJI: Record<Category, string> = {
   OTHER: "📍",
   RESTAURANT: "🍽️",
   ACTIVITY_VENUE: "🎯",
+  COMEDY: "😂",
+  SOCIAL: "🤝",
+  WELLNESS: "🧘",
 };
 
 export const CATEGORY_LABELS: Record<Category, string> = {
@@ -28,6 +31,9 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   OTHER: "Other",
   RESTAURANT: "Restaurant",
   ACTIVITY_VENUE: "Experience",
+  COMEDY: "Comedy",
+  SOCIAL: "Social",
+  WELLNESS: "Wellness",
 };
 
 export const CATEGORY_COLORS: Record<Category, string> = {
@@ -43,4 +49,7 @@ export const CATEGORY_COLORS: Record<Category, string> = {
   OTHER: "bg-slate-100 text-slate-700",
   RESTAURANT: "bg-orange-100 text-orange-700",
   ACTIVITY_VENUE: "bg-cyan-100 text-cyan-700",
+  COMEDY: "bg-rose-100 text-rose-700",
+  SOCIAL: "bg-teal-100 text-teal-700",
+  WELLNESS: "bg-emerald-100 text-emerald-700",
 };

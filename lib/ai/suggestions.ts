@@ -325,6 +325,21 @@ const CATEGORY_REASONS: Record<Category, string[]> = {
     "Great for groups",
     "Entertainment awaits",
   ],
+  COMEDY: [
+    "Guaranteed laughs",
+    "Comedy gold",
+    "You'll be crying laughing",
+  ],
+  SOCIAL: [
+    "Meet your new crew",
+    "Community vibes",
+    "Social energy",
+  ],
+  WELLNESS: [
+    "Recharge and reset",
+    "Self-care essential",
+    "Mind and body boost",
+  ],
 };
 
 /**

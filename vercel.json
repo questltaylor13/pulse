@@ -1,8 +1,16 @@
 {
   "crons": [
     {
-      "path": "/api/events/scrape",
-      "schedule": "0 6 * * *"
+      "path": "/api/cron/refresh-neighborhood-counts",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/archive-stale-events",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/scrape-and-revalidate",
+      "schedule": "0 11 * * *"
     },
     {
       "path": "/api/cron/cleanup-cache",
@@ -19,6 +27,14 @@
     {
       "path": "/api/cron/refresh-places?chunk=2",
       "schedule": "20 7 * * 0"
+    },
+    {
+      "path": "/api/cron/refresh-guide-counts",
+      "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/cron/backfill-walk-times",
+      "schedule": "0 12 * * *"
     }
   ]
 }

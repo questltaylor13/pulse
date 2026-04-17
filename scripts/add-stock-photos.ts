@@ -88,6 +88,27 @@ const EVENT_PHOTOS: Record<Category, string[]> = {
     "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&q=80", // Party
     "https://images.unsplash.com/photo-1527529482837-4698179dc6ce?w=800&q=80", // Social gathering
   ],
+  COMEDY: [
+    "https://images.unsplash.com/photo-1585699324551-f6c309eedeca?w=800&q=80", // Comedy show
+    "https://images.unsplash.com/photo-1527224857830-43a7acc85260?w=800&q=80", // Microphone
+    "https://images.unsplash.com/photo-1603190287605-e6ade32fa852?w=800&q=80", // Stage lights
+    "https://images.unsplash.com/photo-1496024840928-4c417adf211d?w=800&q=80", // Laughing crowd
+    "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=800&q=80", // Performance
+  ],
+  SOCIAL: [
+    "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&q=80", // Group of friends
+    "https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=800&q=80", // Community
+    "https://images.unsplash.com/photo-1543269865-cbf427effbad?w=800&q=80", // Social gathering
+    "https://images.unsplash.com/photo-1528605248644-14dd04022da1?w=800&q=80", // Group activity
+    "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=800&q=80", // People socializing
+  ],
+  WELLNESS: [
+    "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800&q=80", // Yoga
+    "https://images.unsplash.com/photo-1545205597-3d9d02c29597?w=800&q=80", // Meditation
+    "https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=800&q=80", // Spa
+    "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800&q=80", // Wellness
+    "https://images.unsplash.com/photo-1600618528240-fb9fc964b853?w=800&q=80", // Self-care
+  ],
 };
 
 // Place photos by category
@@ -175,6 +196,27 @@ const PLACE_PHOTOS: Record<Category, string[]> = {
     "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&q=80",
     "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&q=80",
     "https://images.unsplash.com/photo-1527529482837-4698179dc6ce?w=800&q=80",
+  ],
+  COMEDY: [
+    "https://images.unsplash.com/photo-1585699324551-f6c309eedeca?w=800&q=80",
+    "https://images.unsplash.com/photo-1527224857830-43a7acc85260?w=800&q=80",
+    "https://images.unsplash.com/photo-1603190287605-e6ade32fa852?w=800&q=80",
+    "https://images.unsplash.com/photo-1496024840928-4c417adf211d?w=800&q=80",
+    "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=800&q=80",
+  ],
+  SOCIAL: [
+    "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&q=80",
+    "https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=800&q=80",
+    "https://images.unsplash.com/photo-1543269865-cbf427effbad?w=800&q=80",
+    "https://images.unsplash.com/photo-1528605248644-14dd04022da1?w=800&q=80",
+    "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=800&q=80",
+  ],
+  WELLNESS: [
+    "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800&q=80",
+    "https://images.unsplash.com/photo-1545205597-3d9d02c29597?w=800&q=80",
+    "https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=800&q=80",
+    "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800&q=80",
+    "https://images.unsplash.com/photo-1600618528240-fb9fc964b853?w=800&q=80",
   ],
 };
 

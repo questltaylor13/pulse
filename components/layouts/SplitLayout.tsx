@@ -16,7 +16,7 @@ export default function SplitLayout({
       <div className="flex flex-col lg:flex-row gap-8">
         {sidebarPosition === "left" && (
           <aside className="hidden lg:block lg:w-1/3">
-            <div className="sticky top-24 max-h-[calc(100vh-120px)] overflow-y-auto space-y-6 scrollbar-hide">
+            <div className="sticky top-24 space-y-6">
               {sidebar}
             </div>
           </aside>
@@ -26,7 +26,7 @@ export default function SplitLayout({
 
         {sidebarPosition === "right" && (
           <aside className="hidden lg:block lg:w-1/3">
-            <div className="sticky top-24 max-h-[calc(100vh-120px)] overflow-y-auto space-y-6 scrollbar-hide">
+            <div className="sticky top-24 space-y-6">
               {sidebar}
             </div>
           </aside>

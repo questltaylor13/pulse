@@ -1,16 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 export default function NavLinks() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const isAdmin = session?.user?.isAdmin;
 
   const linkClass = (href: string) => {
-    const isActive = pathname === href || pathname?.startsWith(href + "/");
+    let isActive: boolean;
+    if (href === "/?tab=places") {
+      isActive =
+        pathname === "/" && searchParams?.get("tab") === "places";
+    } else {
+      isActive = pathname === href || pathname?.startsWith(href + "/") || false;
+    }
     return `px-3 py-2 text-sm font-medium rounded-lg transition ${
       isActive
         ? "text-primary bg-primary/5"
@@ -20,14 +27,14 @@ export default function NavLinks() {
 
   return (
     <nav className="hidden md:flex items-center gap-1">
-      <Link href="/feed" className={linkClass("/feed")}>
-        Feed
+      <Link href="/" className={linkClass("/")}>
+        Home
       </Link>
-      <Link href="/places" className={linkClass("/places")}>
+      <Link href="/?tab=places" className={linkClass("/?tab=places")}>
         Places
       </Link>
       <Link href="/lists" className={linkClass("/lists")}>
-        Lists
+        Saved
       </Link>
       {session?.user ? (
         <Link

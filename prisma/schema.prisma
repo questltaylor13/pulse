@@ -35,6 +35,10 @@ enum Category {
   // Place-specific categories
   RESTAURANT
   ACTIVITY_VENUE
+  // Added for Jensen demo
+  COMEDY
+  SOCIAL
+  WELLNESS
 }
 
 enum DenverTenure {
@@ -83,18 +87,18 @@ enum EventStatus {
 
 // Opening status for places
 enum OpeningStatus {
-  OPEN              // Currently operating
-  COMING_SOON       // Announced, not open yet
-  SOFT_OPEN         // Limited hours/menu, testing
+  OPEN // Currently operating
+  COMING_SOON // Announced, not open yet
+  SOFT_OPEN // Limited hours/menu, testing
   TEMPORARILY_CLOSED
   PERMANENTLY_CLOSED
 }
 
 // Alert types for new place notifications
 enum AlertType {
-  NOTIFY_ON_OPEN    // Tell me when this opens
-  SOFT_OPEN_ALERT   // Tell me about soft opening
-  FIRST_WEEK        // Remind me in first week
+  NOTIFY_ON_OPEN // Tell me when this opens
+  SOFT_OPEN_ALERT // Tell me about soft opening
+  FIRST_WEEK // Remind me in first week
 }
 
 // List collaboration roles
@@ -121,13 +125,13 @@ enum ListTemplate {
 
 // Badge category types
 enum BadgeCategory {
-  EXPLORER        // Discovering neighborhoods/places
-  CATEGORY_FAN    // Category specialists (music, food, art, etc.)
-  SOCIAL          // Following/connections/community
-  STREAK          // Consecutive attendance streaks
-  PIONEER         // Early adopter & new places
-  SPECIAL         // Limited edition/seasonal
-  MILESTONE       // Achievement thresholds
+  EXPLORER // Discovering neighborhoods/places
+  CATEGORY_FAN // Category specialists (music, food, art, etc.)
+  SOCIAL // Following/connections/community
+  STREAK // Consecutive attendance streaks
+  PIONEER // Early adopter & new places
+  SPECIAL // Limited edition/seasonal
+  MILESTONE // Achievement thresholds
 }
 
 // Badge tier levels
@@ -147,11 +151,11 @@ enum GroupRole {
 
 // Group event status
 enum GroupEventStatus {
-  SUGGESTED   // Just suggested
-  VOTING      // Actively being voted on
-  CONFIRMED   // Group is going
-  PASSED      // Decided not to go
-  ATTENDED    // Already happened
+  SUGGESTED // Just suggested
+  VOTING // Actively being voted on
+  CONFIRMED // Group is going
+  PASSED // Decided not to go
+  ATTENDED // Already happened
 }
 
 // Leaderboard types
@@ -162,22 +166,22 @@ enum LeaderboardType {
 }
 
 model User {
-  id                  String              @id @default(cuid())
-  email               String              @unique
-  username            String?             @unique // URL-friendly unique username
-  name                String?
-  bio                 String?             // User bio for profile
-  profileImageUrl     String?             // Profile picture URL
-  passwordHash        String?
-  citySlug            String              @default("denver")
-  relationshipStatus  RelationshipStatus?
-  denverTenure        DenverTenure?
-  onboardingComplete  Boolean             @default(false)
-  isAdmin             Boolean             @default(false)
-  isInfluencer        Boolean             @default(false) // Verified curator flag
-  referralCode        String?             @unique // Unique referral code
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  username           String?             @unique // URL-friendly unique username
+  name               String?
+  bio                String? // User bio for profile
+  profileImageUrl    String? // Profile picture URL
+  passwordHash       String?
+  citySlug           String              @default("denver")
+  relationshipStatus RelationshipStatus?
+  denverTenure       DenverTenure?
+  onboardingComplete Boolean             @default(false)
+  isAdmin            Boolean             @default(false)
+  isInfluencer       Boolean             @default(false) // Verified curator flag
+  referralCode       String?             @unique // Unique referral code
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   preferences         Preference[]
   interactions        UserEventInteraction[]
@@ -191,51 +195,56 @@ model User {
   suggestionSets      UserSuggestionSet[]
   influencerFollows   UserInfluencerFollow[]
   // User following system
-  following           UserFollow[]        @relation("Following")
-  followers           UserFollow[]        @relation("Followers")
+  following           UserFollow[]           @relation("Following")
+  followers           UserFollow[]           @relation("Followers")
   // Activity tracking
   activities          UserActivity[]
-  activitiesAsTarget  UserActivity[]      @relation("ActivityTargetUser")
+  activitiesAsTarget  UserActivity[]         @relation("ActivityTargetUser")
   // Referrals
-  referralsGiven      Referral[]          @relation("Referrer")
-  referredBy          Referral?           @relation("Referred")
+  referralsGiven      Referral[]             @relation("Referrer")
+  referredBy          Referral?              @relation("Referred")
   // Recommendation tuning
   feedback            UserFeedback[]
   constraints         UserConstraints?
   eventFeedViews      EventFeedView[]
   detailedPreferences DetailedPreferences?
+  profile             UserProfile?
   // Plans
   plans               Plan[]
   // New place alerts
   newPlaceAlerts      NewPlaceAlert[]
 
   // Community features
-  badges              UserBadge[]
-  leaderboardEntries  LeaderboardEntry[]
-  groupMemberships    GroupMember[]
-  suggestedGroupEvents GroupEvent[]      @relation("GroupEventSuggestor")
-  suggestedGroupPlaces GroupPlace[]      @relation("GroupPlaceSuggestor")
+  badges               UserBadge[]
+  leaderboardEntries   LeaderboardEntry[]
+  groupMemberships     GroupMember[]
+  suggestedGroupEvents GroupEvent[]       @relation("GroupEventSuggestor")
+  suggestedGroupPlaces GroupPlace[]       @relation("GroupPlaceSuggestor")
 
   // Cached stats for quick display
-  currentStreak       Int               @default(0)  // Consecutive weeks with attendance
-  longestStreak       Int               @default(0)
-  totalEventsAttended Int               @default(0)
-  totalBadgesEarned   Int               @default(0)
+  currentStreak       Int @default(0) // Consecutive weeks with attendance
+  longestStreak       Int @default(0)
+  totalEventsAttended Int @default(0)
+  totalBadgesEarned   Int @default(0)
 
   // Labs (premium builder community)
-  labsRSVPs           LabsRSVP[]
-  labsSaves           LabsSave[]
+  labsRSVPs LabsRSVP[]
+  labsSaves LabsSave[]
 
   // Friends
   friendRequestsSent     Friendship[] @relation("FriendRequestsSent")
   friendRequestsReceived Friendship[] @relation("FriendRequestsReceived")
 
   // Calendar & Invitations
-  invitationsReceived    EventInvitation[] @relation("InvitationsReceived")
-  invitationsSent        EventInvitation[] @relation("InvitationsSent")
+  invitationsReceived EventInvitation[] @relation("InvitationsReceived")
+  invitationsSent     EventInvitation[] @relation("InvitationsSent")
 
   // List collaborations
-  listCollaborations     ListCollaborator[]
+  listCollaborations ListCollaborator[]
+
+  savedGuides UserSavedGuide[]
+
+  searchHistory UserSearchHistory[]
 
   @@index([username])
   @@index([referralCode])
@@ -269,45 +278,45 @@ model Preference {
 
 // Legacy Event model - kept for backward compatibility
 model Event {
-  id            String    @id @default(cuid())
-  cityId        String
-  title         String
-  description   String    @db.Text
-  category      Category
-  tags          String[]
-  venueName     String
-  address       String
-  neighborhood  String?   // Denver neighborhood (e.g., "RiNo", "LoDo", "LoHi")
-  startTime     DateTime
-  endTime       DateTime?
-  priceRange    String
-  source        String
-  sourceUrl     String?
-  externalId    String?
-  imageUrl      String?
-  googleMapsUrl String?
-  appleMapsUrl  String?
+  id                String    @id @default(cuid())
+  cityId            String
+  title             String
+  description       String    @db.Text
+  category          Category
+  tags              String[]
+  venueName         String
+  address           String
+  neighborhood      String? // Denver neighborhood (e.g., "RiNo", "LoDo", "LoHi")
+  startTime         DateTime
+  endTime           DateTime?
+  priceRange        String
+  source            String
+  sourceUrl         String?
+  externalId        String?
+  imageUrl          String?
+  googleMapsUrl     String?
+  appleMapsUrl      String?
   // Location ratings
-  googleRating      Float?    // Google Maps rating (0-5)
-  googleRatingCount Int?      // Number of Google reviews
-  appleRating       Float?    // Apple Maps rating (0-5)
-  appleRatingCount  Int?      // Number of Apple reviews
+  googleRating      Float? // Google Maps rating (0-5)
+  googleRatingCount Int? // Number of Google reviews
+  appleRating       Float? // Apple Maps rating (0-5)
+  appleRatingCount  Int? // Number of Apple reviews
   // Place relation
-  placeId       String?
+  placeId           String?
 
   // Curator/Creator fields
-  createdById   String?       // Influencer who created this event
-  status        EventStatus   @default(PUBLISHED)
-  publishedAt   DateTime?     // When the event was published
-  coverImage    String?       // Main cover image URL
-  images        String[]      // Additional image URLs
-  ticketUrl     String?       // Link to buy tickets
-  ticketInfo    String?       // Ticket details text
+  createdById String? // Influencer who created this event
+  status      EventStatus @default(PUBLISHED)
+  publishedAt DateTime? // When the event was published
+  coverImage  String? // Main cover image URL
+  images      String[] // Additional image URLs
+  ticketUrl   String? // Link to buy tickets
+  ticketInfo  String? // Ticket details text
 
   // Enhanced tagging for discovery
-  vibeTags      String[]  // e.g., ["chill", "energetic", "romantic"]
-  companionTags String[]  // e.g., ["solo", "friends", "date-night", "family"]
-  occasionTags  String[]  // e.g., ["self-improvement", "celebration", "networking"]
+  vibeTags      String[] // e.g., ["chill", "energetic", "romantic"]
+  companionTags String[] // e.g., ["solo", "friends", "date-night", "family"]
+  occasionTags  String[] // e.g., ["self-improvement", "celebration", "networking"]
 
   // What's included (for workshops, classes, etc.)
   whatsIncluded String[]
@@ -317,20 +326,38 @@ model Event {
   // ============================================================================
 
   // Dog-friendly
-  isDogFriendly       Boolean  @default(false)
-  dogFriendlyDetails  String?  // "Dogs allowed on patio only" or "Treats provided!"
+  isDogFriendly      Boolean @default(false)
+  dogFriendlyDetails String? // "Dogs allowed on patio only" or "Treats provided!"
 
   // Sober-friendly / Drinking optional
-  isDrinkingOptional  Boolean  @default(false)  // Good mocktail menu, not centered on alcohol
-  isAlcoholFree       Boolean  @default(false)  // No alcohol at all
-  soberFriendlyNotes  String?  // "Great mocktail menu" or "Coffee-focused event"
+  isDrinkingOptional Boolean @default(false) // Good mocktail menu, not centered on alcohol
+  isAlcoholFree      Boolean @default(false) // No alcohol at all
+  soberFriendlyNotes String? // "Great mocktail menu" or "Coffee-focused event"
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  // Recurring / permanent activities
+  isRecurring Boolean @default(false)
 
-  city            City                    @relation(fields: [cityId], references: [id], onDelete: Cascade)
-  place           Place?                  @relation(fields: [placeId], references: [id], onDelete: SetNull)
-  createdBy       Influencer?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  // AI enrichment fields
+  oneLiner     String? // Punchy 10-15 word description
+  noveltyScore Int? // 1-10 uniqueness rating
+  qualityScore Int? // 1-10 quality/interest rating
+  isNew        Boolean @default(false) // New openings, launches, seasonal returns
+
+  // Phase 1 home redesign fields
+  isEditorsPick       Boolean @default(false) // Manual flag for "This weekend's picks"
+  driveTimeFromDenver Int? // Minutes, for "Outside the city" section meta
+  isArchived          Boolean @default(false) // Flipped true by daily archive cron for past events
+
+  // Phase 4: map support
+  lat Float?
+  lng Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  city            City                   @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  place           Place?                 @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  createdBy       Influencer?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
   interactions    UserEventInteraction[]
   listItems       ListItem[]
   userStatuses    EventUserStatus[]
@@ -339,17 +366,22 @@ model Event {
   feedback        UserFeedback[]
   feedViews       EventFeedView[]
   planEvents      PlanEvent[]
-  creatorFeatures CreatorEventFeature[]   // Creators who are hosting/featuring this event
-  groupEvents     GroupEvent[]            // Group event suggestions
-  socialContent   EventSocialContent[]    // Embedded social media content
-  invitations     EventInvitation[]       // Calendar invitations
+  creatorFeatures CreatorEventFeature[] // Creators who are hosting/featuring this event
+  groupEvents     GroupEvent[] // Group event suggestions
+  socialContent   EventSocialContent[] // Embedded social media content
+  invitations     EventInvitation[] // Calendar invitations
 
+  guideStops GuideStop[]
+
+  @@unique([externalId, source])
   @@index([cityId, startTime])
   @@index([category])
   @@index([placeId])
   @@index([createdById])
   @@index([status])
-  @@unique([externalId, source])
+  @@index([isEditorsPick])
+  @@index([isArchived, startTime])
+  @@index([lat, lng])
 }
 
 // Creator/Influencer featuring or hosting an event
@@ -357,13 +389,13 @@ model CreatorEventFeature {
   id           String   @id @default(cuid())
   influencerId String
   eventId      String
-  quote        String?  // Creator's quote about the event
+  quote        String? // Creator's quote about the event
   isFeatured   Boolean  @default(false) // Show prominently
   isHost       Boolean  @default(false) // Creator is hosting/organizing
   createdAt    DateTime @default(now())
 
-  influencer   Influencer @relation(fields: [influencerId], references: [id], onDelete: Cascade)
-  event        Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  influencer Influencer @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  event      Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@unique([influencerId, eventId])
   @@index([eventId])
@@ -372,80 +404,84 @@ model CreatorEventFeature {
 
 // Social media content embedded in events (TikTok, Instagram)
 model EventSocialContent {
-  id          String   @id @default(cuid())
-  eventId     String
-  platform    String   // "tiktok" or "instagram"
-  url         String   // Full URL to the content
-  embedUrl    String?  // Embed-friendly URL
-  thumbnail   String?  // Thumbnail image URL
+  id           String   @id @default(cuid())
+  eventId      String
+  platform     String // "tiktok" or "instagram"
+  url          String // Full URL to the content
+  embedUrl     String? // Embed-friendly URL
+  thumbnail    String? // Thumbnail image URL
   authorHandle String? // @username
-  caption     String?  // Post caption
-  order       Int      @default(0) // Display order
-  createdAt   DateTime @default(now())
+  caption      String? // Post caption
+  order        Int      @default(0) // Display order
+  createdAt    DateTime @default(now())
 
-  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([eventId])
 }
 
 // Unified Item model for Events and Places
 model Item {
-  id            String    @id @default(cuid())
-  type          ItemType
-  cityId        String
-  title         String
-  description   String
-  category      Category
-  tags          String[]
+  id                String    @id @default(cuid())
+  type              ItemType
+  cityId            String
+  title             String
+  description       String
+  category          Category
+  tags              String[]
   // Location info
-  venueName     String    // For events: venue name. For places: place name
-  address       String
-  googleMapsUrl String?
-  appleMapsUrl  String?
+  venueName         String // For events: venue name. For places: place name
+  address           String
+  googleMapsUrl     String?
+  appleMapsUrl      String?
   // Event-specific (nullable for places)
-  startTime     DateTime?
-  endTime       DateTime?
+  startTime         DateTime?
+  endTime           DateTime?
   // Common fields
-  priceRange    String
-  source        String
-  sourceUrl     String?
-  externalId    String?
-  imageUrl      String?
+  priceRange        String
+  source            String
+  sourceUrl         String?
+  externalId        String?
+  imageUrl          String?
   // Place-specific
-  neighborhood  String?   // e.g., "RiNo", "LoHi", "LoDo"
-  hours         String?   // e.g., "Mon-Fri 11am-10pm"
+  neighborhood      String? // e.g., "RiNo", "LoHi", "LoDo"
+  hours             String? // e.g., "Mon-Fri 11am-10pm"
   // Vibe/Companion tags (for places)
-  vibeTags      String[]  // e.g., ["date-night", "group", "solo", "family"]
-  companionTags String[]  // e.g., ["romantic", "adventurous", "relaxing"]
+  vibeTags          String[] // e.g., ["date-night", "group", "solo", "family"]
+  companionTags     String[] // e.g., ["romantic", "adventurous", "relaxing"]
   // Location ratings
-  googleRating      Float?    // Google Maps rating (0-5)
-  googleRatingCount Int?      // Number of Google reviews
-  appleRating       Float?    // Apple Maps rating (0-5)
-  appleRatingCount  Int?      // Number of Apple reviews
+  googleRating      Float? // Google Maps rating (0-5)
+  googleRatingCount Int? // Number of Google reviews
+  appleRating       Float? // Apple Maps rating (0-5)
+  appleRatingCount  Int? // Number of Apple reviews
+  // AI enrichment fields
+  oneLiner          String? // Punchy 10-15 word description
+  noveltyScore      Int? // 1-10 uniqueness rating
+  qualityScore      Int? // 1-10 quality/interest rating
   // Metadata
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  city            City                @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  city            City             @relation(fields: [cityId], references: [id], onDelete: Cascade)
   userStatuses    UserItemStatus[]
   ratings         UserItemRating[]
   views           ItemView[]
   influencerPicks InfluencerPick[]
 
+  @@unique([externalId, source])
   @@index([cityId, type])
   @@index([type, startTime])
   @@index([category])
-  @@unique([externalId, source])
 }
 
 // User status for Items (WANT/DONE/PASS)
 model UserItemStatus {
-  id        String      @id @default(cuid())
+  id        String     @id @default(cuid())
   userId    String
   itemId    String
   status    ItemStatus
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
@@ -460,7 +496,7 @@ model UserItemRating {
   id        String   @id @default(cuid())
   userId    String
   itemId    String
-  rating    Int      // 1-5 scale
+  rating    Int // 1-5 scale
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -489,16 +525,16 @@ model ItemView {
 
 // AI-generated weekly/monthly suggestions cache
 model UserSuggestionSet {
-  id           String   @id @default(cuid())
-  userId       String
-  generatedAt  DateTime @default(now())
-  expiresAt    DateTime
-  weeklyIds    String[] // Array of item IDs for weekly picks
-  monthlyIds   String[] // Array of item IDs for monthly picks
-  reasonsJson  String   // JSON: Record<string, string> - itemId -> reason
-  summaryText  String   // AI-generated summary
-  isAiGenerated Boolean @default(false)
-  createdAt    DateTime @default(now())
+  id            String   @id @default(cuid())
+  userId        String
+  generatedAt   DateTime @default(now())
+  expiresAt     DateTime
+  weeklyIds     String[] // Array of item IDs for weekly picks
+  monthlyIds    String[] // Array of item IDs for monthly picks
+  reasonsJson   String // JSON: Record<string, string> - itemId -> reason
+  summaryText   String // AI-generated summary
+  isAiGenerated Boolean  @default(false)
+  createdAt     DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -515,16 +551,16 @@ model UserEventInteraction {
   rating    Int?
   liked     Boolean?
   notes     String?
-  goingWith GoingWith?        // Who the user is going with
+  goingWith GoingWith? // Who the user is going with
 
   // Calendar-specific fields
-  calendarStatus   CalendarStatus?  // User's response to this event
-  addedToCalendar  Boolean @default(false)  // Synced to external calendar
-  reminderSet      Boolean @default(false)
-  reminderTime     DateTime?
+  calendarStatus  CalendarStatus? // User's response to this event
+  addedToCalendar Boolean         @default(false) // Synced to external calendar
+  reminderSet     Boolean         @default(false)
+  reminderTime    DateTime?
 
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -538,8 +574,8 @@ model List {
   id            String        @id @default(cuid())
   userId        String
   name          String
-  description   String?       // List description
-  coverImageUrl String?       // Cover image for the list
+  description   String? // List description
+  coverImageUrl String? // Cover image for the list
   isDefault     Boolean       @default(false)
   isPublic      Boolean       @default(false) // Public lists can be viewed by anyone
   template      ListTemplate? // Template type for the list
@@ -562,10 +598,10 @@ model List {
 model ListItem {
   id        String   @id @default(cuid())
   listId    String
-  eventId   String?  // Nullable — item can reference an Event or a Place
-  placeId   String?  // Optional place reference for venue-style lists
+  eventId   String? // Nullable — item can reference an Event or a Place
+  placeId   String? // Optional place reference for venue-style lists
   order     Int      @default(0) // Order in the list (for drag-and-drop)
-  notes     String?  // User notes for this item in list
+  notes     String? // User notes for this item in list
   createdAt DateTime @default(now())
 
   list  List   @relation(fields: [listId], references: [id], onDelete: Cascade)
@@ -641,55 +677,61 @@ model EventView {
 
 // Creator/Influencer profiles
 model Influencer {
-  id              String   @id @default(cuid())
-  userId          String?  @unique // Link to user account (optional for legacy creators)
-  handle          String   @unique // e.g., "haleighwatts"
-  displayName     String   // e.g., "Haleigh Watts"
-  bio             String   @db.Text
-  profileImageUrl String?  // Path to profile image
-  profileColor    String?  // Hex color for profile background e.g., "#F5E6F0"
-  citySlug        String   @default("denver")
+  id              String  @id @default(cuid())
+  userId          String? @unique // Link to user account (optional for legacy creators)
+  handle          String  @unique // e.g., "haleighwatts"
+  displayName     String // e.g., "Haleigh Watts"
+  bio             String  @db.Text
+  profileImageUrl String? // Path to profile image
+  profileColor    String? // Hex color for profile background e.g., "#F5E6F0"
+  citySlug        String  @default("denver")
 
   // Social links
-  instagram       String?  // Instagram handle without @
-  tiktok          String?  // TikTok handle without @
+  instagram String? // Instagram handle without @
+  tiktok    String? // TikTok handle without @
 
   // Denver connection
-  isDenverNative  Boolean  @default(false)
-  yearsInDenver   Int?     // Years living in Denver if not native
+  isDenverNative Boolean @default(false)
+  yearsInDenver  Int? // Years living in Denver if not native
 
   // Creator status
-  isFounder       Boolean  @default(false) // Shows "Founder" badge
+  isFounder Boolean @default(false) // Shows "Founder" badge
 
   // Content & personality
-  vibeDescription String?  // e.g., "Romantic spots, upscale dining, sunset views"
-  funFacts        String[] // Array of fun facts about the creator
-  specialties     String[] // e.g., ["date nights", "hidden gems", "local favorites"]
+  vibeDescription     String? // e.g., "Romantic spots, upscale dining, sunset views"
+  funFacts            String[] // Array of fun facts about the creator
+  specialties         String[] // e.g., ["date nights", "hidden gems", "local favorites"]
   preferredCategories Category[]
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  isFeaturedCreator Boolean @default(false)
+  guideCount        Int     @default(0)
+  coverImageUrl     String?
 
-  pickSets        InfluencerPickSet[]
-  followers       UserInfluencerFollow[]
-  eventFeatures   CreatorEventFeature[]  // Events this creator is hosting/featuring
-  createdEvents   Event[]                // Events created by this creator
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pickSets      InfluencerPickSet[]
+  followers     UserInfluencerFollow[]
+  eventFeatures CreatorEventFeature[] // Events this creator is hosting/featuring
+  createdEvents Event[] // Events created by this creator
+  guides        Guide[]
 
   @@index([citySlug])
   @@index([userId])
+  @@index([isFeaturedCreator])
 }
 
 // Weekly or monthly pick sets from an influencer
 model InfluencerPickSet {
-  id           String       @id @default(cuid())
-  influencerId String
-  range        PickSetRange // WEEK or MONTH
-  title        String       // e.g., "This Week's Date Night Picks"
-  summaryText  String?      // AI-generated or manual summary
-  generatedAt  DateTime     @default(now())
-  expiresAt    DateTime
-  isAiGenerated Boolean     @default(false)
-  createdAt    DateTime     @default(now())
+  id            String       @id @default(cuid())
+  influencerId  String
+  range         PickSetRange // WEEK or MONTH
+  title         String // e.g., "This Week's Date Night Picks"
+  summaryText   String? // AI-generated or manual summary
+  generatedAt   DateTime     @default(now())
+  expiresAt     DateTime
+  isAiGenerated Boolean      @default(false)
+  createdAt     DateTime     @default(now())
 
   influencer Influencer       @relation(fields: [influencerId], references: [id], onDelete: Cascade)
   picks      InfluencerPick[]
@@ -703,8 +745,8 @@ model InfluencerPick {
   id        String   @id @default(cuid())
   pickSetId String
   itemId    String
-  rank      Int      // Order/priority (1 = top pick)
-  reason    String   // Short explanation for this pick
+  rank      Int // Order/priority (1 = top pick)
+  reason    String // Short explanation for this pick
   createdAt DateTime @default(now())
 
   pickSet InfluencerPickSet @relation(fields: [pickSetId], references: [id], onDelete: Cascade)
@@ -737,8 +779,8 @@ model UserInfluencerFollow {
 // User following other users (not influencers)
 model UserFollow {
   id          String   @id @default(cuid())
-  followerId  String   // User who is following
-  followingId String   // User being followed
+  followerId  String // User who is following
+  followingId String // User being followed
   createdAt   DateTime @default(now())
 
   follower  User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
@@ -761,16 +803,16 @@ enum ActivityType {
 
 // User activity for feed
 model UserActivity {
-  id          String       @id @default(cuid())
-  userId      String
-  type        ActivityType
-  eventId     String?      // Related event (if applicable)
-  listId      String?      // Related list (if applicable)
-  targetUserId String?     // Related user (for follows)
-  itemId      String?      // Related item (for places)
-  metadata    String?      // JSON string for extra data
-  isPublic    Boolean      @default(true)
-  createdAt   DateTime     @default(now())
+  id           String       @id @default(cuid())
+  userId       String
+  type         ActivityType
+  eventId      String? // Related event (if applicable)
+  listId       String? // Related list (if applicable)
+  targetUserId String? // Related user (for follows)
+  itemId       String? // Related item (for places)
+  metadata     String? // JSON string for extra data
+  isPublic     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
 
   user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   event      Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
@@ -785,9 +827,9 @@ model UserActivity {
 // Referral tracking
 model Referral {
   id           String   @id @default(cuid())
-  referrerId   String   // User who referred
+  referrerId   String // User who referred
   referredId   String   @unique // User who was referred (one referrer per user)
-  referralCode String   // The code used
+  referralCode String // The code used
   createdAt    DateTime @default(now())
 
   referrer User @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
@@ -803,9 +845,9 @@ model Referral {
 
 // Feedback types for tuning recommendations
 enum FeedbackType {
-  MORE      // User wants more like this
-  LESS      // User wants less like this
-  HIDE      // User wants to hide/pass on this
+  MORE // User wants more like this
+  LESS // User wants less like this
+  HIDE // User wants to hide/pass on this
 }
 
 // Who the user is going with
@@ -829,10 +871,10 @@ enum DayOfWeek {
 
 // Time of day preferences
 enum TimeOfDay {
-  MORNING     // 6am-12pm
-  AFTERNOON   // 12pm-5pm
-  EVENING     // 5pm-9pm
-  LATE_NIGHT  // 9pm+
+  MORNING // 6am-12pm
+  AFTERNOON // 12pm-5pm
+  EVENING // 5pm-9pm
+  LATE_NIGHT // 9pm+
 }
 
 // Budget preferences
@@ -851,47 +893,95 @@ enum SocialIntent {
   EITHER
 }
 
+// Psychographic onboarding enums
+enum ContextSegment {
+  NEW_TO_CITY
+  IN_A_RUT
+  LOCAL_EXPLORER
+  VISITING
+}
+
+enum SocialStyleType {
+  SOCIAL_CONNECTOR
+  PASSIVE_SAVER
+  SOLO_EXPLORER
+  DIRECT_SHARER
+}
+
+enum PlanningStyle {
+  SPONTANEOUS
+  WEEKEND_PLANNER
+  ADVANCE_PLANNER
+}
+
+enum BudgetTier {
+  FREE_FOCUSED
+  MODERATE
+  TREAT_YOURSELF
+}
+
+// Psychographic user profile from onboarding
+model UserProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  contextSegment  ContextSegment
+  socialStyle     SocialStyleType
+  vibePreferences Json
+  planningStyle   PlanningStyle
+  budgetTier      BudgetTier
+  sparkResponse   String?
+
+  opennessScore     Float @default(0.5)
+  extraversionScore Float @default(0.5)
+  noveltyScore      Float @default(0.5)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // Detailed user preferences for recommendations
 model DetailedPreferences {
-  id        String   @id @default(cuid())
-  userId    String   @unique
+  id     String @id @default(cuid())
+  userId String @unique
 
   // Going With - who they typically attend events with (1-5 intensity, null if not selected)
-  goingSolo         Int?
-  goingDate         Int?
-  goingFriends      Int?
-  goingFamily       Int?
+  goingSolo    Int?
+  goingDate    Int?
+  goingFriends Int?
+  goingFamily  Int?
 
   // Time Preferences (1-5 intensity, null if not selected)
-  timeWeeknight     Int?
-  timeWeekend       Int?
-  timeMorning       Int?  // before 12pm
-  timeDaytime       Int?  // 12pm-5pm
-  timeEvening       Int?  // 5pm-9pm
-  timeLateNight     Int?  // after 9pm
+  timeWeeknight Int?
+  timeWeekend   Int?
+  timeMorning   Int? // before 12pm
+  timeDaytime   Int? // 12pm-5pm
+  timeEvening   Int? // 5pm-9pm
+  timeLateNight Int? // after 9pm
 
   // Budget (single select)
-  budget            BudgetPreference  @default(ANY)
+  budget BudgetPreference @default(ANY)
 
   // Energy/Vibe (1-5 intensity, null if not selected)
-  vibeChill         Int?
-  vibeModerate      Int?
-  vibeHighEnergy    Int?
+  vibeChill      Int?
+  vibeModerate   Int?
+  vibeHighEnergy Int?
 
   // Social Intent (single select)
-  socialIntent      SocialIntent  @default(EITHER)
+  socialIntent SocialIntent @default(EITHER)
 
   // ============================================================================
   // LIFESTYLE PREFERENCES (Dog-Friendly & Sober-Friendly)
   // ============================================================================
 
   // Dog preferences
-  hasDog              Boolean  @default(false)  // User has a dog
-  dogFriendlyOnly     Boolean  @default(false)  // Only show dog-friendly options
+  hasDog          Boolean @default(false) // User has a dog
+  dogFriendlyOnly Boolean @default(false) // Only show dog-friendly options
 
   // Sober-friendly preferences
-  preferSoberFriendly Boolean  @default(false)  // Prioritize non-drinking options
-  avoidBars           Boolean  @default(false)  // Don't show bar-focused events
+  preferSoberFriendly Boolean @default(false) // Prioritize non-drinking options
+  avoidBars           Boolean @default(false) // Don't show bar-focused events
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -905,9 +995,9 @@ model UserFeedback {
   userId       String
   eventId      String
   feedbackType FeedbackType
-  category     Category?    // Category being boosted/reduced
-  tags         String[]     // Tags being boosted/reduced
-  venueName    String?      // Venue being boosted/reduced
+  category     Category? // Category being boosted/reduced
+  tags         String[] // Tags being boosted/reduced
+  venueName    String? // Venue being boosted/reduced
   createdAt    DateTime     @default(now())
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -920,31 +1010,31 @@ model UserFeedback {
 
 // User constraints/preferences for filtering
 model UserConstraints {
-  id               String            @id @default(cuid())
-  userId           String            @unique
+  id               String           @id @default(cuid())
+  userId           String           @unique
   preferredDays    DayOfWeek[]
   preferredTimes   TimeOfDay[]
-  budgetMax        BudgetPreference  @default(ANY)
-  travelRadius     Int?              // Miles, null means no limit
-  homeNeighborhood String?           // User's home neighborhood
-  neighborhoods    String[]          // Preferred neighborhoods
-  freeEventsOnly   Boolean           @default(false)
-  discoveryMode    Boolean           @default(false) // Increases variety
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  budgetMax        BudgetPreference @default(ANY)
+  travelRadius     Int? // Miles, null means no limit
+  homeNeighborhood String? // User's home neighborhood
+  neighborhoods    String[] // Preferred neighborhoods
+  freeEventsOnly   Boolean          @default(false)
+  discoveryMode    Boolean          @default(false) // Increases variety
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // Track event feed views for diversity/decay
 model EventFeedView {
-  id           String   @id @default(cuid())
-  userId       String
-  eventId      String
-  seenCount    Int      @default(1)
-  lastShownAt  DateTime @default(now())
-  interacted   Boolean  @default(false) // Did user interact (save/like/click)?
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  userId      String
+  eventId     String
+  seenCount   Int      @default(1)
+  lastShownAt DateTime @default(now())
+  interacted  Boolean  @default(false) // Did user interact (save/like/click)?
+  createdAt   DateTime @default(now())
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -969,18 +1059,18 @@ enum PlanType {
 
 // User-generated plans
 model Plan {
-  id           String    @id @default(cuid())
-  userId       String
-  name         String
-  planType     PlanType
-  goingWith    GoingWith
-  dateStart    DateTime
-  dateEnd      DateTime
-  totalCost    String?   // Estimated cost range
+  id            String    @id @default(cuid())
+  userId        String
+  name          String
+  planType      PlanType
+  goingWith     GoingWith
+  dateStart     DateTime
+  dateEnd       DateTime
+  totalCost     String? // Estimated cost range
   neighborhoods String[] // Neighborhoods in plan
-  isPublic     Boolean   @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  isPublic      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   events PlanEvent[]
@@ -992,10 +1082,10 @@ model Plan {
 model PlanEvent {
   id        String   @id @default(cuid())
   planId    String
-  eventId   String?  // Nullable — plan item can reference an Event or a Place
-  placeId   String?  // Optional place reference
-  order     Int      // Sequence in the plan
-  notes     String?  // User notes for this item in plan
+  eventId   String? // Nullable — plan item can reference an Event or a Place
+  placeId   String? // Optional place reference
+  order     Int // Sequence in the plan
+  notes     String? // User notes for this item in plan
   createdAt DateTime @default(now())
 
   plan  Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
@@ -1013,105 +1103,111 @@ model PlanEvent {
 
 // Place model for Google Places data
 model Place {
-  id              String   @id @default(cuid())
+  id String @id @default(cuid())
 
   // Google Places data
-  googlePlaceId   String?  @unique  // Nullable for upcoming places without Google listing yet
-  name            String
-  address         String
-  lat             Float?   // Nullable for upcoming places
-  lng             Float?   // Nullable for upcoming places
-  googleMapsUrl   String?  // Nullable for upcoming places
+  googlePlaceId String? @unique // Nullable for upcoming places without Google listing yet
+  name          String
+  address       String
+  lat           Float? // Nullable for upcoming places
+  lng           Float? // Nullable for upcoming places
+  googleMapsUrl String? // Nullable for upcoming places
 
   // Ratings
-  googleRating      Float?    // Google rating (0-5)
-  googleReviewCount Int?      // Number of Google reviews
-  appleMapsUrl      String?   // Optional Apple Maps link
-  appleRating       Float?    // Apple rating (if available)
-  appleReviewCount  Int?      // Number of Apple reviews
-  combinedScore     Float?    // Calculated: rating * log(reviewCount)
+  googleRating      Float? // Google rating (0-5)
+  googleReviewCount Int? // Number of Google reviews
+  appleMapsUrl      String? // Optional Apple Maps link
+  appleRating       Float? // Apple rating (if available)
+  appleReviewCount  Int? // Number of Apple reviews
+  combinedScore     Float? // Calculated: rating * log(reviewCount)
 
   // Google metadata
-  priceLevel      Int?      // 0-4 from Google ($ to $$$$)
-  types           String[]  // Google place types/categories
-  phoneNumber     String?
-  website         String?
+  priceLevel  Int? // 0-4 from Google ($ to $$$$)
+  types       String[] // Google place types/categories
+  phoneNumber String?
+  website     String?
 
   // Hours (store as JSON)
-  openingHours    Json?
+  openingHours Json?
 
   // Images
   primaryImageUrl String?
 
   // Location
-  neighborhood    String?   // Denver neighborhood
-  citySlug        String    @default("denver")
+  neighborhood String? // Denver neighborhood
+  citySlug     String  @default("denver")
 
   // Pulse enrichment (our tagging)
-  category        Category?  // Mapped category
-  vibeTags        String[]   // chill, moderate, high-energy
-  companionTags   String[]   // date-night, group-friendly, solo, family
-  occasionTags    String[]   // birthday, first-date, work-hang
-  goodForTags     String[]   // quick-bite, linger-friendly, active
-  pulseDescription String?   // AI-generated summary
+  category         Category? // Mapped category
+  tags             String[]  @default([]) // Free-form tags for home category rail ("weird", "off-beat", "hidden-gem", etc.)
+  vibeTags         String[] // chill, moderate, high-energy
+  companionTags    String[] // date-night, group-friendly, solo, family
+  occasionTags     String[] // birthday, first-date, work-hang
+  goodForTags      String[] // quick-bite, linger-friendly, active
+  pulseDescription String? // AI-generated summary
 
   // ============================================================================
   // DOG-FRIENDLY & SOBER-FRIENDLY FIELDS
   // ============================================================================
 
   // Dog-friendly
-  isDogFriendly       Boolean  @default(false)
-  dogFriendlyAreas    String[] // ["patio", "indoor", "full-venue"]
-  dogAmenities        String[] // ["water-bowls", "treats", "dog-menu", "off-leash-area"]
-  dogFriendlyNotes    String?  // "Dogs welcome on heated patio year-round"
+  isDogFriendly    Boolean  @default(false)
+  dogFriendlyAreas String[] // ["patio", "indoor", "full-venue"]
+  dogAmenities     String[] // ["water-bowls", "treats", "dog-menu", "off-leash-area"]
+  dogFriendlyNotes String? // "Dogs welcome on heated patio year-round"
 
   // Sober-friendly / Drinking optional
-  isDrinkingOptional  Boolean  @default(false)
-  isAlcoholFree       Boolean  @default(false)
-  hasMocktailMenu     Boolean  @default(false)
-  naOptions           String[] // ["mocktails", "na-beer", "na-wine", "craft-sodas", "coffee", "tea"]
-  soberFriendlyNotes  String?
+  isDrinkingOptional Boolean  @default(false)
+  isAlcoholFree      Boolean  @default(false)
+  hasMocktailMenu    Boolean  @default(false)
+  naOptions          String[] // ["mocktails", "na-beer", "na-wine", "craft-sodas", "coffee", "tea"]
+  soberFriendlyNotes String?
 
   // ============================================================================
   // NEW & UPCOMING PLACES FIELDS
   // ============================================================================
 
   // Opening status
-  openingStatus     OpeningStatus  @default(OPEN)
-  openedDate        DateTime?      // When it opened (for "new" places)
-  announcedDate     DateTime?      // When we learned about it
-  expectedOpenDate  DateTime?      // For upcoming places
+  openingStatus    OpeningStatus @default(OPEN)
+  openedDate       DateTime? // When it opened (for "new" places)
+  announcedDate    DateTime? // When we learned about it
+  expectedOpenDate DateTime? // For upcoming places
 
   // New/Upcoming flags (computed daily, or set manually)
-  isNew             Boolean        @default(false)  // Opened within last 90 days
-  isUpcoming        Boolean        @default(false)  // Not open yet
-  isFeatured        Boolean        @default(false)  // Editor's pick
+  isNew      Boolean @default(false) // Opened within last 90 days
+  isUpcoming Boolean @default(false) // Not open yet
+  isFeatured Boolean @default(false) // Editor's pick
+
+  isLocalFavorite  Boolean @default(false)
+  touristTrapScore Float? // 0.0 - 1.0; higher = more touristy
+  goodForWorking   Boolean @default(false)
 
   // Hype/buzz signals
-  buzzScore         Int            @default(0)      // Social media mentions, saves, etc.
-  preOpeningSaves   Int            @default(0)      // How many users saved before opening
+  buzzScore       Int @default(0) // Social media mentions, saves, etc.
+  preOpeningSaves Int @default(0) // How many users saved before opening
 
   // Additional info for upcoming places
-  sneakPeekInfo     String?        // "From the team behind XYZ..."
-  expectedPriceLevel Int?          // Expected $-$$$$ (1-4)
-  conceptDescription String?       // "Fast-casual Vietnamese..."
-  socialLinks       Json?          // Instagram, website if available
+  sneakPeekInfo      String? // "From the team behind XYZ..."
+  expectedPriceLevel Int? // Expected $-$$$$ (1-4)
+  conceptDescription String? // "Fast-casual Vietnamese..."
+  socialLinks        Json? // Instagram, website if available
 
   // Source tracking
-  newsSource        String?        // Where we learned about it
-  newsSourceUrl     String?        // Link to announcement article
+  newsSource    String? // Where we learned about it
+  newsSourceUrl String? // Link to announcement article
 
   // Timestamps
   googleDataFetchedAt DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   // Relations
-  events          Event[]
-  alerts          NewPlaceAlert[]
-  groupPlaces     GroupPlace[]
-  listItems       ListItem[]
-  planEvents      PlanEvent[]
+  events      Event[]
+  alerts      NewPlaceAlert[]
+  groupPlaces GroupPlace[]
+  listItems   ListItem[]
+  planEvents  PlanEvent[]
+  guideStops  GuideStop[]
 
   @@index([citySlug])
   @@index([lat, lng])
@@ -1123,20 +1219,22 @@ model Place {
   @@index([isUpcoming])
   @@index([openedDate])
   @@index([expectedOpenDate])
+  @@index([isLocalFavorite])
+  @@index([goodForWorking])
 }
 
 // User alerts for new/upcoming places
 model NewPlaceAlert {
-  id          String    @id @default(cuid())
-  userId      String
-  placeId     String
-  alertType   AlertType
-  notified    Boolean   @default(false)
-  notifiedAt  DateTime?
-  createdAt   DateTime  @default(now())
+  id         String    @id @default(cuid())
+  userId     String
+  placeId    String
+  alertType  AlertType
+  notified   Boolean   @default(false)
+  notifiedAt DateTime?
+  createdAt  DateTime  @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  place       Place     @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
 
   @@unique([userId, placeId, alertType])
   @@index([userId])
@@ -1150,27 +1248,27 @@ model NewPlaceAlert {
 
 // Badge definitions
 model Badge {
-  id               String        @id @default(cuid())
-  slug             String        @unique // e.g., "concert-junkie-gold"
-  name             String        // e.g., "Concert Junkie"
-  description      String        // e.g., "Attended 25 music events"
-  category         BadgeCategory
-  tier             BadgeTier     @default(BRONZE)
-  emoji            String        // e.g., "🎸"
+  id          String        @id @default(cuid())
+  slug        String        @unique // e.g., "concert-junkie-gold"
+  name        String // e.g., "Concert Junkie"
+  description String // e.g., "Attended 25 music events"
+  category    BadgeCategory
+  tier        BadgeTier     @default(BRONZE)
+  emoji       String // e.g., "🎸"
 
   // Requirement logic
-  requirementType  String        // e.g., "events_attended", "events_in_category", "streak_weeks"
-  requirementValue Int           // e.g., 25 (number to achieve)
-  requirementMeta  Json?         // e.g., {"category": "LIVE_MUSIC"} for category-specific
+  requirementType  String // e.g., "events_attended", "events_in_category", "streak_weeks"
+  requirementValue Int // e.g., 25 (number to achieve)
+  requirementMeta  Json? // e.g., {"category": "LIVE_MUSIC"} for category-specific
 
   // Display
-  colorHex         String        @default("#6B7280") // Badge color
-  isHidden         Boolean       @default(false) // Hidden badges until earned
+  colorHex String  @default("#6B7280") // Badge color
+  isHidden Boolean @default(false) // Hidden badges until earned
 
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  userBadges       UserBadge[]
+  userBadges UserBadge[]
 
   @@index([category])
   @@index([tier])
@@ -1188,8 +1286,8 @@ model UserBadge {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  badge     Badge     @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
 
   @@unique([userId, badgeId])
   @@index([userId, isEarned])
@@ -1198,25 +1296,25 @@ model UserBadge {
 
 // Leaderboard entries (monthly/all-time rankings)
 model LeaderboardEntry {
-  id                   String          @id @default(cuid())
-  userId               String
-  period               String          // e.g., "2025-12" for monthly, "all-time" for overall
-  type                 LeaderboardType
-  typeValue            String?         // e.g., "RiNo" for NEIGHBORHOOD, "LIVE_MUSIC" for CATEGORY
+  id        String          @id @default(cuid())
+  userId    String
+  period    String // e.g., "2025-12" for monthly, "all-time" for overall
+  type      LeaderboardType
+  typeValue String? // e.g., "RiNo" for NEIGHBORHOOD, "LIVE_MUSIC" for CATEGORY
 
   // Score components
-  score                Int             @default(0) // Total calculated score
-  eventsAttended       Int             @default(0)
-  uniquePlaces         Int             @default(0)
-  neighborhoodsVisited Int             @default(0)
+  score                Int @default(0) // Total calculated score
+  eventsAttended       Int @default(0)
+  uniquePlaces         Int @default(0)
+  neighborhoodsVisited Int @default(0)
 
   // Ranking
-  rank                 Int?            // Calculated rank in this leaderboard
+  rank Int? // Calculated rank in this leaderboard
 
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, period, type, typeValue])
   @@index([period, type, score])
@@ -1225,15 +1323,15 @@ model LeaderboardEntry {
 
 // Groups for social event planning
 model Group {
-  id           String        @id @default(cuid())
-  name         String
-  emoji        String        @default("👥")
-  description  String?
-  joinCode     String        @unique // 6-char code for joining
-  isPublic     Boolean       @default(false)
-  memberCount  Int           @default(1)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id          String   @id @default(cuid())
+  name        String
+  emoji       String   @default("👥")
+  description String?
+  joinCode    String   @unique // 6-char code for joining
+  isPublic    Boolean  @default(false)
+  memberCount Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   members          GroupMember[]
   groupEvents      GroupEvent[]
@@ -1252,8 +1350,8 @@ model GroupMember {
   role      GroupRole @default(MEMBER)
   createdAt DateTime  @default(now())
 
-  group     Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, userId])
   @@index([userId])
@@ -1269,16 +1367,16 @@ model GroupEvent {
   status        GroupEventStatus @default(SUGGESTED)
 
   // Voting arrays (store user IDs)
-  votesYes      String[]
-  votesNo       String[]
-  votesMaybe    String[]
+  votesYes   String[]
+  votesNo    String[]
+  votesMaybe String[]
 
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  group         Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  event         Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  suggestedBy   User             @relation("GroupEventSuggestor", fields: [suggestedById], references: [id], onDelete: Cascade)
+  group       Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  suggestedBy User  @relation("GroupEventSuggestor", fields: [suggestedById], references: [id], onDelete: Cascade)
 
   @@unique([groupId, eventId])
   @@index([groupId, status])
@@ -1294,16 +1392,16 @@ model GroupPlace {
   status        GroupEventStatus @default(SUGGESTED) // Reuse same status enum
 
   // Voting arrays (store user IDs)
-  votesYes      String[]
-  votesNo       String[]
-  votesMaybe    String[]
+  votesYes   String[]
+  votesNo    String[]
+  votesMaybe String[]
 
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  group         Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  place         Place            @relation(fields: [placeId], references: [id], onDelete: Cascade)
-  suggestedBy   User             @relation("GroupPlaceSuggestor", fields: [suggestedById], references: [id], onDelete: Cascade)
+  group       Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  place       Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  suggestedBy User  @relation("GroupPlaceSuggestor", fields: [suggestedById], references: [id], onDelete: Cascade)
 
   @@unique([groupId, placeId])
   @@index([groupId, status])
@@ -1315,11 +1413,11 @@ model GroupPlace {
 // ============================================================================
 
 enum LabsItemType {
-  COWORKING_SESSION    // Work alongside builders
-  STARTUP_EVENT        // Pitch nights, founder dinners, hackathons
-  BUILDER_MEETUP       // Casual builder hangouts
-  GET_INVOLVED         // Volunteer, mentor, join opportunities
-  WORKSHOP             // Skill-building sessions
+  COWORKING_SESSION // Work alongside builders
+  STARTUP_EVENT // Pitch nights, founder dinners, hackathons
+  BUILDER_MEETUP // Casual builder hangouts
+  GET_INVOLVED // Volunteer, mentor, join opportunities
+  WORKSHOP // Skill-building sessions
 }
 
 enum LabsItemStatus {
@@ -1337,64 +1435,64 @@ enum RSVPStatus {
 
 // Friendship status for friend requests
 enum FriendshipStatus {
-  PENDING   // Request sent, waiting for response
-  ACCEPTED  // Friends!
-  DECLINED  // Request rejected
-  BLOCKED   // User blocked
+  PENDING // Request sent, waiting for response
+  ACCEPTED // Friends!
+  DECLINED // Request rejected
+  BLOCKED // User blocked
 }
 
 // Calendar status for user's response to events
 enum CalendarStatus {
-  GOING     // Confirmed going
-  MAYBE     // Tentative
-  DECLINED  // Not going
+  GOING // Confirmed going
+  MAYBE // Tentative
+  DECLINED // Not going
 }
 
 // Invitation status for event invitations
 enum InvitationStatus {
-  PENDING   // Waiting for response
-  ACCEPTED  // Accepted the invitation
-  DECLINED  // Declined the invitation
-  MAYBE     // Maybe/tentative
+  PENDING // Waiting for response
+  ACCEPTED // Accepted the invitation
+  DECLINED // Declined the invitation
+  MAYBE // Maybe/tentative
 }
 
 // Labs items - premium content for builders
 model LabsItem {
-  id            String         @id @default(cuid())
+  id String @id @default(cuid())
 
   // Content
-  title         String
-  description   String         @db.Text
-  type          LabsItemType
+  title       String
+  description String       @db.Text
+  type        LabsItemType
 
   // When & Where (optional - some items are ongoing)
-  startTime     DateTime?
-  endTime       DateTime?
-  venueName     String?
-  address       String?
-  neighborhood  String?
-  isVirtual     Boolean        @default(false)
-  virtualLink   String?
+  startTime    DateTime?
+  endTime      DateTime?
+  venueName    String?
+  address      String?
+  neighborhood String?
+  isVirtual    Boolean   @default(false)
+  virtualLink  String?
 
   // Metadata
-  tags          String[]
-  imageUrl      String?
-  hostName      String?        // "Hosted by Denver Founders"
-  hostImageUrl  String?
-  capacity      Int?           // Max attendees
-  spotsLeft     Int?           // Remaining spots
+  tags         String[]
+  imageUrl     String?
+  hostName     String? // "Hosted by Denver Founders"
+  hostImageUrl String?
+  capacity     Int? // Max attendees
+  spotsLeft    Int? // Remaining spots
 
   // Status
-  status        LabsItemStatus @default(ACTIVE)
+  status LabsItemStatus @default(ACTIVE)
 
   // Tracking
-  citySlug      String         @default("denver")
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  citySlug  String   @default("denver")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  rsvps         LabsRSVP[]
-  saves         LabsSave[]
+  rsvps LabsRSVP[]
+  saves LabsSave[]
 
   @@index([type])
   @@index([status])
@@ -1404,15 +1502,15 @@ model LabsItem {
 
 // User RSVPs for Labs items
 model LabsRSVP {
-  id          String     @id @default(cuid())
-  userId      String
-  labsItemId  String
-  status      RSVPStatus @default(GOING)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id         String     @id @default(cuid())
+  userId     String
+  labsItemId String
+  status     RSVPStatus @default(GOING)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
 
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  labsItem    LabsItem   @relation(fields: [labsItemId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  labsItem LabsItem @relation(fields: [labsItemId], references: [id], onDelete: Cascade)
 
   @@unique([userId, labsItemId])
   @@index([userId])
@@ -1421,13 +1519,13 @@ model LabsRSVP {
 
 // User saves for Labs items
 model LabsSave {
-  id          String   @id @default(cuid())
-  userId      String
-  labsItemId  String
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  labsItemId String
+  createdAt  DateTime @default(now())
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  labsItem    LabsItem @relation(fields: [labsItemId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  labsItem LabsItem @relation(fields: [labsItemId], references: [id], onDelete: Cascade)
 
   @@unique([userId, labsItemId])
   @@index([userId])
@@ -1440,20 +1538,20 @@ model LabsSave {
 
 // Friend relationships between users
 model Friendship {
-  id          String           @id @default(cuid())
+  id String @id @default(cuid())
 
   // The user who sent the request
   requesterId String
-  requester   User             @relation("FriendRequestsSent", fields: [requesterId], references: [id], onDelete: Cascade)
+  requester   User   @relation("FriendRequestsSent", fields: [requesterId], references: [id], onDelete: Cascade)
 
   // The user who received the request
   addresseeId String
-  addressee   User             @relation("FriendRequestsReceived", fields: [addresseeId], references: [id], onDelete: Cascade)
+  addressee   User   @relation("FriendRequestsReceived", fields: [addresseeId], references: [id], onDelete: Cascade)
 
-  status      FriendshipStatus @default(PENDING)
+  status FriendshipStatus @default(PENDING)
 
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([requesterId, addresseeId])
   @@index([requesterId, status])
@@ -1466,33 +1564,123 @@ model Friendship {
 
 // Event invitations from friends or groups
 model EventInvitation {
-  id          String           @id @default(cuid())
+  id String @id @default(cuid())
 
   // Who's being invited
-  inviteeId   String
-  invitee     User             @relation("InvitationsReceived", fields: [inviteeId], references: [id], onDelete: Cascade)
+  inviteeId String
+  invitee   User   @relation("InvitationsReceived", fields: [inviteeId], references: [id], onDelete: Cascade)
 
   // What event
-  eventId     String
-  event       Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   // Who sent it (optional - could be from a group)
-  inviterId   String?
-  inviter     User?            @relation("InvitationsSent", fields: [inviterId], references: [id], onDelete: SetNull)
+  inviterId String?
+  inviter   User?   @relation("InvitationsSent", fields: [inviterId], references: [id], onDelete: SetNull)
 
   // Or from a group
-  groupId     String?
-  group       Group?           @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  groupId String?
+  group   Group?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   // Invitation details
-  message     String?          // "Hey, want to come to this with us?"
+  message     String? // "Hey, want to come to this with us?"
   status      InvitationStatus @default(PENDING)
   respondedAt DateTime?
 
-  createdAt   DateTime         @default(now())
+  createdAt DateTime @default(now())
 
   @@index([inviteeId, status])
   @@index([eventId])
   @@index([inviterId])
   @@index([groupId])
+}
+
+model Neighborhood {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  description   String   @db.Text
+  coverImageUrl String?
+  placeCount    Int      @default(0)
+  isFeatured    Boolean  @default(false)
+  displayOrder  Int      @default(100)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([isFeatured, displayOrder])
+}
+
+model Guide {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  title           String
+  tagline         String
+  coverImageUrl   String?
+  description     String   @db.Text
+  durationLabel   String
+  durationMinutes Int
+  neighborhoodHub String?
+  costRangeLabel  String
+  occasionTags    String[]
+  vibeTags        String[]
+  isFeatured      Boolean  @default(false)
+  isPublished     Boolean  @default(false)
+  viewCount       Int      @default(0)
+  saveCount       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  creatorId    String
+  creator      Influencer       @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  stops        GuideStop[]
+  savedByUsers UserSavedGuide[]
+
+  @@index([slug])
+  @@index([isPublished, isFeatured])
+  @@index([creatorId])
+}
+
+model GuideStop {
+  id                 String    @id @default(cuid())
+  order              Int
+  timeWindowStart    String?
+  timeWindowEnd      String?
+  note               String    @db.Text
+  insiderTip         String?   @db.Text
+  walkTimeToNext     Int?
+  walkTimeComputedAt DateTime?
+
+  guideId String
+  guide   Guide  @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  eventId String?
+  event   Event?  @relation(fields: [eventId], references: [id])
+  placeId String?
+  place   Place?  @relation(fields: [placeId], references: [id])
+
+  @@index([guideId, order])
+  @@index([eventId])
+  @@index([placeId])
+}
+
+model UserSavedGuide {
+  userId  String
+  guideId String
+  savedAt DateTime @default(now())
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guide   Guide    @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  @@id([userId, guideId])
+  @@index([userId])
+}
+
+model UserSearchHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  query        String
+  resultsCount Int
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

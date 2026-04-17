@@ -6,3 +6,6 @@ dist
 npm-debug.log*
 .pnpm-store
 .prisma
+.vercel
+.env*.local
+.DS_Store

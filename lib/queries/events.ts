@@ -1,0 +1,73 @@
+import type { Prisma } from "@prisma/client";
+
+/**
+ * Where clause that excludes stale (past, non-recurring, archived) events
+ * from any home-feed query. Used by all 4 Events-tab section queries.
+ */
+export function activeEventsWhere(now: Date = new Date()): Prisma.EventWhereInput {
+  return {
+    isArchived: false,
+    status: "PUBLISHED",
+    OR: [
+      { isRecurring: true },
+      { startTime: { gte: now } },
+    ],
+  };
+}
+
+/**
+ * Denver nearby-region whitelist for the "Outside the city" section.
+ * Events/places whose `neighborhood` field matches one of these are
+ * surfaced in that section. Keep this list narrow — the goal is
+ * real day-trip destinations within ~2 hours of Denver.
+ */
+export const OUTSIDE_DENVER_REGIONS = [
+  "Idaho Springs",
+  "Morrison",
+  "Boulder",
+  "Golden",
+  "Evergreen",
+  "Estes Park",
+  "Fort Collins",
+  "Colorado Springs",
+  "Palisade",
+  "Breckenridge",
+  "Vail",
+  "Aspen",
+];
+
+export function outsideDenverWhere(): Prisma.EventWhereInput {
+  return { neighborhood: { in: OUTSIDE_DENVER_REGIONS } };
+}
+
+export function outsideDenverPlaceWhere(): Prisma.PlaceWhereInput {
+  return { neighborhood: { in: OUTSIDE_DENVER_REGIONS } };
+}
+
+/**
+ * Friday 12:00 local → Sunday 23:59 local for the upcoming (or current) weekend.
+ * Denver is UTC-6/-7 but we operate in server UTC; the window is generous
+ * enough that DST drift is immaterial.
+ */
+export function upcomingWeekendRange(now: Date = new Date()): { start: Date; end: Date } {
+  const d = new Date(now);
+  const dow = d.getDay(); // 0=Sun, 5=Fri, 6=Sat
+  let daysUntilFri = (5 - dow + 7) % 7;
+  // If today is Fri/Sat/Sun, use the current weekend (daysUntilFri stays 0 for Fri, negative otherwise).
+  if (dow === 5) daysUntilFri = 0;
+  if (dow === 6) daysUntilFri = -1;
+  if (dow === 0) daysUntilFri = -2;
+  const start = new Date(d);
+  start.setDate(d.getDate() + daysUntilFri);
+  start.setHours(12, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 2); // Sunday
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+export function endOfTodayLocal(now: Date = new Date()): Date {
+  const d = new Date(now);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}

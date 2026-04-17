@@ -7,6 +7,7 @@ import {
   scoreAndRankEvents,
   buildUserPreferences,
   buildDetailedPreferencesData,
+  buildDetailedPreferencesFromProfile,
   ScoredEvent,
   ScoringContext,
 } from "@/lib/scoring";
@@ -17,6 +18,20 @@ export interface FeedResponse {
   page: number;
   pageSize: number;
   hasMore: boolean;
+}
+
+// Related categories that should cross-filter when selected
+const CATEGORY_GROUPS: Record<string, Category[]> = {
+  FITNESS: ["FITNESS", "WELLNESS"],
+  WELLNESS: ["WELLNESS", "FITNESS"],
+  FOOD: ["FOOD", "RESTAURANT"],
+  RESTAURANT: ["RESTAURANT", "FOOD"],
+};
+
+function getCategoryGroup(cat: Category): Category | { in: Category[] } {
+  const group = CATEGORY_GROUPS[cat];
+  if (group) return { in: group } as unknown as Category;
+  return cat;
 }
 
 export async function GET(request: NextRequest) {
@@ -45,6 +60,7 @@ export async function GET(request: NextRequest) {
           include: {
             preferences: true,
             detailedPreferences: true,
+            profile: true,
           },
         })
       : null,
@@ -65,16 +81,25 @@ export async function GET(request: NextRequest) {
     timeZone: denver.timezone || "America/Denver",
   }).format(new Date());
   const startOfTodayDenver = new Date(denverDateStr + "T00:00:00.000Z");
-  const twoWeeksFromNow = new Date(startOfTodayDenver.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const threeWeeksFromNow = new Date(startOfTodayDenver.getTime() + 21 * 24 * 60 * 60 * 1000);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const whereClause: any = {
     cityId: denver.id,
-    startTime: {
-      gte: startOfTodayDenver,
-      lte: twoWeeksFromNow,
-    },
-    ...(categoryFilter && { category: categoryFilter }),
+    // Show time-bound events in the next 3 weeks OR recurring/permanent activities
+    OR: [
+      {
+        isRecurring: false,
+        startTime: {
+          gte: startOfTodayDenver,
+          lte: threeWeeksFromNow,
+        },
+      },
+      { isRecurring: true },
+    ],
+    ...(categoryFilter && {
+      category: getCategoryGroup(categoryFilter),
+    }),
     ...(neighborhoodFilter.length > 0 && { neighborhood: { in: neighborhoodFilter } }),
     // Filter by subcategories using tags array (case-insensitive matching)
     ...(subcategoryFilter.length > 0 && {
@@ -86,10 +111,15 @@ export async function GET(request: NextRequest) {
 
   // Sober-friendly filter - show events that are drinking optional OR alcohol-free
   // Apply when: URL param is set, user prefers sober-friendly, or user avoids bars
+  // Use AND to avoid overwriting the date/recurring OR clause
   if (soberFriendlyFilter || userPrefersSoberFriendly || userAvoidsBars) {
-    whereClause.OR = [
-      { isDrinkingOptional: true },
-      { isAlcoholFree: true },
+    whereClause.AND = [
+      {
+        OR: [
+          { isDrinkingOptional: true },
+          { isAlcoholFree: true },
+        ],
+      },
     ];
   }
 
@@ -150,7 +180,8 @@ export async function GET(request: NextRequest) {
       user.relationshipStatus
     );
 
-    const detailedPreferences = buildDetailedPreferencesData(user.detailedPreferences);
+    const detailedPreferences = buildDetailedPreferencesData(user.detailedPreferences)
+      ?? buildDetailedPreferencesFromProfile(user.profile);
 
     const context: ScoringContext = {
       preferences,

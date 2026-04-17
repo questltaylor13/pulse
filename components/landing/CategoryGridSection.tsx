@@ -14,6 +14,9 @@ const CATEGORY_CONFIG: Record<string, { emoji: string; label: string; color: str
   RESTAURANT: { emoji: "🍴", label: "Restaurants", color: "from-orange-400 to-orange-500" },
   ACTIVITY_VENUE: { emoji: "🎯", label: "Activities", color: "from-cyan-400 to-cyan-500" },
   OTHER: { emoji: "✨", label: "Other", color: "from-slate-400 to-slate-500" },
+  COMEDY: { emoji: "😂", label: "Comedy", color: "from-rose-400 to-rose-500" },
+  SOCIAL: { emoji: "🤝", label: "Social", color: "from-teal-400 to-teal-500" },
+  WELLNESS: { emoji: "🧘", label: "Wellness", color: "from-emerald-400 to-emerald-500" },
 };
 
 interface CategoryGridSectionProps {

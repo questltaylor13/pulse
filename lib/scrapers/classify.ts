@@ -60,14 +60,32 @@ const VENUE_MAP: [RegExp, Category][] = [
   [/\bdangerous\s+theat(re|er)\b/i, "ART"],
   [/\bfederal\s+theat(re|er)\b/i, "ART"],
   [/\bbovine\s+metropolis\b/i, "ART"],
-  [/\bcomedy\s+works\b/i, "ART"],
-  [/\brise\s+comedy\b/i, "ART"],
-  [/\bpunch\s*line\b/i, "ART"],
+  [/\bcomedy\s+works\b/i, "COMEDY"],
+  [/\brise\s+comedy\b/i, "COMEDY"],
+  [/\bpunch\s*line\b/i, "COMEDY"],
   [/\bsie\s+film/i, "ART"],
   [/\bdickens\s+opera\b/i, "ART"],
   [/\bpikes\s+peak\s+center\b/i, "ART"],
 
-  // Generic venue-type patterns
+  // Activity venues
+  [/\bescape\s*(works|room)/i, "ACTIVITY_VENUE"],
+  [/\bbad\s+axe\b/i, "ACTIVITY_VENUE"],
+  [/\ball\s+out\s+smash\b/i, "ACTIVITY_VENUE"],
+  [/\bifly\b/i, "ACTIVITY_VENUE"],
+  [/\bhouse\s+of\s+immersions?\b/i, "ACTIVITY_VENUE"],
+  [/\barchery\s+games\b/i, "ACTIVITY_VENUE"],
+  [/\bbear\s+creek\s+archery\b/i, "ACTIVITY_VENUE"],
+  [/\bcurling\s+club\b/i, "ACTIVITY_VENUE"],
+  [/\brock\s+creek\s+curling\b/i, "ACTIVITY_VENUE"],
+
+  // Climbing / fitness venues
+  [/\bdenver\s+bouldering\b/i, "FITNESS"],
+  [/\bmovement\s+rino\b/i, "FITNESS"],
+  [/\bthe\s+spot\s+denver\b/i, "FITNESS"],
+  [/\bmile\s+hi\s+pickleball\b/i, "FITNESS"],
+  [/\bpickleball\s+food\s+pub\b/i, "FITNESS"],
+
+  // Generic venue-type patterns (bars/drinking)
   [/\bbrewery\b/i, "BARS"],
   [/\btaproom\b/i, "BARS"],
   [/\bbrewing\b/i, "BARS"],
@@ -75,6 +93,15 @@ const VENUE_MAP: [RegExp, Category][] = [
   [/\bwinery\b/i, "BARS"],
   [/\bdistillery\b/i, "BARS"],
   [/\bwatering\s+bowl\b/i, "BARS"],
+  [/\bspeakeasy\b/i, "BARS"],
+  [/\bcocktail\b/i, "BARS"],
+  [/\btavern\b/i, "BARS"],
+  [/\bsaloon\b/i, "BARS"],
+  [/\bwine\s+bar\b/i, "BARS"],
+  [/\bbeer\s+garden\b/i, "BARS"],
+  [/\bpub\b/i, "BARS"],
+  [/\bnightclub\b/i, "BARS"],
+  [/\blounge\b/i, "BARS"],  // Generic lounge; specific music lounges matched above
 ];
 
 // ---------------------------------------------------------------------------
@@ -126,6 +153,26 @@ const CATEGORY_KEYWORDS: Record<string, KeywordMap[]> = {
   POPUP: [
     { keywords: ["pop-up", "popup", "pop up shop", "trunk show", "flash sale"], weight: 3 },
     { keywords: ["limited time", "one night only", "exclusive event"], weight: 2 },
+  ],
+  COMEDY: [
+    { keywords: ["comedy show", "stand-up", "standup", "improv show", "improv comedy", "sketch comedy"], weight: 3 },
+    { keywords: ["comedy", "improv", "comedian", "comic", "laugh", "open mic comedy"], weight: 2 },
+    { keywords: ["funny", "humor", "joke"], weight: 1 },
+  ],
+  SOCIAL: [
+    { keywords: ["run club", "running club", "social run", "sports league", "adult league"], weight: 3 },
+    { keywords: ["social", "meetup", "community", "league", "club", "group ride", "cycling club"], weight: 2 },
+    { keywords: ["networking", "mixer", "hangout", "gathering"], weight: 1 },
+  ],
+  WELLNESS: [
+    { keywords: ["spa day", "wellness retreat", "meditation class", "sound bath", "float therapy"], weight: 3 },
+    { keywords: ["wellness", "self-care", "recovery", "mindfulness", "breathwork", "sauna"], weight: 2 },
+    { keywords: ["relax", "restore", "rejuvenate"], weight: 1 },
+  ],
+  ACTIVITY_VENUE: [
+    { keywords: ["escape room", "axe throwing", "archery", "curling", "rage room", "splatter paint", "indoor skydiving"], weight: 3 },
+    { keywords: ["bowling", "trampoline", "go kart", "laser tag", "mini golf", "virtual reality"], weight: 2 },
+    { keywords: ["adventure", "experience", "challenge"], weight: 1 },
   ],
 };
 

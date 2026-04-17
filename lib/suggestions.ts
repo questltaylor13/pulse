@@ -32,6 +32,9 @@ interface SuggestionCandidate {
   venueName: string;
   priceRange: string;
   score: number;
+  oneLiner: string | null;
+  noveltyScore: number | null;
+  qualityScore: number | null;
 }
 
 interface SuggestionSet {
@@ -188,29 +191,35 @@ async function buildUserTasteSummary(
  * Score an item based on user's taste vector
  */
 function scoreItem(
-  item: { category: Category; tags: string[]; startTime: Date | null },
+  item: { category: Category; tags: string[]; startTime: Date | null; noveltyScore?: number | null; qualityScore?: number | null },
   tasteVector: TasteVector
 ): number {
-  let score = 0;
-
-  // Category score (major factor)
+  // Category match (40% weight)
   const categoryWeight = tasteVector.categories.get(item.category) || 0;
-  score += categoryWeight * 10;
+  const categoryScore = categoryWeight * 10 * 0.4;
 
-  // Tag scores
+  // Novelty score (35% weight) — unique activities rank higher
+  const novelty = (item.noveltyScore ?? 5) * 3.5;
+
+  // Quality score (25% weight)
+  const quality = (item.qualityScore ?? 5) * 2.5;
+
+  // Tag scores (bonus)
+  let tagScore = 0;
   for (const tag of item.tags) {
     const tagWeight = tasteVector.tags.get(tag) || 0;
-    score += tagWeight * 2;
+    tagScore += tagWeight;
   }
 
   // Time relevance for events
+  let timeBonus = 0;
   if (item.startTime) {
     const hoursUntil = (item.startTime.getTime() - Date.now()) / (1000 * 60 * 60);
-    if (hoursUntil > 0 && hoursUntil <= 168) score += 10; // Within a week
-    else if (hoursUntil > 168 && hoursUntil <= 720) score += 5; // Within a month
+    if (hoursUntil > 0 && hoursUntil <= 168) timeBonus = 10;
+    else if (hoursUntil > 168 && hoursUntil <= 720) timeBonus = 5;
   }
 
-  return score;
+  return categoryScore + novelty + quality + tagScore + timeBonus;
 }
 
 /**
@@ -241,9 +250,25 @@ async function generateCandidatePool(
     take: CANDIDATE_POOL_SIZE * 2,
   });
 
-  // Filter out passed items and score remaining
+  // Build set of disliked categories to exclude from suggestions entirely
+  const dislikedCategories = new Set<Category>();
+  for (const [category, weight] of tasteVector.categories) {
+    if (weight < -1) dislikedCategories.add(category);
+  }
+
+  // Bar-keyword check for extra filtering: even if miscategorized, exclude bar-like venues
+  const BAR_KEYWORDS = /\b(speakeasy|cocktail|bar|brewery|taproom|pub|lounge|tavern|saloon|wine bar|beer garden|nightclub)\b/i;
+
+  // Filter out passed items, disliked categories, and score remaining
   const candidates = items
-    .filter((item) => !passedIds.has(item.id))
+    .filter((item) => {
+      if (passedIds.has(item.id)) return false;
+      // Exclude items in disliked categories
+      if (dislikedCategories.has(item.category)) return false;
+      // Extra: if user dislikes BARS, also exclude bar-like venues regardless of category
+      if (dislikedCategories.has("BARS" as Category) && BAR_KEYWORDS.test(`${item.title} ${item.venueName}`)) return false;
+      return true;
+    })
     .map((item) => ({
       id: item.id,
       title: item.title,
@@ -254,8 +279,11 @@ async function generateCandidatePool(
       startTime: item.startTime,
       venueName: item.venueName,
       priceRange: item.priceRange,
+      oneLiner: item.oneLiner,
+      noveltyScore: item.noveltyScore,
+      qualityScore: item.qualityScore,
       score: scoreItem(
-        { category: item.category, tags: item.tags, startTime: item.startTime },
+        { category: item.category, tags: item.tags, startTime: item.startTime, noveltyScore: item.noveltyScore, qualityScore: item.qualityScore },
         tasteVector
       ),
     }))
@@ -275,26 +303,41 @@ function selectWeeklyDeterministic(
   const now = Date.now();
   const weekFromNow = now + 7 * 24 * 60 * 60 * 1000;
 
-  // Prefer events happening this week, sorted by start time
+  // Pool: events this week + top-scored permanent activities
   const weeklyEvents = candidates
     .filter(
       (c) =>
-        c.type === "EVENT" &&
-        c.startTime &&
-        c.startTime.getTime() > now &&
-        c.startTime.getTime() <= weekFromNow
+        (c.type === "EVENT" &&
+          c.startTime &&
+          c.startTime.getTime() > now &&
+          c.startTime.getTime() <= weekFromNow) ||
+        c.type === "PLACE" // Include permanent activities/places
     )
-    .sort((a, b) => (a.startTime?.getTime() || 0) - (b.startTime?.getTime() || 0));
+    .sort((a, b) => b.score - a.score);
 
-  // If not enough weekly events, add top-scored items
-  if (weeklyEvents.length < count) {
-    const remaining = candidates
-      .filter((c) => !weeklyEvents.some((w) => w.id === c.id))
-      .slice(0, count - weeklyEvents.length);
-    return [...weeklyEvents, ...remaining];
+  // Select with category diversity: max 1 per category in top picks
+  const selected: SuggestionCandidate[] = [];
+  const usedCategories = new Set<Category>();
+
+  for (const candidate of weeklyEvents) {
+    if (selected.length >= count) break;
+    if (!usedCategories.has(candidate.category)) {
+      selected.push(candidate);
+      usedCategories.add(candidate.category);
+    }
   }
 
-  return weeklyEvents.slice(0, count);
+  // If we need more, allow repeating categories
+  if (selected.length < count) {
+    for (const candidate of weeklyEvents) {
+      if (selected.length >= count) break;
+      if (!selected.some((s) => s.id === candidate.id)) {
+        selected.push(candidate);
+      }
+    }
+  }
+
+  return selected;
 }
 
 /**
@@ -337,6 +380,25 @@ function selectMonthlyDeterministic(
 /**
  * Generate reasons for deterministic selection
  */
+// Category-specific reason templates (more compelling than "Matches your love of...")
+const CATEGORY_REASON_TEMPLATES: Record<string, string> = {
+  FITNESS: "Matches your active lifestyle",
+  OUTDOORS: "Right up your alley \u2014 get outside",
+  ACTIVITY_VENUE: "Something different to try",
+  SOCIAL: "Great way to meet people",
+  ART: "Feed your creative side",
+  COMEDY: "You could use a laugh",
+  LIVE_MUSIC: "Live music you'll love",
+  FOOD: "A tasty discovery",
+  COFFEE: "Your kind of coffee spot",
+  WELLNESS: "Recharge and reset",
+  SEASONAL: "Limited time \u2014 don't miss it",
+  POPUP: "Here today, gone tomorrow",
+  RESTAURANT: "Worth a visit",
+  OTHER: "Something special",
+  BARS: "Night out pick",
+};
+
 function generateDeterministicReasons(
   picks: SuggestionCandidate[],
   tasteVector: TasteVector
@@ -344,25 +406,34 @@ function generateDeterministicReasons(
   const reasons: Record<string, string> = {};
 
   for (const pick of picks) {
-    const categoryWeight = tasteVector.categories.get(pick.category) || 0;
-    const categoryName = pick.category.replace(/_/g, " ").toLowerCase();
+    // Priority 1: Use the AI-generated oneLiner if available
+    if (pick.oneLiner) {
+      reasons[pick.id] = pick.oneLiner;
+      continue;
+    }
 
-    if (categoryWeight > 3) {
-      reasons[pick.id] = `Matches your love of ${categoryName}`;
-    } else if (categoryWeight > 0) {
-      reasons[pick.id] = `Based on your interest in ${categoryName}`;
-    } else if (pick.type === "EVENT" && pick.startTime) {
+    // Priority 2: Category-specific template
+    const template = CATEGORY_REASON_TEMPLATES[pick.category];
+    if (template) {
+      reasons[pick.id] = template;
+      continue;
+    }
+
+    // Priority 3: Time-based reason for upcoming events
+    if (pick.type === "EVENT" && pick.startTime) {
       const daysUntil = Math.ceil(
         (pick.startTime.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
       );
       if (daysUntil <= 3) {
-        reasons[pick.id] = `Happening soon - don't miss it!`;
+        reasons[pick.id] = "Happening soon \u2014 don't miss it!";
       } else {
         reasons[pick.id] = `Coming up in ${daysUntil} days`;
       }
-    } else {
-      reasons[pick.id] = `Popular in Denver`;
+      continue;
     }
+
+    // Fallback
+    reasons[pick.id] = "Popular in Denver";
   }
 
   return reasons;
@@ -431,6 +502,9 @@ export async function getSuggestions(userId: string): Promise<SuggestionSet> {
         venueName: i!.venueName,
         priceRange: i!.priceRange,
         score: 0,
+        oneLiner: i!.oneLiner,
+        noveltyScore: i!.noveltyScore,
+        qualityScore: i!.qualityScore,
       })) as SuggestionCandidate[];
 
     const monthlyPicks = cached.monthlyIds
@@ -447,6 +521,9 @@ export async function getSuggestions(userId: string): Promise<SuggestionSet> {
         venueName: i!.venueName,
         priceRange: i!.priceRange,
         score: 0,
+        oneLiner: i!.oneLiner,
+        noveltyScore: i!.noveltyScore,
+        qualityScore: i!.qualityScore,
       })) as SuggestionCandidate[];
 
     return {

@@ -1,0 +1,7 @@
+-- AlterEnum
+ALTER TYPE "Category" ADD VALUE 'COMEDY';
+ALTER TYPE "Category" ADD VALUE 'SOCIAL';
+ALTER TYPE "Category" ADD VALUE 'WELLNESS';
+
+-- AlterTable
+ALTER TABLE "Event" ADD COLUMN "isRecurring" BOOLEAN NOT NULL DEFAULT false;

@@ -15,6 +15,7 @@ import ScoreBadge from "@/components/ScoreBadge";
 import { FriendsGoingBadge } from "@/components/FriendsGoingBadge";
 import { DogFriendlyBadge, SoberFriendlyBadge } from "@/components/badges";
 import { CATEGORY_EMOJI, CATEGORY_LABELS } from "@/lib/constants/categories";
+import { CATEGORY_PLACEHOLDER_IMAGE } from "@/lib/constants/placeholder-images";
 
 interface FriendUser {
   id: string;
@@ -130,6 +131,10 @@ interface EventCardProps {
   isDrinkingOptional?: boolean;
   isAlcoholFree?: boolean;
   soberFriendlyNotes?: string | null;
+  isRecurring?: boolean;
+  noveltyScore?: number | null;
+  oneLiner?: string | null;
+  tags?: string[];
 }
 
 const GOING_WITH_OPTIONS: { value: GoingWith; label: string; icon: string }[] = [
@@ -198,6 +203,10 @@ export default function EventCard({
   isDrinkingOptional,
   isAlcoholFree,
   soberFriendlyNotes,
+  isRecurring,
+  noveltyScore,
+  oneLiner,
+  tags = [],
 }: EventCardProps) {
   const [isSaved, setIsSaved] = useState(initialSaved);
   const [isLiked, setIsLiked] = useState(initialLiked);
@@ -399,12 +408,11 @@ export default function EventCard({
   return (
     <article className="bg-white rounded-xl border border-slate-200 hover:shadow-md transition-shadow relative">
       {/* Image - Compact height */}
-      {imageUrl && (
-        <Link href={`/events/${id}`} className="block">
-          <div className={`relative overflow-hidden ${compact ? "h-28" : "h-36"}`}>
-            <Image
-              src={imageUrl}
-              alt={title}
+      <Link href={`/events/${id}`} className="block">
+        <div className={`relative overflow-hidden ${compact ? "h-28" : "h-36"}`}>
+          <Image
+            src={imageUrl || CATEGORY_PLACEHOLDER_IMAGE[category] || CATEGORY_PLACEHOLDER_IMAGE.OTHER}
+            alt={title}
               fill
               className="object-cover transition-transform hover:scale-105"
             />
@@ -433,7 +441,6 @@ export default function EventCard({
             )}
           </div>
         </Link>
-      )}
 
       <div className={compact ? "p-3" : "p-4"}>
         {/* Line 1: Category + Neighborhood + Score */}
@@ -463,9 +470,35 @@ export default function EventCard({
           </h3>
         </Link>
 
-        {/* Description - 2 lines max, hidden in compact */}
+        {/* Badges */}
         {!compact && (
-          <p className="text-sm text-slate-600 line-clamp-2 mb-3">{description}</p>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {(noveltyScore ?? 0) >= 8 && (
+              <span className="bg-gradient-to-r from-amber-100 to-orange-100 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-full">
+                Hidden Gem
+              </span>
+            )}
+            {/free|\$0/i.test(priceRange) && (
+              <span className="bg-emerald-50 text-emerald-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                Free
+              </span>
+            )}
+            {(category === "ACTIVITY_VENUE") && (
+              <span className="bg-cyan-50 text-cyan-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                Try Something New
+              </span>
+            )}
+            {tags.some(t => /group|friends-group|social|team/.test(t)) && (
+              <span className="bg-violet-50 text-violet-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                Great for Groups
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* One-liner or description */}
+        {!compact && (
+          <p className="text-sm text-slate-600 line-clamp-2 mb-3">{oneLiner || description}</p>
         )}
 
         {/* Meta Info - Compact */}
@@ -474,7 +507,7 @@ export default function EventCard({
             <svg className="h-4 w-4 mr-2 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <span className="truncate">{formatDateTime(startTime, compact ? null : endTime)}</span>
+            <span className="truncate">{isRecurring ? "Always Available" : formatDateTime(startTime, compact ? null : endTime)}</span>
           </div>
           <div className="flex items-center">
             <svg className="h-4 w-4 mr-2 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
