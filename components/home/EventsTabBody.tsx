@@ -72,13 +72,13 @@ export default function EventsTabBody({ category, data }: Props) {
 
       <SectionDivider />
 
-      {/* Section 3: New in Denver (Places) */}
+      {/* Section 3: Just added on Pulse (Places) */}
       {newInDenver.length === 0 && category !== "all" ? (
-        <CollapsedSection title="New in Denver" category={category} />
+        <CollapsedSection title="Just added on Pulse" category={category} />
       ) : (
         <ScrollSection
-          title="New in Denver"
-          subtitle="Places that opened recently"
+          title="Just added on Pulse"
+          subtitle="Fresh picks added to the guide"
           seeAllHref="/browse/new-in-denver"
         >
           {newInDenver.map((p) => (

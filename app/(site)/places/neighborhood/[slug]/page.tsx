@@ -61,6 +61,12 @@ export default async function NeighborhoodPage({ params, searchParams }: Props) 
     openedDate: p.openedDate?.toISOString() ?? null,
     isNew: p.isNew,
     isFeatured: p.isFeatured,
+    region: p.region,
+    townName: p.townName,
+    isDayTrip: p.isDayTrip,
+    isWeekendTrip: p.isWeekendTrip,
+    driveTimeFromDenver: p.driveTimeFromDenver,
+    driveNote: p.driveNote,
   }));
 
   return (

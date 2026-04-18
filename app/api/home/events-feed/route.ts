@@ -25,22 +25,7 @@ import type {
 export const dynamic = "force-dynamic";
 export const revalidate = 60;
 
-function toEventCompact(e: {
-  id: string;
-  title: string;
-  category: any;
-  imageUrl: string | null;
-  venueName: string;
-  neighborhood: string | null;
-  startTime: Date;
-  priceRange: string;
-  isEditorsPick: boolean;
-  isRecurring: boolean;
-  noveltyScore: number | null;
-  driveTimeFromDenver: number | null;
-  tags: string[];
-  oneLiner: string | null;
-}): EventCompact {
+function toEventCompact(e: any): EventCompact {
   return {
     id: e.id,
     title: e.title,
@@ -56,23 +41,16 @@ function toEventCompact(e: {
     driveTimeFromDenver: e.driveTimeFromDenver,
     tags: e.tags,
     oneLiner: e.oneLiner,
+    region: e.region,
+    townName: e.townName,
+    isDayTrip: e.isDayTrip,
+    isWeekendTrip: e.isWeekendTrip,
+    driveNote: e.driveNote,
+    worthTheDriveScore: e.worthTheDriveScore,
   };
 }
 
-function toPlaceCompact(p: {
-  id: string;
-  name: string;
-  category: any;
-  primaryImageUrl: string | null;
-  neighborhood: string | null;
-  address: string;
-  priceLevel: number | null;
-  vibeTags: string[];
-  tags: string[];
-  openedDate: Date | null;
-  isNew: boolean;
-  isFeatured: boolean;
-}): PlaceCompact {
+function toPlaceCompact(p: any): PlaceCompact {
   return {
     id: p.id,
     name: p.name,
@@ -86,6 +64,12 @@ function toPlaceCompact(p: {
     openedDate: p.openedDate ? p.openedDate.toISOString() : null,
     isNew: p.isNew,
     isFeatured: p.isFeatured,
+    region: p.region,
+    townName: p.townName,
+    isDayTrip: p.isDayTrip,
+    isWeekendTrip: p.isWeekendTrip,
+    driveTimeFromDenver: p.driveTimeFromDenver,
+    driveNote: p.driveNote,
   };
 }
 
@@ -105,6 +89,12 @@ const EVENT_SELECT = {
   tags: true,
   oneLiner: true,
   createdAt: true,
+  region: true,
+  townName: true,
+  isDayTrip: true,
+  isWeekendTrip: true,
+  driveNote: true,
+  worthTheDriveScore: true,
 } as const;
 
 const PLACE_SELECT = {
@@ -121,6 +111,12 @@ const PLACE_SELECT = {
   isNew: true,
   isFeatured: true,
   createdAt: true,
+  region: true,
+  townName: true,
+  isDayTrip: true,
+  isWeekendTrip: true,
+  driveTimeFromDenver: true,
+  driveNote: true,
 } as const;
 
 export async function GET(req: NextRequest) {
@@ -130,8 +126,6 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const eodToday = endOfTodayLocal(now);
   const { start: weekendStart, end: weekendEnd } = upcomingWeekendRange(now);
-  const fortyFiveDaysAgo = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
-
   const eventCat = eventWhereForCategory(cat);
   const placeCat = placeWhereForCategory(cat);
 
@@ -160,20 +154,18 @@ export async function GET(req: NextRequest) {
       select: EVENT_SELECT,
       take: 40,
     }),
+    // "Just added on Pulse" — curator-flagged (isNew OR isFeatured) picks.
+    // See components/home/fetch-home-feed.ts for rationale.
     prisma.place.findMany({
       where: {
         AND: [
           placeCat,
-          {
-            OR: [
-              { isNew: true },
-              { openedDate: { gte: fortyFiveDaysAgo } },
-            ],
-          },
+          { openingStatus: "OPEN" },
+          { OR: [{ isNew: true }, { isFeatured: true }] },
         ],
       },
       select: PLACE_SELECT,
-      orderBy: [{ openedDate: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       take: 10,
     }),
     prisma.event.findMany({

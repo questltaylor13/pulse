@@ -86,6 +86,13 @@ enum EventStatus {
 }
 
 // Opening status for places
+enum EventRegion {
+  DENVER_METRO
+  FRONT_RANGE // Boulder, Fort Collins, Colorado Springs, Golden, Morrison
+  MOUNTAIN_GATEWAY // Estes Park, Nederland, Idaho Springs, Georgetown, Winter Park, Evergreen
+  MOUNTAIN_DEST // Breckenridge, Vail, Aspen, Steamboat, Crested Butte, Telluride
+}
+
 enum OpeningStatus {
   OPEN // Currently operating
   COMING_SOON // Announced, not open yet
@@ -348,6 +355,17 @@ model Event {
   driveTimeFromDenver Int? // Minutes, for "Outside the city" section meta
   isArchived          Boolean @default(false) // Flipped true by daily archive cron for past events
 
+  // PRD 2 Phase 0: regional metadata
+  // townName, region, isDayTrip/isWeekendTrip, driveNote are derived from
+  // lib/regional/drive-times.ts at scrape/backfill time based on neighborhood.
+  // worthTheDriveScore is populated by the AI enrichment pass in PRD 2 Phase 4.
+  region             EventRegion @default(DENVER_METRO)
+  townName           String? // "Boulder", "Breckenridge", etc. Null for Denver metro.
+  isDayTrip          Boolean     @default(false)
+  isWeekendTrip      Boolean     @default(false)
+  driveNote          String? // Short Pulse-voice note: "I-70 can be brutal on ski weekends"
+  worthTheDriveScore Int? // 1-10, only populated for region != DENVER_METRO
+
   // Phase 4: map support
   lat Float?
   lng Float?
@@ -382,6 +400,7 @@ model Event {
   @@index([isEditorsPick])
   @@index([isArchived, startTime])
   @@index([lat, lng])
+  @@index([region, startTime])
 }
 
 // Creator/Influencer featuring or hosting an event
@@ -1137,6 +1156,14 @@ model Place {
   neighborhood String? // Denver neighborhood
   citySlug     String  @default("denver")
 
+  // PRD 2 Phase 0: regional metadata (parallels Event model)
+  region              EventRegion @default(DENVER_METRO)
+  townName            String?
+  isDayTrip           Boolean     @default(false)
+  isWeekendTrip       Boolean     @default(false)
+  driveTimeFromDenver Int? // Minutes from downtown Denver, static
+  driveNote           String?
+
   // Pulse enrichment (our tagging)
   category         Category? // Mapped category
   tags             String[]  @default([]) // Free-form tags for home category rail ("weird", "off-beat", "hidden-gem", etc.)
@@ -1221,6 +1248,7 @@ model Place {
   @@index([expectedOpenDate])
   @@index([isLocalFavorite])
   @@index([goodForWorking])
+  @@index([region])
 }
 
 // User alerts for new/upcoming places

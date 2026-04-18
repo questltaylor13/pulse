@@ -49,6 +49,12 @@ function toEventCompact(e: any): EventCompact {
     driveTimeFromDenver: e.driveTimeFromDenver,
     tags: e.tags,
     oneLiner: e.oneLiner,
+    region: e.region,
+    townName: e.townName,
+    isDayTrip: e.isDayTrip,
+    isWeekendTrip: e.isWeekendTrip,
+    driveNote: e.driveNote,
+    worthTheDriveScore: e.worthTheDriveScore,
   };
 }
 
@@ -66,6 +72,12 @@ function toPlaceCompact(p: any): PlaceCompact {
     openedDate: p.openedDate ? p.openedDate.toISOString() : null,
     isNew: p.isNew,
     isFeatured: p.isFeatured,
+    region: p.region,
+    townName: p.townName,
+    isDayTrip: p.isDayTrip,
+    isWeekendTrip: p.isWeekendTrip,
+    driveTimeFromDenver: p.driveTimeFromDenver,
+    driveNote: p.driveNote,
   };
 }
 
@@ -85,6 +97,13 @@ const EVENT_SELECT = {
   tags: true,
   oneLiner: true,
   createdAt: true,
+  // PRD 2 Phase 0: regional metadata
+  region: true,
+  townName: true,
+  isDayTrip: true,
+  isWeekendTrip: true,
+  driveNote: true,
+  worthTheDriveScore: true,
 } as const;
 
 const PLACE_SELECT = {
@@ -102,32 +121,38 @@ const PLACE_SELECT = {
   isFeatured: true,
   createdAt: true,
   updatedAt: true,
+  // PRD 2 Phase 0: regional metadata
+  region: true,
+  townName: true,
+  isDayTrip: true,
+  isWeekendTrip: true,
+  driveTimeFromDenver: true,
+  driveNote: true,
 } as const;
 
 export async function fetchPlacesFeed(
   cat: PlacesRailCategory
 ): Promise<PlacesFeedResponse> {
   const now = new Date();
-  const fortyFiveDaysAgo = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
   const placeCat = placeWhereForPlacesRail(cat);
 
   const [newInDenver, neighborhoods, localFavorites, dateNight, goodForGroups, workFriendly] =
     await Promise.all([
-      // 1. New in Denver
+      // 1. Just added on Pulse — curator-flagged (isNew OR isFeatured) picks,
+      //    ordered by updatedAt DESC so freshly-flagged places float to the top.
+      //    PRD 1 §3.3: switched from `isNew OR openedDate>=45d` (surfaced stale
+      //    seed flags) to a tighter editorial filter. Bare `createdAt DESC`
+      //    was tried first but surfaced same-day-seeded fitness-chain batches.
       prisma.place.findMany({
         where: {
           AND: [
             placeCat,
-            {
-              OR: [
-                { isNew: true },
-                { openedDate: { gte: fortyFiveDaysAgo } },
-              ],
-            },
+            { openingStatus: "OPEN" },
+            { OR: [{ isNew: true }, { isFeatured: true }] },
           ],
         },
         select: PLACE_SELECT,
-        orderBy: [{ openedDate: "desc" }, { createdAt: "desc" }],
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
         take: 10,
       }),
       // 2. Neighborhoods
@@ -303,7 +328,6 @@ export async function fetchHomeFeed(cat: RailCategory): Promise<HomeFeedResponse
   const now = new Date();
   const eodToday = endOfTodayLocal(now);
   const { start: weekendStart, end: weekendEnd } = upcomingWeekendRange(now);
-  const fortyFiveDaysAgo = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
 
   const eventCat = eventWhereForCategory(cat);
   const placeCat = placeWhereForCategory(cat);
@@ -328,20 +352,17 @@ export async function fetchHomeFeed(cat: RailCategory): Promise<HomeFeedResponse
       select: EVENT_SELECT,
       take: 40,
     }),
+    // "Just added on Pulse" — see fetchPlacesFeed() for rationale.
     prisma.place.findMany({
       where: {
         AND: [
           placeCat,
-          {
-            OR: [
-              { isNew: true },
-              { openedDate: { gte: fortyFiveDaysAgo } },
-            ],
-          },
+          { openingStatus: "OPEN" },
+          { OR: [{ isNew: true }, { isFeatured: true }] },
         ],
       },
       select: PLACE_SELECT,
-      orderBy: [{ openedDate: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       take: 10,
     }),
     prisma.event.findMany({

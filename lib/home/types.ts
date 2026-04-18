@@ -1,4 +1,4 @@
-import type { Category } from "@prisma/client";
+import type { Category, EventRegion } from "@prisma/client";
 import type { SeedGuide } from "./seed-guides";
 
 export interface GuideCompact {
@@ -55,6 +55,13 @@ export interface EventCompact {
   driveTimeFromDenver: number | null;
   tags: string[];
   oneLiner: string | null;
+  // PRD 2 Phase 0: regional metadata (UI rendering lands in Phase 5)
+  region: EventRegion;
+  townName: string | null;
+  isDayTrip: boolean;
+  isWeekendTrip: boolean;
+  driveNote: string | null;
+  worthTheDriveScore: number | null;
 }
 
 export interface PlaceCompact {
@@ -70,6 +77,13 @@ export interface PlaceCompact {
   openedDate: string | null; // ISO
   isNew: boolean;
   isFeatured: boolean;
+  // PRD 2 Phase 0: regional metadata
+  region: EventRegion;
+  townName: string | null;
+  isDayTrip: boolean;
+  isWeekendTrip: boolean;
+  driveTimeFromDenver: number | null;
+  driveNote: string | null;
 }
 
 export interface NeighborhoodCardData {
