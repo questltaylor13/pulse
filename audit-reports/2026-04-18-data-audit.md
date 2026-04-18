@@ -7,22 +7,24 @@ Phase 0 deliverable for `PRD/data-refresh-and-reliability.md`. Read-only audit (
 - Scrapers returning 0 silently: **0** (none)
 - Scrapers erroring: **0** (none)
 - Scrapers not configured: **2** (ticketmaster, eventbrite)
-- Future events in DB: **263**
+- Future events in DB: **354**
 - Places in DB: **460** (localFav=268, isNew=15, opened<45d=0)
 - Events with qualityScore persisted: **1296** (expected 0 — see Section F)
 
 ## A. Scraper health
 
-| Source       | Status         | Raw count | Errors | Duration (ms) | Notes                                |
-| ------------ | -------------- | --------- | ------ | ------------- | ------------------------------------ |
-| do303        | ok             | 25        | -      | 986           | e.g. "Sublime"                       |
-| westword     | ok             | 12        | -      | 129           | e.g. "Come from Away"                |
-| red-rocks    | ok             | 172       | -      | 2663          | e.g. "Sublime"                       |
-| visit-denver | ok             | 16        | -      | 499           | e.g. "'Round the Clock"              |
-| ticketmaster | not configured | 0         | -      | 0             | env var TICKETMASTER_API_KEY not set |
-| eventbrite   | not configured | 0         | -      | 0             | env var EVENTBRITE_TOKEN not set     |
+| Source            | Status         | Raw count | Errors | Duration (ms) | Notes                                   |
+| ----------------- | -------------- | --------- | ------ | ------------- | --------------------------------------- |
+| do303             | ok             | 25        | -      | 694           | e.g. "Sublime"                          |
+| westword          | ok             | 12        | -      | 316           | e.g. "Come from Away"                   |
+| red-rocks         | ok             | 172       | -      | 934           | e.g. "Sublime"                          |
+| visit-denver      | ok             | 16        | -      | 621           | e.g. "'Round the Clock"                 |
+| chautauqua        | ok             | 56        | -      | 3470          | e.g. "Colorado Chautauqua History Tour" |
+| pikes-peak-center | ok             | 35        | -      | 1224          | e.g. "99th Season Gala: Itzhak Perlman" |
+| ticketmaster      | not configured | 0         | -      | 0             | env var TICKETMASTER_API_KEY not set    |
+| eventbrite        | not configured | 0         | -      | 0             | env var EVENTBRITE_TOKEN not set        |
 
-Sum of raw events across sources: **225**
+Sum of raw events across sources: **316**
 
 ### Sample titles (sanity check)
 
@@ -30,10 +32,25 @@ Sum of raw events across sources: **225**
 - **westword**: "Come from Away", "Hell’s Kitchen (Touring)", "Colorado Rapids v Inter Miami CF"
 - **red-rocks**: "Sublime", "Wiz Khalifa", "Ice Cube & Snoop Dogg"
 - **visit-denver**: "'Round the Clock", "2026 Staff & Volunteer Showcase", "2026 Staff & Volunteer Showcase"
+- **chautauqua**: "Colorado Chautauqua History Tour", "Qigong For Everyone", "Reed Foehl with Andy Mann – SOLD OUT!"
+- **pikes-peak-center**: "99th Season Gala: Itzhak Perlman", "Southern Colorado In Harmony Festival", "Marsalis / Rachmaninoff"
 
 ## B. Pipeline full run
 
-_AUDIT_CONFIRM not set — Section B skipped._ To run: `AUDIT_CONFIRM=1 npm run audit` (or invoke the script directly).
+| Metric                             | Value |
+| ---------------------------------- | ----- |
+| Events before run                  | 1914  |
+| Events after run                   | 2005  |
+| Total (post-dedup)                 | 312   |
+| Inserted                           | 91    |
+| Updated                            | 221   |
+| Enriched                           | 0     |
+| Dropped (quality<cutoff, archived) | 0     |
+| Dedup drop (sum raw − total)       | 4     |
+| Errors                             | 0     |
+| Duration (ms)                      | 50788 |
+
+_Note: the PRD asks for 'count after AI quality filter'. No such filter is implemented in code today — see Section F, item 4._
 
 ## C. Database state
 
@@ -41,10 +58,10 @@ _AUDIT_CONFIRM not set — Section B skipped._ To run: `AUDIT_CONFIRM=1 npm run 
 
 | Metric                  | Value                    |
 | ----------------------- | ------------------------ |
-| Total events            | 1914                     |
-| Future events (active)  | 263                      |
+| Total events            | 2005                     |
+| Future events (active)  | 354                      |
 | Archived                | 1649                     |
-| Published (status)      | 1914                     |
+| Published (status)      | 2005                     |
 | With qualityScore       | 1296                     |
 | With oneLiner           | 1296                     |
 | With noveltyScore       | 1296                     |
@@ -55,28 +72,30 @@ _AUDIT_CONFIRM not set — Section B skipped._ To run: `AUDIT_CONFIRM=1 npm run 
 
 | Category       | Count |
 | -------------- | ----- |
-| LIVE_MUSIC     | 193   |
-| ART            | 16    |
-| ACTIVITY_VENUE | 12    |
-| OTHER          | 9     |
+| LIVE_MUSIC     | 198   |
+| OTHER          | 53    |
+| ART            | 51    |
+| ACTIVITY_VENUE | 14    |
+| OUTDOORS       | 9     |
 | SOCIAL         | 9     |
-| OUTDOORS       | 6     |
-| FITNESS        | 5     |
+| FITNESS        | 6     |
 | BARS           | 4     |
+| SEASONAL       | 4     |
 | FOOD           | 3     |
-| SEASONAL       | 3     |
 | COMEDY         | 3     |
 
 **Future events by source:**
 
-| Source        | Count |
-| ------------- | ----- |
-| red-rocks     | 172   |
-| pulse-curated | 42    |
-| do303         | 25    |
-| visit-denver  | 15    |
-| westword      | 8     |
-| 303magazine   | 1     |
+| Source            | Count |
+| ----------------- | ----- |
+| red-rocks         | 172   |
+| chautauqua        | 56    |
+| pulse-curated     | 42    |
+| pikes-peak-center | 35    |
+| do303             | 25    |
+| visit-denver      | 15    |
+| westword          | 8     |
+| 303magazine       | 1     |
 
 ### Places
 
@@ -124,13 +143,13 @@ _AUDIT_CONFIRM not set — Section B skipped._ To run: `AUDIT_CONFIRM=1 npm run 
 
 | Rail     | Today | Weekend | New in Denver (places) | Outside events | Outside places |
 | -------- | ----- | ------- | ---------------------- | -------------- | -------------- |
-| all      | 35    | 37      | 15                     | 172            | 0              |
-| music    | 20    | 22      | 0                      | 172            | 0              |
+| all      | 36    | 38      | 15                     | 263            | 0              |
+| music    | 20    | 22      | 0                      | 177            | 0              |
 | food     | 1     | 1       | 9                      | 0              | 0              |
 | weird    | 3     | 3       | 0                      | 0              | 0              |
 | offbeat  | 0     | 0       | 6                      | 0              | 0              |
-| art      | 5     | 5       | 1                      | 0              | 0              |
-| outdoors | 0     | 0       | 0                      | 0              | 0              |
+| art      | 6     | 6       | 1                      | 35             | 0              |
+| outdoors | 0     | 0       | 0                      | 3              | 0              |
 | comedy   | 1     | 1       | 0                      | 0              | 0              |
 | popup    | 0     | 0       | 0                      | 0              | 0              |
 
@@ -192,4 +211,4 @@ Ordered from highest-leverage to lowest, derived from A–F. Quest to approve be
 
 ---
 
-Report generated at 2026-04-18T15:29:58.145Z against `postgresql://***@ep-dry-haze-ahu9d7li-pooler.c-3.us-east-1.aws.neon.tech/neondb`.
+Report generated at 2026-04-18T16:05:59.084Z against `postgresql://***@ep-dry-haze-ahu9d7li-pooler.c-3.us-east-1.aws.neon.tech/neondb`.

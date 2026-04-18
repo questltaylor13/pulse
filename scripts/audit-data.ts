@@ -29,6 +29,8 @@ import { scrapeTicketmaster } from "../lib/scrapers/ticketmaster";
 import { scrapeEventbrite } from "../lib/scrapers/eventbrite";
 import { scrapeRedRocks } from "../lib/scrapers/red-rocks";
 import { scrapeVisitDenver } from "../lib/scrapers/visit-denver";
+import { scrapeChautauqua } from "../lib/scrapers/regional/chautauqua";
+import { scrapePikesPeakCenter } from "../lib/scrapers/regional/pikes-peak-center";
 import { ScraperResult, Scraper } from "../lib/scrapers/types";
 import { runAllScrapers } from "../lib/scrapers/index";
 
@@ -158,10 +160,15 @@ async function probeScraper(
 async function runSectionA(): Promise<ScraperHealth[]> {
   console.log("\n== Section A — Scraper health ==");
   const probes: Array<{ name: string; fn: Scraper; requiresEnv?: string }> = [
+    // Denver core
     { name: "do303", fn: scrapeDenverEvents },
     { name: "westword", fn: scrapeWestword },
     { name: "red-rocks", fn: scrapeRedRocks },
     { name: "visit-denver", fn: scrapeVisitDenver },
+    // Regional (PRD 2 Phase 1)
+    { name: "chautauqua", fn: scrapeChautauqua },
+    { name: "pikes-peak-center", fn: scrapePikesPeakCenter },
+    // API-gated
     { name: "ticketmaster", fn: scrapeTicketmaster, requiresEnv: "TICKETMASTER_API_KEY" },
     { name: "eventbrite", fn: scrapeEventbrite, requiresEnv: "EVENTBRITE_TOKEN" },
   ];

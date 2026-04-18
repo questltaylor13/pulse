@@ -7,7 +7,10 @@ import { scrapeTicketmaster } from "./ticketmaster";
 import { scrapeEventbrite } from "./eventbrite";
 import { scrapeRedRocks } from "./red-rocks";
 import { scrapeVisitDenver } from "./visit-denver";
+import { scrapeChautauqua } from "./regional/chautauqua";
+import { scrapePikesPeakCenter } from "./regional/pikes-peak-center";
 import { enrichEvent } from "@/lib/enrich-event";
+import { deriveRegionalFields } from "@/lib/regional/metadata";
 
 // Note: 303magazine disabled 2026-04-18. The site migrated away from a
 // structured event calendar (JSON-LD Event schema) to a JS-rendered Tribe
@@ -16,10 +19,14 @@ import { enrichEvent } from "@/lib/enrich-event";
 // westword + red-rocks + visit-denver already cover the same ground. Keep
 // lib/scrapers/303magazine.ts for reference but leave it unwired.
 const scrapers: { name: string; fn: Scraper }[] = [
+  // Denver core
   { name: "do303", fn: scrapeDenverEvents },
   { name: "westword", fn: scrapeWestword },
   { name: "red-rocks", fn: scrapeRedRocks },
   { name: "visit-denver", fn: scrapeVisitDenver },
+  // Regional — PRD 2 Phase 1
+  { name: "chautauqua", fn: scrapeChautauqua },
+  { name: "pikes-peak-center", fn: scrapePikesPeakCenter },
 ];
 
 // Conditionally include API scrapers when credentials are configured
@@ -167,6 +174,12 @@ export async function runAllScrapers(): Promise<{
         })
       : null;
 
+    // PRD 2 Phase 1: auto-tag regional metadata from the static drive-time
+    // table based on the scraper's neighborhood value. Keeps scrapers simple
+    // (they just set neighborhood="Boulder" etc.) while region/driveTime/
+    // driveNote/isDayTrip/isWeekendTrip get derived centrally.
+    const regional = deriveRegionalFields(event.neighborhood);
+
     if (existing) {
       await prisma.event.update({
         where: { id: existing.id },
@@ -183,6 +196,12 @@ export async function runAllScrapers(): Promise<{
           priceRange: event.priceRange,
           sourceUrl: event.sourceUrl,
           imageUrl: event.imageUrl,
+          region: regional.region,
+          townName: regional.townName,
+          isDayTrip: regional.isDayTrip,
+          isWeekendTrip: regional.isWeekendTrip,
+          driveTimeFromDenver: regional.driveTimeFromDenver,
+          driveNote: regional.driveNote,
         },
       });
       updated++;
@@ -204,6 +223,12 @@ export async function runAllScrapers(): Promise<{
           sourceUrl: event.sourceUrl,
           externalId: event.externalId,
           imageUrl: event.imageUrl,
+          region: regional.region,
+          townName: regional.townName,
+          isDayTrip: regional.isDayTrip,
+          isWeekendTrip: regional.isWeekendTrip,
+          driveTimeFromDenver: regional.driveTimeFromDenver,
+          driveNote: regional.driveNote,
         },
       });
       newEventIds.push(created.id);
