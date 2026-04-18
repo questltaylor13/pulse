@@ -3,6 +3,8 @@
  */
 import { scrapeChautauqua } from "../lib/scrapers/regional/chautauqua";
 import { scrapePikesPeakCenter } from "../lib/scrapers/regional/pikes-peak-center";
+import { scrapeVisitEstesPark } from "../lib/scrapers/regional/visit-estes-park";
+import { scrapeVisitGolden } from "../lib/scrapers/regional/visit-golden";
 import type { Scraper } from "../lib/scrapers/types";
 
 async function probe(name: string, fn: Scraper) {
@@ -22,6 +24,8 @@ async function probe(name: string, fn: Scraper) {
 async function main() {
   await probe("chautauqua", scrapeChautauqua);
   await probe("pikes-peak-center", scrapePikesPeakCenter);
+  await probe("visit-estes-park", scrapeVisitEstesPark);
+  await probe("visit-golden", scrapeVisitGolden);
 }
 
 main().catch((e) => {

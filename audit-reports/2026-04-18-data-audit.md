@@ -7,7 +7,7 @@ Phase 0 deliverable for `PRD/data-refresh-and-reliability.md`. Read-only audit (
 - Scrapers returning 0 silently: **0** (none)
 - Scrapers erroring: **0** (none)
 - Scrapers not configured: **2** (ticketmaster, eventbrite)
-- Future events in DB: **354**
+- Future events in DB: **391**
 - Places in DB: **460** (localFav=268, isNew=15, opened<45d=0)
 - Events with qualityScore persisted: **1296** (expected 0 — see Section F)
 
@@ -15,16 +15,18 @@ Phase 0 deliverable for `PRD/data-refresh-and-reliability.md`. Read-only audit (
 
 | Source            | Status         | Raw count | Errors | Duration (ms) | Notes                                   |
 | ----------------- | -------------- | --------- | ------ | ------------- | --------------------------------------- |
-| do303             | ok             | 25        | -      | 694           | e.g. "Sublime"                          |
-| westword          | ok             | 12        | -      | 316           | e.g. "Come from Away"                   |
-| red-rocks         | ok             | 172       | -      | 934           | e.g. "Sublime"                          |
-| visit-denver      | ok             | 16        | -      | 621           | e.g. "'Round the Clock"                 |
-| chautauqua        | ok             | 56        | -      | 3470          | e.g. "Colorado Chautauqua History Tour" |
-| pikes-peak-center | ok             | 35        | -      | 1224          | e.g. "99th Season Gala: Itzhak Perlman" |
+| do303             | ok             | 25        | -      | 859           | e.g. "Sublime"                          |
+| westword          | ok             | 12        | -      | 133           | e.g. "Come from Away"                   |
+| red-rocks         | ok             | 172       | -      | 2770          | e.g. "Sublime"                          |
+| visit-denver      | ok             | 16        | -      | 378           | e.g. "'Round the Clock"                 |
+| chautauqua        | ok             | 56        | -      | 2725          | e.g. "Colorado Chautauqua History Tour" |
+| pikes-peak-center | ok             | 35        | -      | 368           | e.g. "99th Season Gala: Itzhak Perlman" |
+| visit-estes-park  | ok             | 20        | -      | 74            | e.g. ""Reflections on Light and color"" |
+| visit-golden      | ok             | 20        | -      | 81            | e.g. "2026 Members’ Show"               |
 | ticketmaster      | not configured | 0         | -      | 0             | env var TICKETMASTER_API_KEY not set    |
 | eventbrite        | not configured | 0         | -      | 0             | env var EVENTBRITE_TOKEN not set        |
 
-Sum of raw events across sources: **316**
+Sum of raw events across sources: **356**
 
 ### Sample titles (sanity check)
 
@@ -34,21 +36,23 @@ Sum of raw events across sources: **316**
 - **visit-denver**: "'Round the Clock", "2026 Staff & Volunteer Showcase", "2026 Staff & Volunteer Showcase"
 - **chautauqua**: "Colorado Chautauqua History Tour", "Qigong For Everyone", "Reed Foehl with Andy Mann – SOLD OUT!"
 - **pikes-peak-center**: "99th Season Gala: Itzhak Perlman", "Southern Colorado In Harmony Festival", "Marsalis / Rachmaninoff"
+- **visit-estes-park**: ""Reflections on Light and color"", "Accessible Art Gala and Auction", "Glentucky Funkdown"
+- **visit-golden**: "2026 Members’ Show", "2026 Men's Exhibit | 18th Biennial Men’s Call for Entry Exhibit", "Artist Talk With Rob Bell"
 
 ## B. Pipeline full run
 
 | Metric                             | Value |
 | ---------------------------------- | ----- |
-| Events before run                  | 1914  |
-| Events after run                   | 2005  |
-| Total (post-dedup)                 | 312   |
-| Inserted                           | 91    |
-| Updated                            | 221   |
+| Events before run                  | 2005  |
+| Events after run                   | 2042  |
+| Total (post-dedup)                 | 349   |
+| Inserted                           | 37    |
+| Updated                            | 312   |
 | Enriched                           | 0     |
 | Dropped (quality<cutoff, archived) | 0     |
-| Dedup drop (sum raw − total)       | 4     |
+| Dedup drop (sum raw − total)       | 7     |
 | Errors                             | 0     |
-| Duration (ms)                      | 50788 |
+| Duration (ms)                      | 52241 |
 
 _Note: the PRD asks for 'count after AI quality filter'. No such filter is implemented in code today — see Section F, item 4._
 
@@ -58,10 +62,10 @@ _Note: the PRD asks for 'count after AI quality filter'. No such filter is imple
 
 | Metric                  | Value                    |
 | ----------------------- | ------------------------ |
-| Total events            | 2005                     |
-| Future events (active)  | 354                      |
+| Total events            | 2042                     |
+| Future events (active)  | 391                      |
 | Archived                | 1649                     |
-| Published (status)      | 2005                     |
+| Published (status)      | 2042                     |
 | With qualityScore       | 1296                     |
 | With oneLiner           | 1296                     |
 | With noveltyScore       | 1296                     |
@@ -72,16 +76,16 @@ _Note: the PRD asks for 'count after AI quality filter'. No such filter is imple
 
 | Category       | Count |
 | -------------- | ----- |
-| LIVE_MUSIC     | 198   |
-| OTHER          | 53    |
-| ART            | 51    |
+| LIVE_MUSIC     | 203   |
+| ART            | 67    |
+| OTHER          | 55    |
 | ACTIVITY_VENUE | 14    |
-| OUTDOORS       | 9     |
-| SOCIAL         | 9     |
-| FITNESS        | 6     |
-| BARS           | 4     |
+| FOOD           | 11    |
+| OUTDOORS       | 10    |
+| SOCIAL         | 10    |
+| FITNESS        | 8     |
+| BARS           | 6     |
 | SEASONAL       | 4     |
-| FOOD           | 3     |
 | COMEDY         | 3     |
 
 **Future events by source:**
@@ -93,6 +97,8 @@ _Note: the PRD asks for 'count after AI quality filter'. No such filter is imple
 | pulse-curated     | 42    |
 | pikes-peak-center | 35    |
 | do303             | 25    |
+| visit-golden      | 20    |
+| visit-estes-park  | 17    |
 | visit-denver      | 15    |
 | westword          | 8     |
 | 303magazine       | 1     |
@@ -143,13 +149,13 @@ _Note: the PRD asks for 'count after AI quality filter'. No such filter is imple
 
 | Rail     | Today | Weekend | New in Denver (places) | Outside events | Outside places |
 | -------- | ----- | ------- | ---------------------- | -------------- | -------------- |
-| all      | 36    | 38      | 15                     | 263            | 0              |
-| music    | 20    | 22      | 0                      | 177            | 0              |
-| food     | 1     | 1       | 9                      | 0              | 0              |
+| all      | 50    | 61      | 15                     | 300            | 0              |
+| music    | 21    | 25      | 0                      | 182            | 0              |
+| food     | 4     | 6       | 9                      | 10             | 0              |
 | weird    | 3     | 3       | 0                      | 0              | 0              |
 | offbeat  | 0     | 0       | 6                      | 0              | 0              |
-| art      | 6     | 6       | 1                      | 35             | 0              |
-| outdoors | 0     | 0       | 0                      | 3              | 0              |
+| art      | 13    | 16      | 1                      | 51             | 0              |
+| outdoors | 0     | 0       | 0                      | 4              | 0              |
 | comedy   | 1     | 1       | 0                      | 0              | 0              |
 | popup    | 0     | 0       | 0                      | 0              | 0              |
 
@@ -211,4 +217,4 @@ Ordered from highest-leverage to lowest, derived from A–F. Quest to approve be
 
 ---
 
-Report generated at 2026-04-18T16:05:59.084Z against `postgresql://***@ep-dry-haze-ahu9d7li-pooler.c-3.us-east-1.aws.neon.tech/neondb`.
+Report generated at 2026-04-18T17:56:33.849Z against `postgresql://***@ep-dry-haze-ahu9d7li-pooler.c-3.us-east-1.aws.neon.tech/neondb`.

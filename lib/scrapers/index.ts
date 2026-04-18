@@ -9,6 +9,8 @@ import { scrapeRedRocks } from "./red-rocks";
 import { scrapeVisitDenver } from "./visit-denver";
 import { scrapeChautauqua } from "./regional/chautauqua";
 import { scrapePikesPeakCenter } from "./regional/pikes-peak-center";
+import { scrapeVisitEstesPark } from "./regional/visit-estes-park";
+import { scrapeVisitGolden } from "./regional/visit-golden";
 import { enrichEvent } from "@/lib/enrich-event";
 import { deriveRegionalFields } from "@/lib/regional/metadata";
 
@@ -27,6 +29,9 @@ const scrapers: { name: string; fn: Scraper }[] = [
   // Regional — PRD 2 Phase 1
   { name: "chautauqua", fn: scrapeChautauqua },
   { name: "pikes-peak-center", fn: scrapePikesPeakCenter },
+  // Regional — PRD 2 Phase 2 (Simpleview RSS feeds)
+  { name: "visit-estes-park", fn: scrapeVisitEstesPark },
+  { name: "visit-golden", fn: scrapeVisitGolden },
 ];
 
 // Conditionally include API scrapers when credentials are configured

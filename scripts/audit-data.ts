@@ -31,6 +31,8 @@ import { scrapeRedRocks } from "../lib/scrapers/red-rocks";
 import { scrapeVisitDenver } from "../lib/scrapers/visit-denver";
 import { scrapeChautauqua } from "../lib/scrapers/regional/chautauqua";
 import { scrapePikesPeakCenter } from "../lib/scrapers/regional/pikes-peak-center";
+import { scrapeVisitEstesPark } from "../lib/scrapers/regional/visit-estes-park";
+import { scrapeVisitGolden } from "../lib/scrapers/regional/visit-golden";
 import { ScraperResult, Scraper } from "../lib/scrapers/types";
 import { runAllScrapers } from "../lib/scrapers/index";
 
@@ -168,6 +170,9 @@ async function runSectionA(): Promise<ScraperHealth[]> {
     // Regional (PRD 2 Phase 1)
     { name: "chautauqua", fn: scrapeChautauqua },
     { name: "pikes-peak-center", fn: scrapePikesPeakCenter },
+    // Regional (PRD 2 Phase 2)
+    { name: "visit-estes-park", fn: scrapeVisitEstesPark },
+    { name: "visit-golden", fn: scrapeVisitGolden },
     // API-gated
     { name: "ticketmaster", fn: scrapeTicketmaster, requiresEnv: "TICKETMASTER_API_KEY" },
     { name: "eventbrite", fn: scrapeEventbrite, requiresEnv: "EVENTBRITE_TOKEN" },
