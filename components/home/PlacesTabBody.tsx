@@ -44,13 +44,13 @@ export default function PlacesTabBody({ category, data }: Props) {
 
   return (
     <>
-      {/* Section 1: New in Denver */}
+      {/* Section 1: Just added on Pulse */}
       {newInDenver.length === 0 && category !== "all" ? (
-        <CollapsedSection title="New in Denver" category={category} />
+        <CollapsedSection title="Just added on Pulse" category={category} />
       ) : (
         <ScrollSection
-          title="New in Denver"
-          subtitle="Places that opened recently"
+          title="Just added on Pulse"
+          subtitle="Fresh picks added to the guide"
           seeAllHref="/browse/new-in-denver"
         >
           {newInDenver.map((p) => (

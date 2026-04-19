@@ -17,9 +17,16 @@ export function activeEventsWhere(now: Date = new Date()): Prisma.EventWhereInpu
 
 /**
  * Denver nearby-region whitelist for the "Outside the city" section.
- * Events/places whose `neighborhood` field matches one of these are
- * surfaced in that section. Keep this list narrow — the goal is
- * real day-trip destinations within ~2 hours of Denver.
+ *
+ * Legacy path. Before PRD 2 Phase 0 this was the *only* way to classify
+ * non-Denver content. After Phase 0 the canonical source is the
+ * `Event.region` / `Place.region` enum populated from
+ * `lib/regional/drive-times.ts`. This array is retained as a fallback so
+ * rows that predate the backfill still surface correctly.
+ *
+ * When adding a town here, also add it to `DRIVE_TIMES_FROM_DENVER` in
+ * `lib/regional/drive-times.ts` — a module-load assertion in
+ * `lib/regional/metadata.ts` enforces that invariant.
  */
 export const OUTSIDE_DENVER_REGIONS = [
   "Idaho Springs",
@@ -36,12 +43,36 @@ export const OUTSIDE_DENVER_REGIONS = [
   "Aspen",
 ];
 
+const OUTSIDE_DENVER_REGIONS_ENUM: Prisma.EnumEventRegionFilter = {
+  in: ["FRONT_RANGE", "MOUNTAIN_GATEWAY", "MOUNTAIN_DEST"],
+};
+
 export function outsideDenverWhere(): Prisma.EventWhereInput {
-  return { neighborhood: { in: OUTSIDE_DENVER_REGIONS } };
+  return {
+    OR: [
+      { region: OUTSIDE_DENVER_REGIONS_ENUM },
+      {
+        AND: [
+          { region: "DENVER_METRO" },
+          { neighborhood: { in: OUTSIDE_DENVER_REGIONS } },
+        ],
+      },
+    ],
+  };
 }
 
 export function outsideDenverPlaceWhere(): Prisma.PlaceWhereInput {
-  return { neighborhood: { in: OUTSIDE_DENVER_REGIONS } };
+  return {
+    OR: [
+      { region: OUTSIDE_DENVER_REGIONS_ENUM },
+      {
+        AND: [
+          { region: "DENVER_METRO" },
+          { neighborhood: { in: OUTSIDE_DENVER_REGIONS } },
+        ],
+      },
+    ],
+  };
 }
 
 /**
