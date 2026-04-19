@@ -160,15 +160,29 @@ export async function runAllScrapers(): Promise<{
   const startTime = Date.now();
   const allResults: ScraperResult[] = [];
 
+    // PRD 2 Phase 6 — per-source run metadata. We record one ScraperRun row
+  // per scraper after all upserts + enrichment have finished (keyed by
+  // source, not by event). Duration captures scrape-only time (not the
+  // orchestrator's upsert phase, which is shared).
+  const perSourceMeta = new Map<string, { durationMs: number; rawCount: number; errors: string[] }>();
+
   for (const scraper of scrapers) {
+    const perSourceStart = Date.now();
     try {
       const result = await runWithTimeout(scraper.name, scraper.fn);
       allResults.push(result);
+      perSourceMeta.set(scraper.name, {
+        durationMs: Date.now() - perSourceStart,
+        rawCount: result.events.length,
+        errors: result.errors,
+      });
     } catch (error) {
-      allResults.push({
-        source: scraper.name,
-        events: [],
-        errors: [error instanceof Error ? error.message : "Unknown error"],
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      allResults.push({ source: scraper.name, events: [], errors: [msg] });
+      perSourceMeta.set(scraper.name, {
+        durationMs: Date.now() - perSourceStart,
+        rawCount: 0,
+        errors: [msg],
       });
     }
   }
@@ -332,6 +346,40 @@ export async function runAllScrapers(): Promise<{
         // Don't let enrichment failures break the scraper
       }
     }
+  }
+
+  // PRD 2 Phase 6 — persist one ScraperRun row per source. Per-source
+  // insert/update/enriched/dropped counts are approximated proportionally
+  // from the totals; precise attribution would require per-source upsert
+  // tracking which isn't worth the extra DB calls. Wrapped in try/catch so
+  // a logging failure never breaks the scrape.
+  try {
+    const rowsBySource = new Map<string, number>();
+    for (const r of allResults) {
+      rowsBySource.set(r.source, r.events.length);
+    }
+    const sumRaw = Array.from(rowsBySource.values()).reduce((s, n) => s + n, 0) || 1;
+
+    for (const [source, meta] of perSourceMeta.entries()) {
+      const rawCount = meta.rawCount;
+      const weight = rawCount / sumRaw;
+      await prisma.scraperRun.create({
+        data: {
+          source,
+          durationMs: meta.durationMs,
+          rawCount,
+          insertedCount: Math.round(inserted * weight),
+          updatedCount: Math.round(updated * weight),
+          enrichedCount: Math.round(enriched * weight),
+          droppedCount: Math.round(dropped * weight),
+          errorCount: meta.errors.length,
+          errors: meta.errors.slice(0, 5),
+          succeeded: meta.errors.length === 0 || rawCount > 0,
+        },
+      });
+    }
+  } catch (logErr) {
+    console.error("[runAllScrapers] failed to write ScraperRun:", logErr);
   }
 
   return { total: deduplicated.length, inserted, updated, enriched, dropped, errors: allErrors };

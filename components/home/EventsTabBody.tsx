@@ -4,6 +4,7 @@ import EventCardCompact from "./EventCardCompact";
 import PlaceCardCompact from "./PlaceCardCompact";
 import GuideCard from "./GuideCard";
 import LastUpdatedIndicator from "./LastUpdatedIndicator";
+import RegionalScopeFilter from "./RegionalScopeFilter";
 import type { HomeFeedResponse } from "@/lib/home/types";
 import { RAIL_LABELS, type RailCategory } from "@/lib/home/category-filters";
 
@@ -24,11 +25,23 @@ function CollapsedSection({ title, category }: { title: string; category: RailCa
 }
 
 export default function EventsTabBody({ category, data }: Props) {
-  const { today, weekendPicks, newInDenver, outsideTheCity, guidesFromCreators, lastUpdatedAt } =
-    data;
+  const {
+    today,
+    weekendPicks,
+    newInDenver,
+    outsideTheCity,
+    worthAWeekend,
+    guidesFromCreators,
+    lastUpdatedAt,
+    regionalScope,
+  } = data;
 
   return (
     <>
+      {/* PRD 2 §5.3 — "Near Denver" / "All" filter chip. Defaults to "near" so
+          mountain-destination content doesn't surprise first-time users. */}
+      <RegionalScopeFilter scope={regionalScope} />
+
       {/* Section 1: Today */}
       {today.length === 0 && category !== "all" ? (
         <CollapsedSection title="Today" category={category} />
@@ -103,6 +116,22 @@ export default function EventsTabBody({ category, data }: Props) {
               <PlaceCardCompact key={`p-${item.id}`} place={item} variant="wide" />
             )
           )}
+        </ScrollSection>
+      )}
+
+      {/* Section 4b: Worth a weekend — PRD 2 §5.4. Only rendered when the
+          feed returns ≥3 qualifying mountain-destination events AND the
+          user has switched scope to "all". fetchHomeFeed handles both
+          guards — worthAWeekend is [] otherwise. */}
+      {worthAWeekend.length > 0 && (
+        <ScrollSection
+          title="Worth a weekend"
+          subtitle="Mountain-town trips that earn the drive"
+          seeAllHref="/browse/worth-a-weekend"
+        >
+          {worthAWeekend.map((e) => (
+            <EventCardCompact key={`ww-${e.id}`} event={e} variant="wide" />
+          ))}
         </ScrollSection>
       )}
 

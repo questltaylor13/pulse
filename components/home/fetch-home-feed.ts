@@ -10,7 +10,10 @@ import {
   endOfTodayLocal,
   outsideDenverPlaceWhere,
   outsideDenverWhere,
+  regionalScopeWhere,
+  regionalScopePlaceWhere,
   upcomingWeekendRange,
+  type RegionalScope,
 } from "@/lib/queries/events";
 import { sortByEditorialRank } from "@/lib/ranking";
 import { SEED_GUIDES } from "@/lib/home/seed-guides";
@@ -324,18 +327,29 @@ export async function fetchGuidesFeed(
   };
 }
 
-export async function fetchHomeFeed(cat: RailCategory): Promise<HomeFeedResponse> {
+export async function fetchHomeFeed(
+  cat: RailCategory,
+  scope: RegionalScope = "near"
+): Promise<HomeFeedResponse> {
   const now = new Date();
   const eodToday = endOfTodayLocal(now);
   const { start: weekendStart, end: weekendEnd } = upcomingWeekendRange(now);
+  const eightWeeksOut = new Date(now.getTime() + 56 * 24 * 60 * 60 * 1000);
 
   const eventCat = eventWhereForCategory(cat);
   const placeCat = placeWhereForCategory(cat);
+  const scopeEventFilter = regionalScopeWhere(scope);
+  const scopePlaceFilter = regionalScopePlaceWhere(scope);
 
-  const [today, weekend, newPlaces, outsideEvents, outsidePlaces] = await Promise.all([
+  const [today, weekend, newPlaces, outsideEvents, outsidePlaces, worthAWeekend] = await Promise.all([
     prisma.event.findMany({
       where: {
-        AND: [activeEventsWhere(now), eventCat, { startTime: { gte: now, lte: eodToday } }],
+        AND: [
+          activeEventsWhere(now),
+          eventCat,
+          scopeEventFilter,
+          { startTime: { gte: now, lte: eodToday } },
+        ],
       },
       select: EVENT_SELECT,
       orderBy: { startTime: "asc" },
@@ -346,6 +360,7 @@ export async function fetchHomeFeed(cat: RailCategory): Promise<HomeFeedResponse
         AND: [
           activeEventsWhere(now),
           eventCat,
+          scopeEventFilter,
           { startTime: { gte: weekendStart, lte: weekendEnd } },
         ],
       },
@@ -357,6 +372,7 @@ export async function fetchHomeFeed(cat: RailCategory): Promise<HomeFeedResponse
       where: {
         AND: [
           placeCat,
+          scopePlaceFilter,
           { openingStatus: "OPEN" },
           { OR: [{ isNew: true }, { isFeatured: true }] },
         ],
@@ -365,19 +381,41 @@ export async function fetchHomeFeed(cat: RailCategory): Promise<HomeFeedResponse
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       take: 10,
     }),
+    // "Outside the city": Front Range + Mountain Gateway (day trips), sorted
+    // by worthTheDriveScore when available, else startTime.
     prisma.event.findMany({
       where: {
-        AND: [activeEventsWhere(now), eventCat, outsideDenverWhere()],
+        AND: [activeEventsWhere(now), eventCat, outsideDenverWhere(), { isDayTrip: true }],
       },
       select: EVENT_SELECT,
-      orderBy: { startTime: "asc" },
+      orderBy: [{ worthTheDriveScore: { sort: "desc", nulls: "last" } }, { startTime: "asc" }],
       take: 6,
     }),
     prisma.place.findMany({
-      where: { AND: [placeCat, outsideDenverPlaceWhere()] },
+      where: { AND: [placeCat, outsideDenverPlaceWhere(), { isDayTrip: true }] },
       select: PLACE_SELECT,
       orderBy: { updatedAt: "desc" },
       take: 6,
+    }),
+    // PRD 2 §5.4: "Worth a weekend" — Mountain Destination events only,
+    // high worth-the-drive scores, upcoming 8 weeks. Caller filters below 3.
+    // When scope="near" this always returns [] since Mountain Destinations
+    // are excluded; that's intentional — the section only appears when the
+    // user has switched to "all".
+    prisma.event.findMany({
+      where: {
+        AND: [
+          activeEventsWhere(now),
+          eventCat,
+          scopeEventFilter,
+          { region: "MOUNTAIN_DEST" },
+          { startTime: { gte: now, lte: eightWeeksOut } },
+          { OR: [{ worthTheDriveScore: { gte: 8 } }, { worthTheDriveScore: null }] },
+        ],
+      },
+      select: EVENT_SELECT,
+      orderBy: [{ worthTheDriveScore: { sort: "desc", nulls: "last" } }, { startTime: "asc" }],
+      take: 10,
     }),
   ]);
 
@@ -391,12 +429,18 @@ export async function fetchHomeFeed(cat: RailCategory): Promise<HomeFeedResponse
     ...outsidePlaces.map((p) => ({ kind: "place" as const, ...toPlaceCompact(p) })),
   ].slice(0, 10);
 
+  // PRD 2 §5.4: hide Worth-a-weekend when <3 high-signal events.
+  const worthAWeekendOut =
+    worthAWeekend.length >= 3 ? worthAWeekend.map(toEventCompact) : [];
+
   return {
     today: today.map(toEventCompact),
     weekendPicks: weekendRanked.map(toEventCompact),
     newInDenver: newPlaces.map(toPlaceCompact),
     outsideTheCity,
+    worthAWeekend: worthAWeekendOut,
     guidesFromCreators: SEED_GUIDES,
     lastUpdatedAt: now.toISOString(),
+    regionalScope: scope,
   };
 }
