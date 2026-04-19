@@ -33,6 +33,7 @@ import { scrapeChautauqua } from "../lib/scrapers/regional/chautauqua";
 import { scrapePikesPeakCenter } from "../lib/scrapers/regional/pikes-peak-center";
 import { scrapeVisitEstesPark } from "../lib/scrapers/regional/visit-estes-park";
 import { scrapeVisitGolden } from "../lib/scrapers/regional/visit-golden";
+import { scrapeVisitSteamboatChamber } from "../lib/scrapers/regional/visit-steamboat-chamber";
 import { ScraperResult, Scraper } from "../lib/scrapers/types";
 import { runAllScrapers } from "../lib/scrapers/index";
 
@@ -173,6 +174,8 @@ async function runSectionA(): Promise<ScraperHealth[]> {
     // Regional (PRD 2 Phase 2)
     { name: "visit-estes-park", fn: scrapeVisitEstesPark },
     { name: "visit-golden", fn: scrapeVisitGolden },
+    // Regional (PRD 2 Phase 3 — mountain destinations)
+    { name: "visit-steamboat-chamber", fn: scrapeVisitSteamboatChamber },
     // API-gated
     { name: "ticketmaster", fn: scrapeTicketmaster, requiresEnv: "TICKETMASTER_API_KEY" },
     { name: "eventbrite", fn: scrapeEventbrite, requiresEnv: "EVENTBRITE_TOKEN" },

@@ -11,6 +11,7 @@ import { scrapeChautauqua } from "./regional/chautauqua";
 import { scrapePikesPeakCenter } from "./regional/pikes-peak-center";
 import { scrapeVisitEstesPark } from "./regional/visit-estes-park";
 import { scrapeVisitGolden } from "./regional/visit-golden";
+import { scrapeVisitSteamboatChamber } from "./regional/visit-steamboat-chamber";
 import { enrichEvent } from "@/lib/enrich-event";
 import { deriveRegionalFields } from "@/lib/regional/metadata";
 
@@ -32,6 +33,11 @@ const scrapers: { name: string; fn: Scraper }[] = [
   // Regional — PRD 2 Phase 2 (Simpleview RSS feeds)
   { name: "visit-estes-park", fn: scrapeVisitEstesPark },
   { name: "visit-golden", fn: scrapeVisitGolden },
+  // Regional — PRD 2 Phase 3 (Mountain destinations, Simpleview RSS).
+  // Crested Butte / Vail / Aspen / Telluride are handled by the LLM research
+  // pipeline (scripts/research-mountain-events.ts) since their event feeds
+  // are unstructured or bot-protected.
+  { name: "visit-steamboat-chamber", fn: scrapeVisitSteamboatChamber },
 ];
 
 // Conditionally include API scrapers when credentials are configured
