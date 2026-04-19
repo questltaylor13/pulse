@@ -7,7 +7,7 @@ Phase 0 deliverable for `PRD/data-refresh-and-reliability.md`. Read-only audit (
 - Scrapers returning 0 silently: **0** (none)
 - Scrapers erroring: **0** (none)
 - Scrapers not configured: **2** (ticketmaster, eventbrite)
-- Future events in DB: **380**
+- Future events in DB: **379**
 - Places in DB: **460** (localFav=268, isNew=15, opened<45d=0)
 - Events with qualityScore persisted: **1296** (expected 0 — see Section F)
 
@@ -15,15 +15,15 @@ Phase 0 deliverable for `PRD/data-refresh-and-reliability.md`. Read-only audit (
 
 | Source                  | Status         | Raw count | Errors | Duration (ms) | Notes                                                     |
 | ----------------------- | -------------- | --------- | ------ | ------------- | --------------------------------------------------------- |
-| do303                   | ok             | 25        | -      | 851           | e.g. "Wiz Khalifa"                                        |
-| westword                | ok             | 12        | -      | 222           | e.g. "First Round: Los Angeles Kings at Colorado Avalanc" |
-| red-rocks               | ok             | 171       | -      | 2231          | e.g. "Wiz Khalifa"                                        |
-| visit-denver            | ok             | 18        | -      | 461           | e.g. "'Round the Clock"                                   |
-| chautauqua              | ok             | 56        | -      | 2869          | e.g. "Colorado Chautauqua History Tour"                   |
-| pikes-peak-center       | ok             | 34        | -      | 345           | e.g. "Southern Colorado In Harmony Festival"              |
-| visit-estes-park        | ok             | 22        | -      | 1904          | e.g. ""Reflections on Light and color""                   |
-| visit-golden            | ok             | 15        | -      | 275           | e.g. "2026 Members’ Show"                                 |
-| visit-steamboat-chamber | ok             | 10        | -      | 438           | e.g. "Patio Days Sale"                                    |
+| do303                   | ok             | 25        | -      | 800           | e.g. "Wiz Khalifa"                                        |
+| westword                | ok             | 12        | -      | 237           | e.g. "First Round: Los Angeles Kings at Colorado Avalanc" |
+| red-rocks               | ok             | 171       | -      | 2991          | e.g. "Wiz Khalifa"                                        |
+| visit-denver            | ok             | 18        | -      | 408           | e.g. "'Round the Clock"                                   |
+| chautauqua              | ok             | 56        | -      | 2749          | e.g. "Colorado Chautauqua History Tour"                   |
+| pikes-peak-center       | ok             | 34        | -      | 467           | e.g. "Southern Colorado In Harmony Festival"              |
+| visit-estes-park        | ok             | 22        | -      | 358           | e.g. ""Reflections on Light and color""                   |
+| visit-golden            | ok             | 15        | -      | 339           | e.g. "2026 Members’ Show"                                 |
+| visit-steamboat-chamber | ok             | 10        | -      | 101           | e.g. "Patio Days Sale"                                    |
 | ticketmaster            | not configured | 0         | -      | 0             | env var TICKETMASTER_API_KEY not set                      |
 | eventbrite              | not configured | 0         | -      | 0             | env var EVENTBRITE_TOKEN not set                          |
 
@@ -52,20 +52,20 @@ _AUDIT_CONFIRM not set — Section B skipped._ To run: `AUDIT_CONFIRM=1 npm run 
 | Metric                  | Value                    |
 | ----------------------- | ------------------------ |
 | Total events            | 2085                     |
-| Future events (active)  | 380                      |
+| Future events (active)  | 379                      |
 | Archived                | 1701                     |
 | Published (status)      | 2085                     |
 | With qualityScore       | 1296                     |
 | With oneLiner           | 1296                     |
 | With noveltyScore       | 1296                     |
-| Oldest future startTime | 2026-04-19T14:45:00.000Z |
+| Oldest future startTime | 2026-04-19T16:30:00.000Z |
 | Newest future startTime | 2027-06-16T00:00:00.000Z |
 
 **Future events by category:**
 
 | Category       | Count |
 | -------------- | ----- |
-| LIVE_MUSIC     | 201   |
+| LIVE_MUSIC     | 200   |
 | ART            | 61    |
 | OTHER          | 52    |
 | OUTDOORS       | 15    |
@@ -85,7 +85,7 @@ _AUDIT_CONFIRM not set — Section B skipped._ To run: `AUDIT_CONFIRM=1 npm run 
 | chautauqua        | 56    |
 | pulse-curated     | 41    |
 | pikes-peak-center | 34    |
-| do303             | 23    |
+| do303             | 22    |
 | visit-estes-park  | 13    |
 | llm-research-mtn  | 12    |
 | visit-denver      | 11    |
@@ -139,8 +139,8 @@ _AUDIT_CONFIRM not set — Section B skipped._ To run: `AUDIT_CONFIRM=1 npm run 
 
 | Rail     | Today | Weekend | New in Denver (places) | Outside events | Outside places |
 | -------- | ----- | ------- | ---------------------- | -------------- | -------------- |
-| all      | 34    | 34      | 15                     | 296            | 0              |
-| music    | 21    | 21      | 0                      | 180            | 0              |
+| all      | 33    | 33      | 15                     | 296            | 0              |
+| music    | 20    | 20      | 0                      | 180            | 0              |
 | food     | 2     | 2       | 9                      | 9              | 0              |
 | weird    | 0     | 0       | 0                      | 0              | 0              |
 | offbeat  | 0     | 0       | 6                      | 0              | 0              |
@@ -207,4 +207,4 @@ Ordered from highest-leverage to lowest, derived from A–F. Quest to approve be
 
 ---
 
-Report generated at 2026-04-19T14:19:07.550Z against `postgresql://***@ep-dry-haze-ahu9d7li-pooler.c-3.us-east-1.aws.neon.tech/neondb`.
+Report generated at 2026-04-19T14:51:30.477Z against `postgresql://***@ep-dry-haze-ahu9d7li-pooler.c-3.us-east-1.aws.neon.tech/neondb`.
