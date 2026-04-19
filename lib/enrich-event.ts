@@ -49,6 +49,8 @@ export interface EventEnrichment {
   category: string | null;
   qualityScore: number | null;
   noveltyScore: number | null;
+  // PRD 2 Phase 4: 1–10 score for regional events only. Null for DENVER_METRO.
+  worthTheDriveScore: number | null;
   tags: string[];
   vibeTags: string[];
   companionTags: string[];
@@ -65,6 +67,11 @@ interface EventInput {
   tags: string[];
   priceRange: string;
   neighborhood?: string | null;
+  // PRD 2 Phase 4 — pass regional context so the model can rate
+  // worth-the-drive and lean into travel-framed oneLiners.
+  townName?: string | null;
+  driveTimeFromDenver?: number | null;
+  isRegional?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +79,20 @@ interface EventInput {
 // ---------------------------------------------------------------------------
 
 function buildPrompt(event: EventInput): string {
+  const regionalBlock = event.isRegional
+    ? `
+
+REGIONAL CONTEXT:
+This event is NOT in Denver — it's in ${event.townName ?? "a nearby town"}, approximately ${event.driveTimeFromDenver ?? "unknown"} minutes from downtown Denver each way. The user would need to drive to get there. Rate carefully:
+- "worthTheDriveScore" (1-10): How compelling is this for someone in Denver who would drive ${event.driveTimeFromDenver ?? "out"} minutes each way? Consider uniqueness (is it something Denver doesn't have?), scale (major festival vs. small meetup), and time-investment payoff. 1 = "hard pass, too far for what this is." 10 = "absolutely worth the drive, don't miss it."
+- For "oneLiner": lean into the travel framing ONLY if worthTheDriveScore >= 7. Example: "Fort Collins art festival that's worth the I-25 drive" or "The Aspen weekend that justifies the traffic." Otherwise keep the hook neutral.`
+    : "";
+
+  const regionalJsonFields = event.isRegional
+    ? `,
+  "worthTheDriveScore": 6`
+    : "";
+
   return `You are a Denver local helping tag events for a social discovery app called Pulse.
 
 Based on the following event, provide enrichment data. Pick ONLY tags from the provided lists.
@@ -83,7 +104,7 @@ Event:
 - Category: ${event.category}
 - Existing Tags: ${event.tags.join(", ") || "(none)"}
 - Price: ${event.priceRange}
-- Neighborhood: ${event.neighborhood || "Denver"}
+- Neighborhood: ${event.neighborhood || "Denver"}${regionalBlock}
 
 IMPORTANT CATEGORY RULES:
 - Bars, cocktail lounges, speakeasies, breweries, taprooms, pubs, wine bars, beer gardens, and any venue where drinking is the PRIMARY activity should ALWAYS be categorized as BARS, never as ACTIVITY_VENUE or OTHER.
@@ -101,7 +122,7 @@ Provide a JSON response with:
 7. "companionTags": 2-4 tags from: ${COMPANION_TAGS.join(", ")}
 8. "isDogFriendly": boolean - true if dogs are likely welcome
 9. "isDrinkingOptional": boolean - true if the event works fine without drinking
-10. "isAlcoholFree": boolean - true if no alcohol is involved
+10. "isAlcoholFree": boolean - true if no alcohol is involved${event.isRegional ? `\n11. "worthTheDriveScore": 1-10 per the REGIONAL CONTEXT rules above.` : ""}
 
 Respond ONLY with valid JSON:
 {
@@ -114,7 +135,7 @@ Respond ONLY with valid JSON:
   "companionTags": [],
   "isDogFriendly": false,
   "isDrinkingOptional": false,
-  "isAlcoholFree": false
+  "isAlcoholFree": false${regionalJsonFields}
 }`;
 }
 
@@ -172,6 +193,10 @@ export async function enrichEvent(
       category: typeof raw.category === "string" ? raw.category : null,
       qualityScore: typeof raw.qualityScore === "number" ? Math.min(10, Math.max(1, Math.round(raw.qualityScore))) : null,
       noveltyScore: typeof raw.noveltyScore === "number" ? Math.min(10, Math.max(1, Math.round(raw.noveltyScore))) : null,
+      worthTheDriveScore:
+        event.isRegional && typeof raw.worthTheDriveScore === "number"
+          ? Math.min(10, Math.max(1, Math.round(raw.worthTheDriveScore)))
+          : null,
       tags: Array.from(allTags),
       vibeTags,
       companionTags,
