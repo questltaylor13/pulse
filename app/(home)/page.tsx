@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 interface PageProps {
-  searchParams: Promise<{ tab?: string; cat?: string; occasion?: string }>;
+  searchParams: Promise<{ tab?: string; cat?: string; occasion?: string; scope?: string }>;
 }
 
 export default async function HomePage({ searchParams }: PageProps) {
@@ -39,11 +39,13 @@ export default async function HomePage({ searchParams }: PageProps) {
       : isRailCategory(sp.cat) ? sp.cat : "all";
   const occasion: string =
     tab === "guides" && isOccasionTag(sp.occasion) ? sp.occasion : "all";
+  // PRD 2 §5.3 — "Near Denver" default ON. Only "all" overrides.
+  const scope: "near" | "all" = sp.scope === "all" ? "all" : "near";
 
   return (
     <div className="relative flex min-h-screen flex-col bg-surface pb-[72px] md:pb-0">
       <Suspense fallback={<EventsTabSkeleton />}>
-        <HomeBody tab={tab} category={category} occasion={occasion} />
+        <HomeBody tab={tab} category={category} occasion={occasion} scope={scope} />
       </Suspense>
       <BottomNav />
       <NoticeToast />
@@ -56,14 +58,16 @@ async function HomeBody({
   tab,
   category,
   occasion,
+  scope,
 }: {
   tab: HomeTab;
   category: RailCategory | PlacesRailCategory;
   occasion: string;
+  scope: "near" | "all";
 }) {
   const eventsData: HomeFeedResponse | null =
     tab === "events"
-      ? await fetchHomeFeed(category as RailCategory).catch((err) => {
+      ? await fetchHomeFeed(category as RailCategory, scope).catch((err) => {
           console.error("[home] fetchHomeFeed failed:", err);
           return null;
         })

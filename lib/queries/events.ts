@@ -47,6 +47,32 @@ const OUTSIDE_DENVER_REGIONS_ENUM: Prisma.EnumEventRegionFilter = {
   in: ["FRONT_RANGE", "MOUNTAIN_GATEWAY", "MOUNTAIN_DEST"],
 };
 
+/**
+ * PRD 2 §5.3 — filter-chip scope.
+ *   "near" (default, per PRD Open Question #1 answered ON) — Denver metro
+ *          + Front Range + Mountain Gateway. Excludes weekend-trip mountain
+ *          destinations so the main feed stays impulse-friendly.
+ *   "all"  — everything including Mountain Destinations. For when the user
+ *          wants to explore further.
+ */
+export type RegionalScope = "near" | "all";
+
+export function regionalScopeWhere(scope: RegionalScope): Prisma.EventWhereInput {
+  if (scope === "all") return {};
+  return {
+    region: { in: ["DENVER_METRO", "FRONT_RANGE", "MOUNTAIN_GATEWAY"] },
+  };
+}
+
+export function regionalScopePlaceWhere(
+  scope: RegionalScope
+): Prisma.PlaceWhereInput {
+  if (scope === "all") return {};
+  return {
+    region: { in: ["DENVER_METRO", "FRONT_RANGE", "MOUNTAIN_GATEWAY"] },
+  };
+}
+
 export function outsideDenverWhere(): Prisma.EventWhereInput {
   return {
     OR: [
