@@ -111,6 +111,12 @@ export interface HomeFeedResponse {
     | ({ kind: "event" } & EventCompact)
     | ({ kind: "place" } & PlaceCompact)
   >;
+  // PRD 2 §5.4: mountain-destination events scored >= 8 on worth-the-drive.
+  // Section hides when count < 3.
+  worthAWeekend: EventCompact[];
   guidesFromCreators: SeedGuide[];
   lastUpdatedAt: string; // ISO
+  // PRD 2 §5.3: echoed back so the UI can render the filter chip in its
+  // current state without re-parsing URL params.
+  regionalScope: "near" | "all";
 }

@@ -206,13 +206,18 @@ export async function GET(req: NextRequest) {
     ...outsidePlaces.map((p) => ({ kind: "place" as const, ...toPlaceCompact(p) })),
   ].slice(0, 10);
 
+  // Simpler API surface — Worth-a-weekend / scope filter lives in the
+  // server component path; this unauthenticated JSON endpoint keeps the
+  // pre-Phase-5 shape for callers that already consume it.
   const body: HomeFeedResponse = {
     today: today.map(toEventCompact),
     weekendPicks: weekendRanked.map(toEventCompact),
     newInDenver: newPlaces.map(toPlaceCompact),
     outsideTheCity,
+    worthAWeekend: [],
     guidesFromCreators: SEED_GUIDES,
     lastUpdatedAt: now.toISOString(),
+    regionalScope: "near",
   };
 
   return NextResponse.json(body, {

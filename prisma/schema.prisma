@@ -93,6 +93,28 @@ enum EventRegion {
   MOUNTAIN_DEST // Breckenridge, Vail, Aspen, Steamboat, Crested Butte, Telluride
 }
 
+// PRD 2 Phase 6 — one row per source per scrape run. Feeds the admin
+// coverage-health view (/admin/scrapers) and powers stale-source alerts.
+// 30-day retention enforced by a daily cleanup cron.
+model ScraperRun {
+  id            String      @id @default(cuid())
+  source        String
+  region        EventRegion @default(DENVER_METRO)
+  startedAt     DateTime    @default(now())
+  durationMs    Int
+  rawCount      Int         @default(0)
+  insertedCount Int         @default(0)
+  updatedCount  Int         @default(0)
+  enrichedCount Int         @default(0)
+  droppedCount  Int         @default(0)
+  errorCount    Int         @default(0)
+  errors        String[]    @default([])
+  succeeded     Boolean     @default(true)
+
+  @@index([source, startedAt])
+  @@index([startedAt])
+}
+
 enum OpeningStatus {
   OPEN // Currently operating
   COMING_SOON // Announced, not open yet
