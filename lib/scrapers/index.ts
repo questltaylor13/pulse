@@ -11,6 +11,7 @@ import { scrapeChautauqua } from "./regional/chautauqua";
 import { scrapePikesPeakCenter } from "./regional/pikes-peak-center";
 import { scrapeVisitEstesPark } from "./regional/visit-estes-park";
 import { scrapeVisitGolden } from "./regional/visit-golden";
+import { scrapeVisitSteamboatChamber } from "./regional/visit-steamboat-chamber";
 import { enrichEvent } from "@/lib/enrich-event";
 import { deriveRegionalFields } from "@/lib/regional/metadata";
 
@@ -32,6 +33,11 @@ const scrapers: { name: string; fn: Scraper }[] = [
   // Regional — PRD 2 Phase 2 (Simpleview RSS feeds)
   { name: "visit-estes-park", fn: scrapeVisitEstesPark },
   { name: "visit-golden", fn: scrapeVisitGolden },
+  // Regional — PRD 2 Phase 3 (Mountain destinations, Simpleview RSS).
+  // Crested Butte / Vail / Aspen / Telluride are handled by the LLM research
+  // pipeline (scripts/research-mountain-events.ts) since their event feeds
+  // are unstructured or bot-protected.
+  { name: "visit-steamboat-chamber", fn: scrapeVisitSteamboatChamber },
 ];
 
 // Conditionally include API scrapers when credentials are configured
@@ -101,14 +107,23 @@ function deduplicateEvents(events: ScrapedEvent[]): ScrapedEvent[] {
   return Array.from(seen.values());
 }
 
-// Budget (in seconds) reserved for inline enrichment after scraping
+// Budget (in seconds) reserved for inline enrichment after scraping.
+// PRD 2 Phase 4 tuning: raised the function-time assumption from 60s to
+// 270s so big insert runs (like the Phase 1/2 91- and 37-event waves)
+// still get their scores persisted inline. Match the scrape-and-revalidate
+// cron's maxDuration=300 with a safety margin.
 const ENRICHMENT_TIME_BUDGET = 15;
+const FUNCTION_TIME_LIMIT = 270;
 
 // Events below this quality score get archived at enrichment time (they
 // remain in the DB for analytics, but the feed's `activeEventsWhere()`
 // filter excludes isArchived=true). Tunable without redeploy. PRD 1 §1.3
 // specifies 5 as the default.
 const QUALITY_CUTOFF = Number(process.env.PULSE_QUALITY_CUTOFF ?? 5);
+
+// Higher cutoff specifically for non-Denver events. Regional events ask more
+// of the user (drive time), so the bar is higher per PRD 2 §4.2. Default 6.
+const REGIONAL_CUTOFF = Number(process.env.PULSE_REGIONAL_CUTOFF ?? 6);
 
 const VALID_CATEGORIES: ReadonlySet<Category> = new Set<Category>([
   "ART",
@@ -249,15 +264,16 @@ export async function runAllScrapers(): Promise<{
   const elapsedSeconds = (Date.now() - startTime) / 1000;
   const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
 
-  if (hasOpenAIKey && newEventIds.length > 0 && elapsedSeconds < 60 - ENRICHMENT_TIME_BUDGET) {
+  if (hasOpenAIKey && newEventIds.length > 0 && elapsedSeconds < FUNCTION_TIME_LIMIT - ENRICHMENT_TIME_BUDGET) {
     const newEvents = await prisma.event.findMany({
       where: { id: { in: newEventIds } },
     });
 
     for (const ev of newEvents) {
       // Check time budget before each call (~1.5s per call)
-      if ((Date.now() - startTime) / 1000 > 60 - 5) break;
+      if ((Date.now() - startTime) / 1000 > FUNCTION_TIME_LIMIT - 5) break;
 
+      const isRegional = ev.region !== "DENVER_METRO";
       try {
         const result = await enrichEvent({
           title: ev.title,
@@ -267,20 +283,33 @@ export async function runAllScrapers(): Promise<{
           tags: ev.tags,
           priceRange: ev.priceRange,
           neighborhood: ev.neighborhood,
+          townName: ev.townName,
+          driveTimeFromDenver: ev.driveTimeFromDenver,
+          isRegional,
         });
 
         if (!result) continue;
 
         const mergedTags = Array.from(new Set([...ev.tags, ...result.tags]));
         const overrideCategory = coerceCategory(result.category);
-        const belowCutoff =
+
+        // PRD 1 §1.3 quality gate — applies to every event.
+        const belowQualityCutoff =
           typeof result.qualityScore === "number" &&
           result.qualityScore < QUALITY_CUTOFF;
+
+        // PRD 2 §4.2 worth-the-drive gate — applies only to regional events.
+        // Bar is higher because the user has to drive there.
+        const belowRegionalCutoff =
+          isRegional &&
+          typeof result.worthTheDriveScore === "number" &&
+          result.worthTheDriveScore < REGIONAL_CUTOFF;
+
+        const shouldArchive = belowQualityCutoff || belowRegionalCutoff;
 
         await prisma.event.update({
           where: { id: ev.id },
           data: {
-            // Pre-existing persisted fields
             description: result.description || ev.description,
             tags: mergedTags,
             vibeTags: result.vibeTags,
@@ -288,20 +317,17 @@ export async function runAllScrapers(): Promise<{
             isDogFriendly: result.isDogFriendly,
             isDrinkingOptional: result.isDrinkingOptional,
             isAlcoholFree: result.isAlcoholFree,
-            // PRD 1 §F #5 — persist the scores the model returns so the
-            // quality filter and the "weird"/"offbeat" rails can read them.
             qualityScore: result.qualityScore ?? undefined,
             noveltyScore: result.noveltyScore ?? undefined,
             oneLiner: result.oneLiner ?? undefined,
-            // Only override category if the model returned a known enum value.
+            // PRD 2 §4.1: persist worth-the-drive for regional events only.
+            worthTheDriveScore: result.worthTheDriveScore ?? undefined,
             ...(overrideCategory ? { category: overrideCategory } : {}),
-            // PRD 1 §1.3 — gate low-quality events out of the feed. We archive
-            // instead of deleting so analytics can inspect what got dropped.
-            ...(belowCutoff ? { isArchived: true } : {}),
+            ...(shouldArchive ? { isArchived: true } : {}),
           },
         });
         enriched++;
-        if (belowCutoff) dropped++;
+        if (shouldArchive) dropped++;
       } catch {
         // Don't let enrichment failures break the scraper
       }
