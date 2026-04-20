@@ -33,6 +33,9 @@ export default function NavLinks() {
       <Link href="/?tab=places" className={linkClass("/?tab=places")}>
         Places
       </Link>
+      <Link href="/discoveries" className={linkClass("/discoveries")}>
+        Hidden Gems
+      </Link>
       <Link href="/lists" className={linkClass("/lists")}>
         Saved
       </Link>

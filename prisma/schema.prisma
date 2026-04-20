@@ -1273,6 +1273,128 @@ model Place {
   @@index([region])
 }
 
+// Hidden Gems Engine (PRD 3) — curated Discoveries that don't fit Event or Place taxonomy
+model Discovery {
+  id          String           @id @default(cuid())
+  title       String
+  description String           @db.Text
+  subtype     DiscoverySubtype
+  category    Category
+
+  // Location (nullable — non-geographic tips like "Colorado stargazing in winter")
+  neighborhood String?
+  townName     String?
+  region       EventRegion @default(DENVER_METRO)
+  latitude     Float?
+  longitude    Float?
+
+  // Timing flavor (no hard dates)
+  seasonHint String?
+
+  // Provenance
+  sourceType    DiscoverySource
+  sourceUrl     String?
+  sourceUpvotes Int?
+  mentionedByN  Int             @default(1)
+
+  // Quality + verification
+  qualityScore Int
+  tags         String[]
+  status       DiscoveryStatus @default(ACTIVE)
+  verifiedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, qualityScore])
+  @@index([category, status])
+  @@index([region, status])
+}
+
+enum DiscoverySubtype {
+  HIDDEN_GEM
+  NICHE_ACTIVITY
+  SEASONAL_TIP
+}
+
+enum DiscoverySource {
+  REDDIT
+  LLM_RESEARCH
+  NICHE_SITE
+  EDITORIAL
+  COMMUNITY
+}
+
+enum DiscoveryStatus {
+  ACTIVE
+  ARCHIVED
+  UNVERIFIED
+  FLAGGED
+}
+
+// PRD 3 Phase 1 — debug log for LLM research runs. One row per (runBatch, queryIndex)
+// so prompts/responses are inspectable and tuneable without re-running the pipeline.
+// Candidate JSON is the structured output the LLM returned; enrichment (Phase 4) reads
+// from these rows downstream.
+model LLMResearchRun {
+  id             String               @id @default(cuid())
+  runBatchId     String // Shared across all queries in a single pipeline invocation
+  queryIndex     Int // 1-indexed position in the research query set
+  queryLabel     String // Human-readable slug e.g. "denver_under_radar"
+  prompt         String               @db.Text
+  model          String // Claude model identifier used
+  rawResponse    String?              @db.Text
+  candidates     Json? // Validated candidate array; null on parse/fetch failure
+  candidateCount Int                  @default(0)
+  webSearches    Int                  @default(0) // server_tool_use.web_search_requests
+  status         LLMResearchRunStatus @default(PENDING)
+  errorMessage   String?              @db.Text
+  durationMs     Int?
+  createdAt      DateTime             @default(now())
+
+  @@index([runBatchId])
+  @@index([status, createdAt])
+  @@index([queryLabel, createdAt])
+}
+
+enum LLMResearchRunStatus {
+  PENDING
+  SUCCESS
+  PARSE_ERROR
+  API_ERROR
+}
+
+// PRD 3 Phase 6 — per-pipeline observability (parallel to ScraperRun from PRD 2).
+// One row per run of a single pipeline; the orchestrator writes one row for each
+// of llm-research, reddit, and niche-sites on every invocation.
+model DiscoveryRun {
+  id                     String             @id @default(cuid())
+  runBatchId             String
+  source                 DiscoverySource
+  status                 DiscoveryRunStatus @default(PENDING)
+  rawCandidateCount      Int                @default(0)
+  rejectedAsEventCount   Int                @default(0)
+  droppedForQualityCount Int                @default(0)
+  unverifiedCount        Int                @default(0)
+  upsertedCount          Int                @default(0)
+  updatedExistingCount   Int                @default(0)
+  errorCount             Int                @default(0)
+  errors                 String[]
+  durationMs             Int?
+  createdAt              DateTime           @default(now())
+
+  @@index([runBatchId])
+  @@index([source, createdAt])
+  @@index([status, createdAt])
+}
+
+enum DiscoveryRunStatus {
+  PENDING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
 // User alerts for new/upcoming places
 model NewPlaceAlert {
   id         String    @id @default(cuid())
