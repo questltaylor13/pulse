@@ -5,7 +5,6 @@ export const RAIL_CATEGORIES = [
   "music",
   "food",
   "weird",
-  "offbeat",
   "art",
   "outdoors",
   "comedy",
@@ -23,16 +22,25 @@ export const RAIL_LABELS: Record<RailCategory, string> = {
   music: "Music",
   food: "Food",
   weird: "Weird",
-  offbeat: "Off-beat",
   art: "Art",
   outdoors: "Outdoors",
   comedy: "Comedy",
   popup: "Pop-ups",
 };
 
-// Synthetic tags we look at for "Weird" and "Off-beat" filters.
-const WEIRD_TAGS = ["weird", "unusual", "unique", "novelty"];
-const OFFBEAT_TAGS = ["off-beat", "offbeat", "hidden-gem", "underground"];
+// "Weird" now absorbs the off-beat bucket — both chips surfaced overlapping
+// content and created a pick-one dilemma. Unified match: synthetic tags,
+// novelty score, editor's-pick signal, and the old off-beat tag list.
+const WEIRD_TAGS = [
+  "weird",
+  "unusual",
+  "unique",
+  "novelty",
+  "off-beat",
+  "offbeat",
+  "hidden-gem",
+  "underground",
+];
 const NOVELTY_WEIRD_THRESHOLD = 7; // Int 1-10 — honors existing schema (NOT 0.75 float)
 
 export function eventWhereForCategory(cat: RailCategory): Prisma.EventWhereInput {
@@ -56,12 +64,6 @@ export function eventWhereForCategory(cat: RailCategory): Prisma.EventWhereInput
         OR: [
           { tags: { hasSome: WEIRD_TAGS } },
           { noveltyScore: { gte: NOVELTY_WEIRD_THRESHOLD } },
-        ],
-      };
-    case "offbeat":
-      return {
-        OR: [
-          { tags: { hasSome: OFFBEAT_TAGS } },
           {
             AND: [
               { isEditorsPick: true },
@@ -90,11 +92,9 @@ export function placeWhereForCategory(cat: RailCategory): Prisma.PlaceWhereInput
     case "popup":
       return { category: "POPUP" };
     case "weird":
-      return { tags: { hasSome: WEIRD_TAGS } };
-    case "offbeat":
       return {
         OR: [
-          { tags: { hasSome: OFFBEAT_TAGS } },
+          { tags: { hasSome: WEIRD_TAGS } },
           { isFeatured: true },
         ],
       };
