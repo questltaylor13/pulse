@@ -1,37 +1,45 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
-import { Category } from "@prisma/client";
-import { CATEGORY_EMOJI, CATEGORY_LABELS, CATEGORY_COLORS } from "@/lib/constants/categories";
-import { CATEGORY_PLACEHOLDER_IMAGE } from "@/lib/constants/placeholder-images";
+import type { Category, DiscoverySubtype, EventRegion } from "@prisma/client";
+import {
+  CATEGORY_EMOJI,
+  CATEGORY_LABELS,
+  CATEGORY_COLORS,
+} from "@/lib/constants/categories";
+
+// PRD 3 Phase 5 — horizontal Hidden Gems rail for cross-surfacing on the
+// Events / Places / Home feeds. Links to /discoveries/[id], not /events.
 
 interface HiddenGem {
   id: string;
   title: string;
   description: string;
-  oneLiner: string | null;
+  subtype: DiscoverySubtype;
   category: Category;
-  venueName: string;
-  address: string;
-  priceRange: string;
-  imageUrl: string | null;
-  noveltyScore: number | null;
-  qualityScore: number | null;
-  isRecurring: boolean;
-  startTime: string;
+  neighborhood: string | null;
+  townName: string | null;
+  region: EventRegion;
+  seasonHint: string | null;
+  qualityScore: number;
   tags: string[];
 }
+
+const SUBTYPE_LABEL: Record<DiscoverySubtype, string> = {
+  HIDDEN_GEM: "Spot",
+  NICHE_ACTIVITY: "Club",
+  SEASONAL_TIP: "Seasonal",
+};
 
 export default function HiddenGemsSection() {
   const [gems, setGems] = useState<HiddenGem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/hidden-gems")
+    fetch("/api/hidden-gems?limit=8")
       .then((res) => res.json())
-      .then((data) => setGems(data.events || []))
+      .then((data) => setGems(data.discoveries ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -42,7 +50,10 @@ export default function HiddenGemsSection() {
         <h2 className="text-lg font-bold text-slate-900">Hidden Gems</h2>
         <div className="flex gap-4 overflow-x-auto pb-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="flex-shrink-0 w-72 h-44 rounded-xl bg-slate-100 animate-pulse" />
+            <div
+              key={i}
+              className="flex-shrink-0 w-72 h-40 rounded-xl bg-slate-100 animate-pulse"
+            />
           ))}
         </div>
       </div>
@@ -53,64 +64,57 @@ export default function HiddenGemsSection() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-end justify-between">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Hidden Gems</h2>
-          <p className="text-sm text-slate-500">Unique experiences you might not know about</p>
+          <p className="text-sm text-slate-500">
+            Curated spots and rituals the guidebooks miss
+          </p>
         </div>
+        <Link
+          href="/discoveries"
+          className="text-sm font-medium text-amber-700 hover:underline"
+        >
+          See all →
+        </Link>
       </div>
 
       <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
         {gems.map((gem) => {
-          const isFree = /free|\$0/i.test(gem.priceRange);
-
+          const locationLine = [gem.neighborhood, gem.townName]
+            .filter(Boolean)
+            .join(" · ");
           return (
             <Link
               key={gem.id}
-              href={`/events/${gem.id}`}
-              className="flex-shrink-0 w-72 rounded-xl border border-slate-200 bg-white overflow-hidden transition hover:shadow-lg hover:border-primary/30 group"
+              href={`/discoveries/${gem.id}`}
+              className="flex-shrink-0 w-72 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-amber-400 hover:shadow-md"
             >
-              {/* Image */}
-              <div className="relative h-32 overflow-hidden">
-                <Image
-                  src={gem.imageUrl || CATEGORY_PLACEHOLDER_IMAGE[gem.category] || CATEGORY_PLACEHOLDER_IMAGE.OTHER}
-                  alt={gem.title}
-                  fill
-                  className="object-cover transition-transform group-hover:scale-105"
-                />
-                {/* Badges overlay */}
-                <div className="absolute top-2 left-2 flex gap-1.5">
-                  {(gem.noveltyScore ?? 0) >= 8 && (
-                    <span className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                      Hidden Gem
-                    </span>
-                  )}
-                  {isFree && (
-                    <span className="bg-emerald-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                      Free
-                    </span>
-                  )}
-                </div>
-                {/* Category pill */}
-                <div className="absolute bottom-2 left-2">
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${CATEGORY_COLORS[gem.category]}`}>
-                    {CATEGORY_EMOJI[gem.category]} {CATEGORY_LABELS[gem.category]}
-                  </span>
-                </div>
+              <div className="flex items-start justify-between gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                  ✦ Hidden Gem
+                </span>
+                <span className="text-[10px] font-medium text-slate-500">
+                  {SUBTYPE_LABEL[gem.subtype]}
+                </span>
               </div>
 
-              {/* Content */}
-              <div className="p-3">
-                <h3 className="font-semibold text-slate-900 text-sm line-clamp-1">{gem.title}</h3>
-                <p className="text-xs text-primary mt-1 line-clamp-2">
-                  {gem.oneLiner || gem.description}
-                </p>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-xs text-slate-500">{gem.venueName}</span>
-                  {gem.priceRange && (
-                    <span className="text-xs text-slate-400">{gem.priceRange}</span>
-                  )}
-                </div>
+              <h3 className="mt-3 font-semibold text-slate-900 text-sm line-clamp-2">
+                {gem.title}
+              </h3>
+              <p className="mt-1 text-xs text-slate-600 line-clamp-3">
+                {gem.description}
+              </p>
+
+              <div className="mt-3 flex items-center gap-2 text-[11px]">
+                <span
+                  className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium ${CATEGORY_COLORS[gem.category] ?? "bg-slate-100 text-slate-700"}`}
+                >
+                  {CATEGORY_EMOJI[gem.category]} {CATEGORY_LABELS[gem.category]}
+                </span>
+                {locationLine && (
+                  <span className="text-slate-500 truncate">{locationLine}</span>
+                )}
               </div>
             </Link>
           );

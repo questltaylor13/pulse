@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// Session lookup reads cookies; route must render per-request, not at build.
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/places/new - Get recently opened places
  * Query params:

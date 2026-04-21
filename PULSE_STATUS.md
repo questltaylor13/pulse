@@ -142,3 +142,84 @@ Top sources (future events): red-rocks 171, chautauqua 56, pulse-curated 41, pik
 - **Audit reports**: `audit-reports/YYYY-MM-DD-data-audit.md`. Regenerate: `TS_NODE_PROJECT=scripts/tsconfig.json npx ts-node -r tsconfig-paths/register scripts/audit-data.ts`. Gate on `AUDIT_CONFIRM=1` to run the write pass.
 - **Drive-time table**: `lib/regional/drive-times.ts` — extend this first when adding a new regional scraper so `deriveRegionalFields()` can tag it.
 - **Probe scripts**: `scripts/probe-regional.ts`, `scripts/probe-red-rocks.ts`, `scripts/probe-visit-denver.ts`.
+
+
+## PRD 3: Hidden Gems Engine (2026-04-20)
+
+Third content type alongside Events and Places. Discoveries are curated local
+content that doesn't fit the dated-event or permanent-place taxonomy: hidden
+spots, rec leagues, seasonal rituals. Refresh is weekly, not daily.
+
+### Schema
+- `Discovery` model + enums `DiscoverySubtype` (HIDDEN_GEM / NICHE_ACTIVITY /
+  SEASONAL_TIP), `DiscoverySource` (REDDIT / LLM_RESEARCH / NICHE_SITE /
+  EDITORIAL / COMMUNITY), `DiscoveryStatus` (ACTIVE / ARCHIVED / UNVERIFIED /
+  FLAGGED). Reuses existing `Category` + `EventRegion` enums.
+- `LLMResearchRun` — per-query debug rows (prompt, raw response, structured
+  candidates, duration). Reused by both LLM research and Reddit extraction.
+- `DiscoveryRun` — per-pipeline observability (rawCount, rejectedAsEvent,
+  droppedForQuality, unverified, upserted, updatedExisting, errors).
+
+### Pipelines (all persist to LLMResearchRun; all feed the orchestrator)
+- **LLM Research** (`lib/discoveries/pipelines/llm-research.ts`) — 6 scoped
+  queries via OpenAI Responses API with `web_search_preview`. Structured JSON
+  output validated with Zod. Model: `gpt-5.4-mini` (env
+  `DISCOVERIES_OPENAI_MODEL`).
+- **Reddit** (`lib/discoveries/pipelines/reddit.ts`) — 12 subreddits
+  (Denver/Boulder/Fort Collins/Colorado Springs/Breckenridge/Vail/Steamboat/
+  CO-wide), public JSON endpoints, 1.1s rate-limit, per-post LLM extraction.
+  No raw Reddit text persisted — licensing posture locked.
+- **Niche Sites** (`lib/discoveries/pipelines/niche-sites.ts`) — 6 curated
+  sites with per-site cheerio extractors, robots.txt compliance, 1.2s delay
+  between sites, no LLM calls.
+
+### Enrichment flow (Phase 4, orchestrator per candidate)
+1. Event-vs-Gem classifier (OpenAI) — DATED_EVENT with confidence > 0.7 rejected
+2. Pulse-voice enrichment (OpenAI) — title/description/category/tags/quality
+3. Quality threshold ≥ 6 (stricter than events' ≥ 5)
+4. Regional metadata via `DRIVE_TIMES_FROM_DENVER`
+5. Google Places verification — no location match → status=UNVERIFIED
+6. Fuzzy dedup — same subtype + normalized-title Levenshtein ≤ 3 + ≤100m geo
+
+### Cron + observability
+- Weekly cron: Sunday 3am UTC → `/api/discoveries/refresh` (vercel.json)
+- Manual endpoints: `/api/discoveries/refresh-llm`, `/api/discoveries/refresh-reddit`,
+  `/api/discoveries/refresh-niche-sites` (all CRON_SECRET auth)
+- CLI: `npm run discoveries:research`, `discoveries:reddit`, `discoveries:niche`,
+  `discoveries:seed` (editorial)
+
+### UI
+- `/discoveries` — Hidden Gems tab with subtype chips (All / Spots / Clubs &
+  Leagues / Seasonal) + scope toggle (Near Me / All of Colorado). Deep-linkable.
+- `/discoveries/[id]` — detail page with per-source attribution
+- `components/HiddenGemsSection.tsx` — horizontal rail for cross-surfacing
+  (consumes `/api/hidden-gems`)
+- `components/DiscoveryCard.tsx` + `components/HiddenGemsFilters.tsx`
+- Desktop nav (`NavLinks.tsx`) adds Hidden Gems link
+
+### Admin
+- `/admin/scrapers` — dashboard: active Discovery count, UNVERIFIED queue size
+  (warns >20), 28-day rejected-as-event total (warns >30), per-pipeline last
+  30 runs with counts + duration + error counts
+- `/admin/discoveries/review` — UNVERIFIED triage with Server Actions:
+  Approve / Reject / inline Edit
+
+### Editorial seed (Phase 0)
+- 13 hand-curated Discoveries in `scripts/seed-discoveries.ts` covering all
+  subtypes and 3 regions. Idempotent (title+EDITORIAL guard). Quality pinned
+  at 9 so editorial always outranks pipeline output at equal quality.
+
+### Pending for first live run
+- `OPENAI_API_KEY` + `GOOGLE_PLACES_API_KEY` + `CRON_SECRET` set in Vercel
+- Smoke test recommended: `npm run discoveries:reddit -- --max=2` first to
+  validate voice/output before burning a full weekly pass
+- First Sunday run will populate `DiscoveryRun` — admin dashboard is blank
+  until then
+- Niche-site selectors are best-guess; zero-candidate sites flag as errors
+  and need per-site tuning after first run
+
+### Known deferred
+- Cross-surfacing of Discoveries into Events/Places tabs (PRD §5.2)
+- Mobile bottom-nav entry for Hidden Gems (kept at 3 items to avoid crowding)
+- Auto-ingest of dated-event rejections into the Event pipeline (PRD open
+  question — for now they just log to DiscoveryRun.rejectedAsEventCount)
