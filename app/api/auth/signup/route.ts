@@ -41,7 +41,10 @@ export async function POST(request: Request) {
 
     const passwordHash = await hash(password, 10);
 
-    // Create user
+    // Create user. PRD 6 Phase 6 — assign rankingVariant at signup via
+    // hash-based bucketing. V1 always returns "control" because no other
+    // variants are defined in lib/ranking/config.ts yet.
+    const { assignVariant } = await import("@/lib/ranking/variants");
     const newUser = await prisma.user.create({
       data: {
         email,
@@ -49,6 +52,15 @@ export async function POST(request: Request) {
         passwordHash,
       },
     });
+    // Variant assignment is a separate update so the hash can use the
+    // assigned userId as input (stable across runs).
+    const variant = assignVariant(newUser.id);
+    if (variant !== "control") {
+      await prisma.user.update({
+        where: { id: newUser.id },
+        data: { rankingVariant: variant },
+      });
+    }
 
     // Create referral record if referrer found
     if (referrerId && referralCode) {
