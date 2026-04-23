@@ -50,7 +50,7 @@
     },
     {
       "path": "/api/ranking/precompute",
-      "schedule": "0 */1 * * *"
+      "schedule": "0 5 * * *"
     },
     {
       "path": "/api/ranking/sanity",
