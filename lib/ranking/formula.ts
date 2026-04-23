@@ -17,6 +17,7 @@
  */
 
 import { RANKING_CONFIG, type RankingConfig } from "./config";
+import { getVariantConfig } from "./variants";
 import type { RankableItem, RankingContext, ScoreReason, VibePair, PriceTier } from "./types";
 import {
   SOCIAL_STYLE_TAGS,
@@ -39,8 +40,11 @@ export interface ScoreResult {
 export function score(
   ctx: RankingContext,
   item: RankableItem,
-  config: RankingConfig = RANKING_CONFIG,
+  configOverride?: RankingConfig,
 ): ScoreResult {
+  // PRD 6 Phase 6 — variant overrides are merged onto the base config
+  // based on ctx.variant. Unknown variants fall back to control silently.
+  const config = configOverride ?? getVariantConfig(ctx.variant);
   const reasons: ScoreReason[] = [];
 
   // If the user has no profile at all, we fall back to quality-only.
