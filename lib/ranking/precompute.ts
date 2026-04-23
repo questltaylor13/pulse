@@ -14,6 +14,7 @@ import { buildCandidatePool } from "./candidate-pool";
 import { score } from "./formula";
 import { writeCache } from "./cache";
 import { RANKING_CONFIG } from "./config";
+import { injectSerendipity } from "./serendipity";
 import type { RankedItem } from "./types";
 
 export interface PrecomputeResult {
@@ -79,10 +80,11 @@ export async function precomputeUser(
       .sort((a, b) => b.score - a.score)
       .slice(0, topN);
 
-    // Phase 3 will inject serendipity here — stub for now.
-    const serendipityCount = 0;
+    // Phase 3 — inject serendipity slots into the sorted list.
+    const withSerendipity = injectSerendipity(scored, pool, ctx);
+    const serendipityCount = withSerendipity.filter((r) => r.isSerendipity).length;
 
-    await writeCache(userId, scored, {
+    await writeCache(userId, withSerendipity, {
       profileVersion: ctx.profile?.version ?? 0,
       feedbackCount: ctx.totalFeedbackCount,
     });
@@ -91,7 +93,7 @@ export async function precomputeUser(
       userId,
       variant: ctx.variant,
       poolSize: pool.length,
-      rankedCount: scored.length,
+      rankedCount: withSerendipity.length,
       serendipityCount,
       durationMs: Date.now() - startedAt,
       skipped: false,
