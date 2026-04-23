@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { similarEvents } from "@/lib/detail/similar";
 import EventDetailPage from "@/components/detail/EventDetailPage";
+import DetailFeedback from "@/components/feedback/DetailFeedback";
+import { getFeedbackMaps } from "@/lib/feedback/server";
 
 interface PageProps {
   params: { eventId: string };
@@ -43,8 +47,26 @@ export default async function EventPage({ params }: PageProps) {
 
   const similar = await similarEvents(eventId, 3);
 
+  // PRD 5 Phase 3 — fetch user's current feedback on this event so the
+  // detail page can render the pill + ⋯ menu with the correct initial state.
+  const session = await getServerSession(authOptions);
+  const { byEventId } = await getFeedbackMaps({
+    userId: session?.user?.id,
+    eventIds: [eventId],
+  });
+  const feedbackStatus = byEventId.get(eventId) ?? null;
+
   return (
-    <EventDetailPage
+    <>
+      <div className="mx-auto flex max-w-3xl justify-end px-5 pt-3">
+        <DetailFeedback
+          ref_={{ eventId }}
+          itemTitle={event.title}
+          shareUrl={`/events/${eventId}`}
+          initialStatus={feedbackStatus}
+        />
+      </div>
+      <EventDetailPage
       event={{
         id: event.id,
         title: event.title,
@@ -66,5 +88,6 @@ export default async function EventPage({ params }: PageProps) {
       }}
       similarEvents={similar}
     />
+    </>
   );
 }

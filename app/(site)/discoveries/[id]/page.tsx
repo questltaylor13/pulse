@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   CATEGORY_EMOJI,
   CATEGORY_LABELS,
   CATEGORY_COLORS,
 } from "@/lib/constants/categories";
+import DetailFeedback from "@/components/feedback/DetailFeedback";
+import { getFeedbackMaps } from "@/lib/feedback/server";
 import type { DiscoverySource, DiscoverySubtype } from "@prisma/client";
 
 // PRD 3 Phase 5 — Discovery detail page.
@@ -56,12 +60,26 @@ export default async function DiscoveryDetailPage({ params }: PageProps) {
   const attribution = sourceAttribution(gem.sourceType, gem.sourceUrl);
   const locationLine = [gem.neighborhood, gem.townName].filter(Boolean).join(" · ");
 
+  // PRD 5 Phase 3 — current feedback state for the detail widget
+  const session = await getServerSession(authOptions);
+  const { byDiscoveryId } = await getFeedbackMaps({
+    userId: session?.user?.id,
+    discoveryIds: [id],
+  });
+  const feedbackStatus = byDiscoveryId.get(id) ?? null;
+
   return (
     <article className="mx-auto max-w-3xl px-4 py-10 space-y-8">
-      <nav className="text-sm text-slate-500">
+      <nav className="flex items-center justify-between text-sm text-slate-500">
         <Link href="/discoveries" className="hover:text-slate-800">
           ← Hidden Gems
         </Link>
+        <DetailFeedback
+          ref_={{ discoveryId: id }}
+          itemTitle={gem.title}
+          shareUrl={`/discoveries/${id}`}
+          initialStatus={feedbackStatus}
+        />
       </nav>
 
       <header className="space-y-4">
