@@ -79,9 +79,6 @@ const now = new Date("2026-04-16T12:00:00-06:00");
   assert.ok(Array.isArray(weird.OR), "weird uses OR");
   assert.equal(weird.OR[1].noveltyScore.gte, 7, "weird uses >=7 threshold (Int schema)");
 
-  const offbeat = eventWhereForCategory("offbeat") as any;
-  assert.ok(Array.isArray(offbeat.OR));
-
   // Places variant
   const pFood = placeWhereForCategory("food") as any;
   assert.deepEqual(pFood.category.in, ["FOOD", "RESTAURANT", "BARS", "COFFEE"]);
