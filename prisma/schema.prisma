@@ -961,7 +961,14 @@ enum BudgetTier {
   TREAT_YOURSELF
 }
 
-// Psychographic user profile from onboarding
+// Psychographic user profile from onboarding.
+//
+// PRD 4 Phase 0: added `aspirationCategories` + `aspirationText` for the new
+// 5-question flow (Q5 aspirations). The enum rename `SocialStyleType` →
+// `SocialStyle` and deprecation of `planningStyle` / `sparkResponse` /
+// `opennessScore` / `extraversionScore` / `noveltyScore` is deferred to
+// Phase 1, when the new `/onboarding-v2` routes replace the legacy flow that
+// currently reads these fields.
 model UserProfile {
   id     String @id @default(cuid())
   userId String @unique
@@ -977,6 +984,10 @@ model UserProfile {
   opennessScore     Float @default(0.5)
   extraversionScore Float @default(0.5)
   noveltyScore      Float @default(0.5)
+
+  // Q5 aspiration: chip labels + optional raw free text (LLM extraction later).
+  aspirationCategories String[]
+  aspirationText       String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
