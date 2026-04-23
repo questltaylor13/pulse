@@ -18,7 +18,9 @@ export type FeedbackAnalyticsEvent =
   | { type: "swiper_started" }
   | { type: "swiper_completed"; interestedCount: number; beenCount: number; passCount: number; skippedCount: number }
   | { type: "swiper_abandoned"; atItemIndex: number }
-  | { type: "your_denver_viewed"; entryCount: number };
+  | { type: "your_denver_viewed"; entryCount: number }
+  // PRD 6 Phase 4 — "Why am I seeing this?" surface.
+  | { type: "ranking_why_opened"; itemType: "event" | "place" | "discovery"; reasonCount: number; isSerendipity: boolean };
 
 export function track(event: FeedbackAnalyticsEvent): void {
   if (typeof window === "undefined") return;

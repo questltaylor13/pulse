@@ -3,8 +3,11 @@
 import { useState } from "react";
 import type { ItemStatus } from "@prisma/client";
 import type { FeedbackRef } from "@/lib/feedback/types";
+import { isEventRef, isPlaceRef, isDiscoveryRef } from "@/lib/feedback/types";
 import { useFeedback } from "@/lib/feedback/hooks";
+import type { RankedItemType } from "@/lib/ranking/types";
 import ActionSheet from "./ActionSheet";
+import WhyThisSheet from "./WhyThisSheet";
 
 // PRD 5 Phase 3 — detail-page feedback widget.
 //
@@ -39,10 +42,12 @@ export default function DetailFeedback({
   initialStatus,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [whyOpen, setWhyOpen] = useState(false);
   const { status, submitting, errorMessage, upsert } = useFeedback({
     ref: ref_,
     initialStatus,
   });
+  const whyTarget = resolveWhyTarget(ref_);
 
   const handleSelect = async (next: ItemStatus) => {
     const result = await upsert(next, "DETAIL_PAGE");
@@ -98,7 +103,35 @@ export default function DetailFeedback({
         errorMessage={errorMessage}
         onSelect={handleSelect}
         onShare={handleShare}
+        onWhy={
+          whyTarget
+            ? () => {
+                setOpen(false);
+                setWhyOpen(true);
+              }
+            : undefined
+        }
       />
+      {whyTarget && (
+        <WhyThisSheet
+          open={whyOpen}
+          onClose={() => setWhyOpen(false)}
+          itemType={whyTarget.itemType}
+          itemId={whyTarget.itemId}
+          itemTitle={itemTitle}
+          onOpenFeedback={() => {
+            setWhyOpen(false);
+            setOpen(true);
+          }}
+        />
+      )}
     </>
   );
+}
+
+function resolveWhyTarget(ref: FeedbackRef): { itemType: RankedItemType; itemId: string } | null {
+  if (isEventRef(ref)) return { itemType: "event", itemId: ref.eventId };
+  if (isPlaceRef(ref)) return { itemType: "place", itemId: ref.placeId };
+  if (isDiscoveryRef(ref)) return { itemType: "discovery", itemId: ref.discoveryId };
+  return null;
 }
