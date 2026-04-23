@@ -1,5 +1,8 @@
 import Link from "next/link";
+import type { ItemStatus } from "@prisma/client";
 import SaveButton from "./SaveButton";
+import CardMoreMenu from "@/components/feedback/CardMoreMenu";
+import FeedbackTag from "@/components/feedback/FeedbackTag";
 import { EditorPickBadge, FreeBadge, TodayBadge, TrendingBadge } from "./Badges";
 import {
   categoryLabel,
@@ -13,6 +16,7 @@ interface Props {
   event: EventCompact;
   variant?: "standard" | "wide";
   showTodayBadge?: boolean;
+  feedbackStatus?: ItemStatus | null;
 }
 
 const FALLBACK_IMG =
@@ -22,6 +26,7 @@ export default function EventCardCompact({
   event,
   variant = "standard",
   showTodayBadge = false,
+  feedbackStatus = null,
 }: Props) {
   const isWide = variant === "wide";
   const href = `/events/${event.id}`;
@@ -53,6 +58,12 @@ export default function EventCardCompact({
           />
           {pickBadge}
           <SaveButton itemId={event.id} itemType="event" />
+          <CardMoreMenu
+            ref_={{ eventId: event.id }}
+            itemTitle={event.title}
+            shareUrl={`/events/${event.id}`}
+            initialStatus={feedbackStatus}
+          />
         </div>
         <div className="p-3">
           <p className="text-meta font-medium uppercase tracking-wide text-coral">
@@ -66,6 +77,11 @@ export default function EventCardCompact({
           </p>
           {eventSecondaryMeta(event) && (
             <p className="truncate text-[12px] text-mute">{eventSecondaryMeta(event)}</p>
+          )}
+          {feedbackStatus === "WANT" && (
+            <div className="mt-2">
+              <FeedbackTag status={feedbackStatus} />
+            </div>
           )}
         </div>
       </article>

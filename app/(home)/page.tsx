@@ -1,5 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import StickyChrome from "@/components/home/StickyChrome";
 import BottomNav from "@/components/home/BottomNav";
 import EventsTabBody from "@/components/home/EventsTabBody";
@@ -8,6 +10,7 @@ import GuidesTabBody from "@/components/home/GuidesTabBody";
 import EventsTabSkeleton from "@/components/home/EventsTabSkeleton";
 import NoticeToast from "@/components/home/NoticeToast";
 import { fetchHomeFeed, fetchPlacesFeed, fetchGuidesFeed } from "@/components/home/fetch-home-feed";
+import { getFeedbackMaps, isFilteredFromFeed } from "@/lib/feedback/server";
 import type { HomeTab } from "@/components/home/TopTabs";
 import { isRailCategory, type RailCategory } from "@/lib/home/category-filters";
 import { isPlacesRailCategory, type PlacesRailCategory } from "@/lib/home/places-rail-filters";
@@ -105,6 +108,53 @@ async function HomeBody({
       ? [...placesData.newInDenver, ...placesData.localFavorites]
       : [];
 
+  // PRD 5 Phase 1 — batch-fetch current user's feedback for every item the
+  // feed will render. One query per page load; used to (a) stamp the
+  // "Interested" pill on WANT cards, (b) hide PASS/DONE cards pre-render.
+  const session = await getServerSession(authOptions);
+  const feedbackMaps = await getFeedbackMaps({
+    userId: session?.user?.id,
+    eventIds: events.map((e) => e.id),
+    placeIds: places.map((p) => p.id),
+  });
+
+  // Filtered copies of the feed structures with PASS/DONE excluded.
+  const filteredEventsData: HomeFeedResponse | null = eventsData
+    ? {
+        ...eventsData,
+        today: eventsData.today.filter(
+          (e) => !isFilteredFromFeed(feedbackMaps.byEventId.get(e.id))
+        ),
+        weekendPicks: eventsData.weekendPicks.filter(
+          (e) => !isFilteredFromFeed(feedbackMaps.byEventId.get(e.id))
+        ),
+        newInDenver: eventsData.newInDenver.filter(
+          (p) => !isFilteredFromFeed(feedbackMaps.byPlaceId.get(p.id))
+        ),
+        outsideTheCity: eventsData.outsideTheCity.filter((x) => {
+          const status =
+            x.kind === "event"
+              ? feedbackMaps.byEventId.get(x.id)
+              : feedbackMaps.byPlaceId.get(x.id);
+          return !isFilteredFromFeed(status);
+        }),
+        worthAWeekend: eventsData.worthAWeekend.filter(
+          (e) => !isFilteredFromFeed(feedbackMaps.byEventId.get(e.id))
+        ),
+      }
+    : null;
+  const filteredPlacesData: PlacesFeedResponse | null = placesData
+    ? {
+        ...placesData,
+        newInDenver: placesData.newInDenver.filter(
+          (p) => !isFilteredFromFeed(feedbackMaps.byPlaceId.get(p.id))
+        ),
+        localFavorites: placesData.localFavorites.filter(
+          (p) => !isFilteredFromFeed(feedbackMaps.byPlaceId.get(p.id))
+        ),
+      }
+    : null;
+
   return (
     <>
       <StickyChrome
@@ -115,18 +165,26 @@ async function HomeBody({
         searchablePlaces={places}
       />
       <div className="flex-1" id={`panel-${tab}`} role="tabpanel">
-        {tab === "events" && eventsData && (
-          <EventsTabBody category={category as RailCategory} data={eventsData} />
+        {tab === "events" && filteredEventsData && (
+          <EventsTabBody
+            category={category as RailCategory}
+            data={filteredEventsData}
+            feedbackMaps={feedbackMaps}
+          />
         )}
-        {tab === "events" && !eventsData && (
+        {tab === "events" && !filteredEventsData && (
           <div className="px-5 py-10 text-center text-body text-mute">
             Couldn't load events right now. Try again in a moment.
           </div>
         )}
-        {tab === "places" && placesData && (
-          <PlacesTabBody category={category as PlacesRailCategory} data={placesData} />
+        {tab === "places" && filteredPlacesData && (
+          <PlacesTabBody
+            category={category as PlacesRailCategory}
+            data={filteredPlacesData}
+            feedbackMaps={feedbackMaps}
+          />
         )}
-        {tab === "places" && !placesData && (
+        {tab === "places" && !filteredPlacesData && (
           <div className="px-5 py-10 text-center text-body text-mute">
             Couldn't load places right now. Try again in a moment.
           </div>

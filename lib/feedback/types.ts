@@ -28,12 +28,26 @@ export const STATUS_TO_PILL_TEXT: Partial<Record<ItemStatus, string>> = {
 };
 
 // Polymorphic ref: exactly one key populated.
-export type FeedbackRef = { itemId: string } | { discoveryId: string };
+//
+// Feed UI uses eventId / placeId / discoveryId (the natural IDs rendered on
+// cards). Server-side `resolveFeedbackTarget` in lib/feedback/api.ts bridges
+// eventId/placeId → Item.id on write (find-or-create). Existing DB-level
+// code that already knows the bridge Item.id can still pass itemId directly.
+export type FeedbackRef =
+  | { itemId: string }
+  | { eventId: string }
+  | { placeId: string }
+  | { discoveryId: string };
 
 export function isItemRef(ref: FeedbackRef): ref is { itemId: string } {
   return "itemId" in ref && typeof ref.itemId === "string" && ref.itemId.length > 0;
 }
-
+export function isEventRef(ref: FeedbackRef): ref is { eventId: string } {
+  return "eventId" in ref && typeof ref.eventId === "string" && ref.eventId.length > 0;
+}
+export function isPlaceRef(ref: FeedbackRef): ref is { placeId: string } {
+  return "placeId" in ref && typeof ref.placeId === "string" && ref.placeId.length > 0;
+}
 export function isDiscoveryRef(
   ref: FeedbackRef
 ): ref is { discoveryId: string } {
