@@ -20,7 +20,12 @@ export type FeedbackAnalyticsEvent =
   | { type: "swiper_abandoned"; atItemIndex: number }
   | { type: "your_denver_viewed"; entryCount: number }
   // PRD 6 Phase 4 — "Why am I seeing this?" surface.
-  | { type: "ranking_why_opened"; itemType: "event" | "place" | "discovery"; reasonCount: number; isSerendipity: boolean };
+  | { type: "ranking_why_opened"; itemType: "event" | "place" | "discovery"; reasonCount: number; isSerendipity: boolean }
+  // PRD 6 Phase 7 — ranking-engine observability events.
+  | { type: "ranking_precompute_run"; usersRanked: number; durationMs: number; errored: number }
+  | { type: "ranking_fallback_triggered"; where: "precompute" | "feed" | "why"; userId: string | null }
+  | { type: "ranking_outside_usual_engaged"; itemType: "event" | "place" | "discovery" }
+  | { type: "ranking_variant_assigned"; variant: string };
 
 export function track(event: FeedbackAnalyticsEvent): void {
   if (typeof window === "undefined") return;
