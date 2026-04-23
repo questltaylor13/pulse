@@ -6,10 +6,11 @@ import { runOrchestrator } from "@/lib/discoveries/orchestrator";
 // three pipelines (llm-research, reddit, niche-sites) through the Phase 4
 // enrichment + verification + dedup flow and upserts Discovery rows.
 //
-// Total runtime budget: ~5–15 minutes. Fluid Compute keeps us inside
-// maxDuration, but watch /admin/scrapers → Hidden Gems for anomalies.
+// Capped at 300s (Vercel hobby plan ceiling). If a real weekly run pushes
+// past that, split the pipelines across separate endpoints and chain them
+// (pattern already used by /api/cron/refresh-places?chunk=0..2).
 
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 async function handleRequest(request: NextRequest) {
   const auth = request.headers.get("authorization");
