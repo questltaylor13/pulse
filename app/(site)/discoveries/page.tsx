@@ -1,7 +1,10 @@
 import { Suspense } from "react";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import DiscoveryCard from "@/components/DiscoveryCard";
 import HiddenGemsFilters from "@/components/HiddenGemsFilters";
+import { getFeedbackMaps, isFilteredFromFeed } from "@/lib/feedback/server";
 import type {
   Category,
   DiscoverySubtype,
@@ -67,7 +70,17 @@ async function DiscoveryList({
     },
   });
 
-  if (gems.length === 0) {
+  // PRD 5 Phase 1 — batch-fetch feedback + filter PASS/DONE pre-render.
+  const session = await getServerSession(authOptions);
+  const { byDiscoveryId } = await getFeedbackMaps({
+    userId: session?.user?.id,
+    discoveryIds: gems.map((g) => g.id),
+  });
+  const visibleGems = gems.filter(
+    (g) => !isFilteredFromFeed(byDiscoveryId.get(g.id))
+  );
+
+  if (visibleGems.length === 0) {
     const hint =
       scope === "near_me"
         ? "Not seeing much nearby? Try All of Colorado to pick up mountain-town picks."
@@ -82,8 +95,12 @@ async function DiscoveryList({
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {gems.map((gem) => (
-        <DiscoveryCard key={gem.id} gem={gem} />
+      {visibleGems.map((gem) => (
+        <DiscoveryCard
+          key={gem.id}
+          gem={gem}
+          feedbackStatus={byDiscoveryId.get(gem.id) ?? null}
+        />
       ))}
     </div>
   );

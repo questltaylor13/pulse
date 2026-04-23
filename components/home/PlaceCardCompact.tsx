@@ -1,6 +1,9 @@
 import Link from "next/link";
+import type { ItemStatus } from "@prisma/client";
 import SaveButton from "./SaveButton";
 import VibeTagPill from "./VibeTagPill";
+import CardMoreMenu from "@/components/feedback/CardMoreMenu";
+import FeedbackTag from "@/components/feedback/FeedbackTag";
 import { JustOpenedBadge } from "./Badges";
 import { categoryLabel, daysSince, placeSecondaryMeta } from "@/lib/home/event-view";
 import type { PlaceCompact } from "@/lib/home/types";
@@ -8,12 +11,17 @@ import type { PlaceCompact } from "@/lib/home/types";
 interface Props {
   place: PlaceCompact;
   variant?: "standard" | "wide";
+  feedbackStatus?: ItemStatus | null;
 }
 
 const FALLBACK_IMG =
   "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=640&q=60";
 
-export default function PlaceCardCompact({ place, variant = "standard" }: Props) {
+export default function PlaceCardCompact({
+  place,
+  variant = "standard",
+  feedbackStatus = null,
+}: Props) {
   const isWide = variant === "wide";
   const href = `/places/${place.id}`;
   const imgHeight = isWide ? 180 : 150;
@@ -39,6 +47,12 @@ export default function PlaceCardCompact({ place, variant = "standard" }: Props)
           />
           {showJustOpened && <JustOpenedBadge />}
           <SaveButton itemId={place.id} itemType="place" />
+          <CardMoreMenu
+            ref_={{ placeId: place.id }}
+            itemTitle={place.name}
+            shareUrl={`/places/${place.id}`}
+            initialStatus={feedbackStatus}
+          />
         </div>
         <div className="p-3">
           <p className="text-meta font-medium uppercase tracking-wide text-coral">
@@ -53,6 +67,11 @@ export default function PlaceCardCompact({ place, variant = "standard" }: Props)
             </p>
           )}
           <VibeTagPill tags={place.vibeTags} />
+          {feedbackStatus === "WANT" && (
+            <div className="mt-2">
+              <FeedbackTag status={feedbackStatus} />
+            </div>
+          )}
         </div>
       </article>
     </Link>

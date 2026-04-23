@@ -20,6 +20,8 @@ export const dynamic = "force-dynamic";
 
 const refSchema = z.union([
   z.object({ itemId: z.string().min(1) }).strict(),
+  z.object({ eventId: z.string().min(1) }).strict(),
+  z.object({ placeId: z.string().min(1) }).strict(),
   z.object({ discoveryId: z.string().min(1) }).strict(),
 ]);
 

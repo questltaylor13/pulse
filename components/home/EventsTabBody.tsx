@@ -7,10 +7,12 @@ import LastUpdatedIndicator from "./LastUpdatedIndicator";
 import RegionalScopeFilter from "./RegionalScopeFilter";
 import type { HomeFeedResponse } from "@/lib/home/types";
 import { RAIL_LABELS, type RailCategory } from "@/lib/home/category-filters";
+import type { FeedbackMaps } from "@/lib/feedback/server";
 
 interface Props {
   category: RailCategory;
   data: HomeFeedResponse;
+  feedbackMaps?: FeedbackMaps;
 }
 
 function CollapsedSection({ title, category }: { title: string; category: RailCategory }) {
@@ -24,7 +26,7 @@ function CollapsedSection({ title, category }: { title: string; category: RailCa
   );
 }
 
-export default function EventsTabBody({ category, data }: Props) {
+export default function EventsTabBody({ category, data, feedbackMaps }: Props) {
   const {
     today,
     weekendPicks,
@@ -35,6 +37,8 @@ export default function EventsTabBody({ category, data }: Props) {
     lastUpdatedAt,
     regionalScope,
   } = data;
+  const eventStatus = (id: string) => feedbackMaps?.byEventId.get(id) ?? null;
+  const placeStatus = (id: string) => feedbackMaps?.byPlaceId.get(id) ?? null;
 
   return (
     <>
@@ -63,6 +67,7 @@ export default function EventsTabBody({ category, data }: Props) {
               event={e}
               variant="standard"
               showTodayBadge
+              feedbackStatus={eventStatus(e.id)}
             />
           ))}
         </ScrollSection>
@@ -78,7 +83,12 @@ export default function EventsTabBody({ category, data }: Props) {
           seeAllHref="/browse/this-weekend"
         >
           {weekendPicks.map((e) => (
-            <EventCardCompact key={e.id} event={e} variant="wide" />
+            <EventCardCompact
+              key={e.id}
+              event={e}
+              variant="wide"
+              feedbackStatus={eventStatus(e.id)}
+            />
           ))}
         </ScrollSection>
       )}
@@ -95,7 +105,12 @@ export default function EventsTabBody({ category, data }: Props) {
           seeAllHref="/browse/new-in-denver"
         >
           {newInDenver.map((p) => (
-            <PlaceCardCompact key={p.id} place={p} variant="standard" />
+            <PlaceCardCompact
+              key={p.id}
+              place={p}
+              variant="standard"
+              feedbackStatus={placeStatus(p.id)}
+            />
           ))}
         </ScrollSection>
       )}
@@ -111,9 +126,19 @@ export default function EventsTabBody({ category, data }: Props) {
         >
           {outsideTheCity.map((item) =>
             item.kind === "event" ? (
-              <EventCardCompact key={`e-${item.id}`} event={item} variant="wide" />
+              <EventCardCompact
+                key={`e-${item.id}`}
+                event={item}
+                variant="wide"
+                feedbackStatus={eventStatus(item.id)}
+              />
             ) : (
-              <PlaceCardCompact key={`p-${item.id}`} place={item} variant="wide" />
+              <PlaceCardCompact
+                key={`p-${item.id}`}
+                place={item}
+                variant="wide"
+                feedbackStatus={placeStatus(item.id)}
+              />
             )
           )}
         </ScrollSection>
@@ -130,7 +155,12 @@ export default function EventsTabBody({ category, data }: Props) {
           seeAllHref="/browse/worth-a-weekend"
         >
           {worthAWeekend.map((e) => (
-            <EventCardCompact key={`ww-${e.id}`} event={e} variant="wide" />
+            <EventCardCompact
+              key={`ww-${e.id}`}
+              event={e}
+              variant="wide"
+              feedbackStatus={eventStatus(e.id)}
+            />
           ))}
         </ScrollSection>
       )}

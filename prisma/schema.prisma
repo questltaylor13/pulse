@@ -411,6 +411,9 @@ model Event {
   socialContent   EventSocialContent[] // Embedded social media content
   invitations     EventInvitation[] // Calendar invitations
 
+  // PRD 5 Phase 1 — direct UserItemStatus feedback (bypasses Item bridge)
+  userItemStatuses UserItemStatus[]
+
   guideStops GuideStop[]
 
   @@unique([externalId, source])
@@ -530,16 +533,23 @@ model UserItemStatus {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Polymorphic refs — exactly one is non-null
+  // Polymorphic refs — exactly one is non-null. UI paths write directly to
+  // eventId / placeId / discoveryId. The legacy `itemId` column remains for
+  // the pre-PRD-5 rows that were routed through the Item polymorphic bridge
+  // (see lib/actions/items.ts:setPlaceStatus history).
   itemId      String?
   item        Item?      @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  eventId     String?
+  event       Event?     @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  placeId     String?
+  place       Place?     @relation(fields: [placeId], references: [id], onDelete: SetNull)
   discoveryId String?
   discovery   Discovery? @relation(fields: [discoveryId], references: [id], onDelete: SetNull)
 
   status ItemStatus
   source FeedbackSource @default(LEGACY)
 
-  // Denormalized snapshot — survives item/discovery deletion
+  // Denormalized snapshot — survives item/discovery/event/place deletion
   itemTitleSnapshot    String?
   itemCategorySnapshot String?
   itemTownSnapshot     String?
@@ -548,9 +558,13 @@ model UserItemStatus {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, itemId])
+  @@unique([userId, eventId])
+  @@unique([userId, placeId])
   @@unique([userId, discoveryId])
   @@index([userId, status])
   @@index([itemId])
+  @@index([eventId])
+  @@index([placeId])
   @@index([discoveryId])
 }
 
@@ -1291,12 +1305,14 @@ model Place {
   updatedAt           DateTime  @updatedAt
 
   // Relations
-  events      Event[]
-  alerts      NewPlaceAlert[]
-  groupPlaces GroupPlace[]
-  listItems   ListItem[]
-  planEvents  PlanEvent[]
-  guideStops  GuideStop[]
+  events           Event[]
+  alerts           NewPlaceAlert[]
+  groupPlaces      GroupPlace[]
+  listItems        ListItem[]
+  planEvents       PlanEvent[]
+  guideStops       GuideStop[]
+  // PRD 5 Phase 1 — direct UserItemStatus feedback (bypasses Item bridge)
+  userItemStatuses UserItemStatus[]
 
   @@index([citySlug])
   @@index([lat, lng])

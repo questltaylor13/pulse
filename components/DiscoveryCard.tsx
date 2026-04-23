@@ -1,10 +1,12 @@
 import Link from "next/link";
-import type { Discovery, DiscoverySubtype } from "@prisma/client";
+import type { Discovery, DiscoverySubtype, ItemStatus } from "@prisma/client";
 import {
   CATEGORY_EMOJI,
   CATEGORY_LABELS,
   CATEGORY_COLORS,
 } from "@/lib/constants/categories";
+import CardMoreMenu from "@/components/feedback/CardMoreMenu";
+import FeedbackTag from "@/components/feedback/FeedbackTag";
 
 // PRD 3 Phase 5 — Hidden Gems card.
 // Distinct visual tell so users know this isn't a typical listing: amber
@@ -41,7 +43,12 @@ const REGION_LABEL: Record<string, string> = {
   MOUNTAIN_DEST: "Mountain Destination",
 };
 
-export default function DiscoveryCard({ gem }: { gem: DiscoveryCardData }) {
+interface Props {
+  gem: DiscoveryCardData;
+  feedbackStatus?: ItemStatus | null;
+}
+
+export default function DiscoveryCard({ gem, feedbackStatus = null }: Props) {
   const locationLine = [gem.neighborhood, gem.townName]
     .filter(Boolean)
     .join(" · ");
@@ -50,9 +57,15 @@ export default function DiscoveryCard({ gem }: { gem: DiscoveryCardData }) {
   return (
     <Link
       href={`/discoveries/${gem.id}`}
-      className="block rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-amber-400 hover:shadow-md"
+      className="relative block rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-amber-400 hover:shadow-md"
     >
-      <div className="flex items-start justify-between gap-3">
+      <CardMoreMenu
+        ref_={{ discoveryId: gem.id }}
+        itemTitle={gem.title}
+        shareUrl={`/discoveries/${gem.id}`}
+        initialStatus={feedbackStatus}
+      />
+      <div className="flex items-start justify-between gap-3 pl-10">
         <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2.5 py-0.5 text-xs font-bold text-white">
           ✦ Hidden Gem
         </span>
@@ -94,6 +107,12 @@ export default function DiscoveryCard({ gem }: { gem: DiscoveryCardData }) {
               {tag}
             </span>
           ))}
+        </div>
+      )}
+
+      {feedbackStatus === "WANT" && (
+        <div className="mt-3">
+          <FeedbackTag status={feedbackStatus} />
         </div>
       )}
     </Link>

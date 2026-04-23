@@ -8,10 +8,12 @@ import {
   PLACES_RAIL_LABELS,
   type PlacesRailCategory,
 } from "@/lib/home/places-rail-filters";
+import type { FeedbackMaps } from "@/lib/feedback/server";
 
 interface Props {
   category: PlacesRailCategory;
   data: PlacesFeedResponse;
+  feedbackMaps?: FeedbackMaps;
 }
 
 function CollapsedSection({
@@ -31,7 +33,7 @@ function CollapsedSection({
   );
 }
 
-export default function PlacesTabBody({ category, data }: Props) {
+export default function PlacesTabBody({ category, data, feedbackMaps }: Props) {
   const {
     newInDenver,
     neighborhoods,
@@ -41,6 +43,7 @@ export default function PlacesTabBody({ category, data }: Props) {
     workFriendly,
     lastUpdatedAt,
   } = data;
+  const placeStatus = (id: string) => feedbackMaps?.byPlaceId.get(id) ?? null;
 
   return (
     <>
@@ -54,7 +57,7 @@ export default function PlacesTabBody({ category, data }: Props) {
           seeAllHref="/browse/new-in-denver"
         >
           {newInDenver.map((p) => (
-            <PlaceCardCompact key={p.id} place={p} />
+            <PlaceCardCompact key={p.id} place={p} feedbackStatus={placeStatus(p.id)} />
           ))}
         </ScrollSection>
       )}
@@ -77,7 +80,7 @@ export default function PlacesTabBody({ category, data }: Props) {
           subtitle="No tourist traps, no chains"
         >
           {localFavorites.map((p) => (
-            <PlaceCardCompact key={p.id} place={p} />
+            <PlaceCardCompact key={p.id} place={p} feedbackStatus={placeStatus(p.id)} />
           ))}
         </ScrollSection>
       )}
@@ -91,7 +94,7 @@ export default function PlacesTabBody({ category, data }: Props) {
           subtitle="Low-pressure, conversation-friendly"
         >
           {dateNight.map((p) => (
-            <PlaceCardCompact key={p.id} place={p} />
+            <PlaceCardCompact key={p.id} place={p} feedbackStatus={placeStatus(p.id)} />
           ))}
         </ScrollSection>
       )}
@@ -107,7 +110,7 @@ export default function PlacesTabBody({ category, data }: Props) {
           subtitle="Big tables, shareable plates, loud enough"
         >
           {goodForGroups.map((p) => (
-            <PlaceCardCompact key={p.id} place={p} />
+            <PlaceCardCompact key={p.id} place={p} feedbackStatus={placeStatus(p.id)} />
           ))}
         </ScrollSection>
       )}
@@ -121,7 +124,7 @@ export default function PlacesTabBody({ category, data }: Props) {
           subtitle="Wifi, outlets, quiet enough"
         >
           {workFriendly.map((p) => (
-            <PlaceCardCompact key={p.id} place={p} />
+            <PlaceCardCompact key={p.id} place={p} feedbackStatus={placeStatus(p.id)} />
           ))}
         </ScrollSection>
       )}
