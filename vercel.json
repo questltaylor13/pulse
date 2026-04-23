@@ -51,6 +51,14 @@
     {
       "path": "/api/ranking/precompute",
       "schedule": "0 */1 * * *"
+    },
+    {
+      "path": "/api/ranking/sanity",
+      "schedule": "0 10 * * 1"
+    },
+    {
+      "path": "/api/cron/cleanup-ranking-runs",
+      "schedule": "30 4 * * *"
     }
   ]
 }
