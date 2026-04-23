@@ -259,13 +259,17 @@ export async function getUnifiedList(
 
   // Add items from UserItemStatus (Places)
   for (const is of itemStatuses) {
+    // PRD 5 Phase 0: UserItemStatus is polymorphic across Items and
+    // Discoveries; the Saved/Done list UI renders Item content only,
+    // so skip Discovery-only rows.
+    if (!is.item) continue;
     // Skip if it's an EVENT type item (to avoid duplicates with legacy system)
     if (is.item.type === "EVENT") continue;
 
     unifiedItems.push({
       id: is.id,
       type: "PLACE",
-      sourceId: is.itemId,
+      sourceId: is.itemId ?? "",
       title: is.item.title,
       description: is.item.description,
       category: is.item.category,

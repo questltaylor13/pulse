@@ -100,14 +100,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
   }
 
-  // Calculate stats
+  // Calculate stats. UserItemStatus is polymorphic under PRD 5; Discovery-
+  // only rows (item null) don't contribute to category/neighborhood stats
+  // in this profile view.
   const allCategories = [
     ...user.eventStatuses.map((s) => s.event.category),
-    ...user.itemStatuses.map((s) => s.item.category),
+    ...user.itemStatuses.flatMap((s) => (s.item ? [s.item.category] : [])),
   ];
   const allNeighborhoods = [
     ...user.eventStatuses.map((s) => s.event.neighborhood).filter(Boolean),
-    ...user.itemStatuses.map((s) => s.item.neighborhood).filter(Boolean),
+    ...user.itemStatuses.flatMap((s) =>
+      s.item && s.item.neighborhood ? [s.item.neighborhood] : []
+    ),
   ];
 
   // Count occurrences

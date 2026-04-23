@@ -74,6 +74,11 @@ async function buildTasteVector(userId: string): Promise<TasteVector> {
   });
 
   for (const status of itemStatuses) {
+    // PRD 5 Phase 0: UserItemStatus is polymorphic across Items and
+    // Discoveries. This module reads Item-based signal only; Discovery
+    // rows (item === null) are scored by a future update.
+    if (!status.item) continue;
+
     let weight = 0;
     if (status.status === "DONE") weight = 3;
     else if (status.status === "WANT") weight = 2;
@@ -143,7 +148,12 @@ async function findSimilarUsers(userId: string, limit: number = 20): Promise<Use
     where: { userId, status: { in: ["WANT", "DONE"] } },
     select: { itemId: true },
   });
-  const userItemIds = new Set(userStatuses.map((s) => s.itemId));
+  // Filter out Discovery-only rows (itemId null under PRD 5 polymorphism)
+  const userItemIds = new Set(
+    userStatuses
+      .map((s) => s.itemId)
+      .filter((id): id is string => id !== null)
+  );
 
   // Get all other users with their data
   const otherUsers = await prisma.user.findMany({
@@ -168,7 +178,12 @@ async function findSimilarUsers(userId: string, limit: number = 20): Promise<Use
 
   for (const other of otherUsers) {
     const otherCategories = new Set(other.preferences.map((p) => p.category));
-    const otherItemIds = new Set(other.itemStatuses.map((s) => s.itemId));
+    // Filter out Discovery-only rows (itemId null under PRD 5 polymorphism)
+    const otherItemIds = new Set(
+      other.itemStatuses
+        .map((s) => s.itemId)
+        .filter((id): id is string => id !== null)
+    );
 
     const categorySimilarity = jaccardSimilarity(userCategories, otherCategories);
     const itemSimilarity = jaccardSimilarity(userItemIds, otherItemIds);
@@ -230,12 +245,15 @@ async function getExcludedItemIds(
 ): Promise<Set<string>> {
   const excluded = new Set<string>([currentItemId]);
 
-  // Add passed items
+  // Add passed items. itemId is nullable under PRD 5 polymorphism; Discovery
+  // exclusion is handled separately by that surface.
   const passed = await prisma.userItemStatus.findMany({
-    where: { userId, status: "PASS" },
+    where: { userId, status: "PASS", itemId: { not: null } },
     select: { itemId: true },
   });
-  passed.forEach((p) => excluded.add(p.itemId));
+  passed.forEach((p) => {
+    if (p.itemId) excluded.add(p.itemId);
+  });
 
   return excluded;
 }

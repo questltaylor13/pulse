@@ -274,6 +274,8 @@ export async function getUserStats(range: TimeRange = 30): Promise<StatsResult> 
 
   // From new item statuses (exclude EVENT type to avoid double counting)
   for (const status of itemStatusesWithDetails) {
+    // PRD 5 Phase 0: skip Discovery-only rows (item null under polymorphism)
+    if (!status.item) continue;
     if (status.item.type === "EVENT") continue; // Skip events to avoid duplicates
 
     const cat = status.item.category;

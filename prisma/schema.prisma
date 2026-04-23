@@ -516,20 +516,49 @@ model Item {
 }
 
 // User status for Items (WANT/DONE/PASS)
+// PRD 5 — single source of truth for behavioral feedback signal.
+// UI copy ↔ ItemStatus mapping: "Interested" = WANT, "Not for me" = PASS,
+// "I've been there" = DONE. Polymorphic across Items (Events+Places via
+// bridge) and Discoveries; exactly one of itemId / discoveryId is non-null,
+// enforced by a CHECK constraint in the migration. `source` defaults to
+// LEGACY so rows written before Phase 5 backfill cleanly without attribution.
+// onDelete: SetNull on both FKs so the denormalized snapshots survive
+// item/discovery deletion — the Your Denver history view reads snapshots
+// when the live record is gone.
 model UserItemStatus {
-  id        String     @id @default(cuid())
-  userId    String
-  itemId    String
-  status    ItemStatus
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  // Polymorphic refs — exactly one is non-null
+  itemId      String?
+  item        Item?      @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  discoveryId String?
+  discovery   Discovery? @relation(fields: [discoveryId], references: [id], onDelete: SetNull)
+
+  status ItemStatus
+  source FeedbackSource @default(LEGACY)
+
+  // Denormalized snapshot — survives item/discovery deletion
+  itemTitleSnapshot    String?
+  itemCategorySnapshot String?
+  itemTownSnapshot     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, itemId])
+  @@unique([userId, discoveryId])
   @@index([userId, status])
   @@index([itemId])
+  @@index([discoveryId])
+}
+
+enum FeedbackSource {
+  FEED_CARD
+  PROFILE_SWIPER
+  DETAIL_PAGE
+  LEGACY
 }
 
 // User ratings for Items (1-5 scale)
@@ -1316,6 +1345,9 @@ model Discovery {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // PRD 5 feedback reverse relation
+  userStatuses UserItemStatus[]
 
   @@index([status, qualityScore])
   @@index([category, status])

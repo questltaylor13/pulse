@@ -2830,9 +2830,10 @@ async function seedItemRatings(
     // Delete existing ratings for this user
     await prisma.userItemRating.deleteMany({ where: { userId: user.id } });
 
-    // Get user's DONE items
+    // Get user's DONE items. itemId became nullable under PRD 5 polymorphism;
+    // ratings are Item-only, so filter to non-null.
     const doneStatuses = await prisma.userItemStatus.findMany({
-      where: { userId: user.id, status: ItemStatus.DONE },
+      where: { userId: user.id, status: ItemStatus.DONE, itemId: { not: null } },
       select: { itemId: true },
     });
 
@@ -2840,7 +2841,10 @@ async function seedItemRatings(
 
     // Rate 60-90% of done items
     const rateCount = Math.floor(doneStatuses.length * (0.6 + rng.next() * 0.3));
-    const itemsToRate = rng.pickN(doneStatuses.map(s => s.itemId), rateCount);
+    const itemsToRate = rng.pickN(
+      doneStatuses.map((s) => s.itemId).filter((id): id is string => id !== null),
+      rateCount
+    );
 
     for (const itemId of itemsToRate) {
       const item = items.find(i => i.id === itemId);
