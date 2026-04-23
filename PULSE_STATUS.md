@@ -223,3 +223,93 @@ spots, rec leagues, seasonal rituals. Refresh is weekly, not daily.
 - Mobile bottom-nav entry for Hidden Gems (kept at 3 items to avoid crowding)
 - Auto-ingest of dated-event rejections into the Event pipeline (PRD open
   question — for now they just log to DiscoveryRun.rejectedAsEventCount)
+
+---
+
+## PRD 5: Feedback System (2026-04-23)
+
+Behavioral signal layer for the future ranking engine (PRD 6). Three
+surfaces write the same `UserItemStatus` rows under a shared UI vocabulary:
+"Interested" → `WANT`, "Not for me" → `PASS`, "I've been there" → `DONE`.
+
+### Schema (extends the existing UserItemStatus model from PRD 1)
+
+- Direct FKs to Event + Place + Discovery alongside the legacy Item bridge;
+  `itemId` is now nullable.
+- `onDelete: SetNull` on every ref so denormalized snapshot columns survive
+  item deletion.
+- `FeedbackSource` enum (FEED_CARD / PROFILE_SWIPER / DETAIL_PAGE /
+  LEGACY) populated at write time; pre-PRD-5 rows auto-backfill as LEGACY.
+- `itemTitleSnapshot` / `itemCategorySnapshot` / `itemTownSnapshot` TEXT
+  columns captured at write time from the joined source row.
+- Polymorphic integrity enforced by SQL CHECK: exactly one of the four FK
+  columns must be non-null.
+- `User.profileStripDismissedAt DateTime?` for the Phase 2 48h cooldown.
+
+### Three feedback surfaces
+
+| Surface | Entry point | FeedbackSource |
+|---|---|---|
+| In-feed card | ⋯ button top-left on every compact card (Event/Place/Discovery) | `FEED_CARD` |
+| Profile taste-calibration | Completion strip → Continue → `/?swiper=1` overlay | `PROFILE_SWIPER` |
+| Detail page | ⋯ button + status pill on event/place/discovery detail pages | `DETAIL_PAGE` |
+
+All three route through `POST /api/feedback` with a polymorphic
+`{eventId|placeId|discoveryId|itemId}` ref. Optimistic UI via
+`useFeedback` hook; rollback + inline error on failure; no loading spinners
+in the feedback flow by design.
+
+### Profile completion strip + taste swiper
+
+- Strip renders between the Scope toggle and the Today section in the home
+  feed when `completion < 80% AND (never dismissed OR dismissed > 48h ago)`.
+- Completion formula (40% onboarding + 3% per feedback capped at 60%) hits
+  100% at 20 feedback items. Lives in `lib/feedback/profile-completion.ts`.
+- Swiper opens via `?swiper=1` URL param. 12 items, 4 each from Events /
+  Places / Discoveries, diversity-biased (one per category where possible),
+  excludes items the user already has any UserItemStatus on. Fisher-Yates
+  shuffled before return.
+- "Done for now" visible from item 3 onward. Fresh re-roll per launch — no
+  session resume.
+
+### Your Denver history
+
+`/your-denver` — grid of DONE items with per-kind counts, URL-driven filter
+chips (All / Events / Places / Hidden Gems), empty-state CTA routes into
+the swiper. Falls back to snapshot columns when the live Event/Place/
+Discovery row has been deleted (FK went NULL). Not yet promoted to
+top-level nav — PRD §4.1 gates promotion on usage data showing 10+ entries
+from a cohort.
+
+### Admin observability
+
+`/admin/feedback` — total rows by status + source, median feedback per
+user, top 10 WANT items, top 10 PASS items (content quality flag), data
+quality flag for users with >50 PASS and <5 WANT (profile mismatch
+signal). Admin-gated via session + isAdmin check.
+
+### Analytics
+
+Event signatures declared in `lib/feedback/analytics.ts`. `track()`
+currently console.debugs in dev; vendor wire-up is a one-line change
+when a provider is chosen. Call-site instrumentation intentionally
+deferred so we don't ship dead code paths to a vendor that doesn't exist
+yet.
+
+### Signal map
+
+PRD 5 behavior documented in `PRD/signal-map.md` §Behavioral signals:
+- WANT → +0.25 per similar-tagged item, capped +0.40 total
+- PASS → -0.30 per similar-tagged item, capped -0.50 total
+- DONE → hard filter (pre-ranking; item never reappears)
+- Behavioral signal overrides stated preferences on conflict; transition
+  is automatic as feedback count grows.
+- Cold-start unchanged: zero UserItemStatus rows → stated prefs dominate.
+
+### Known deferred
+- Analytics vendor selection + call-site instrumentation
+- Client offline queue (IndexedDB) for feedback — acknowledged in PRD §7.3
+  as "promote to its own sub-phase"
+- Your Denver promotion to top-level nav (gated on usage cohort threshold)
+- Removing the Item-polymorphic bridge entirely — 438 legacy rows still
+  live through it; new writes all go direct.
