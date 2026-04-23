@@ -82,6 +82,9 @@ async function buildTasteVector(userId: string): Promise<TasteVector> {
   });
 
   for (const status of itemStatuses) {
+    // PRD 5 Phase 0: skip Discovery-only rows; this module scores Items.
+    if (!status.item) continue;
+
     let weight = 0;
     if (status.status === "DONE") weight = 3;
     else if (status.status === "WANT") weight = 2;
@@ -172,9 +175,9 @@ async function buildUserTasteSummary(
     include: { item: { select: { title: true, category: true } } },
   });
 
-  const recentActivity = recentStatuses.map(
-    (s) => `${s.status} "${s.item.title}" (${s.item.category})`
-  );
+  const recentActivity = recentStatuses
+    .filter((s): s is typeof s & { item: NonNullable<typeof s.item> } => s.item !== null)
+    .map((s) => `${s.status} "${s.item.title}" (${s.item.category})`);
 
   return {
     likedCategories,

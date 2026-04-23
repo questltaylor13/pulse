@@ -1,124 +1,113 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { FeedbackType } from "@prisma/client";
 import { z } from "zod";
+import { authOptions } from "@/lib/auth";
+import {
+  deleteFeedback,
+  upsertFeedback,
+} from "@/lib/feedback/api";
+import { getProfileCompletion } from "@/lib/feedback/profile-completion";
 
-const feedbackSchema = z.object({
-  eventId: z.string(),
-  feedbackType: z.enum(["MORE", "LESS", "HIDE"]),
+// PRD 5 Phase 0 — behavioral feedback endpoint.
+//
+// Replaces an older MORE/LESS/HIDE stub that wrote to the UserFeedback model
+// (0 rows, 0 callers — safe to swap). Session-gated. Writes to
+// UserItemStatus via lib/feedback/api.ts; handles both Item and Discovery
+// polymorphic refs.
+
+// Session lookup reads cookies — must render per-request, not at build.
+export const dynamic = "force-dynamic";
+
+const refSchema = z.union([
+  z.object({ itemId: z.string().min(1) }).strict(),
+  z.object({ discoveryId: z.string().min(1) }).strict(),
+]);
+
+const postSchema = z.object({
+  ref: refSchema,
+  status: z.enum(["WANT", "PASS", "DONE"]),
+  source: z.enum(["FEED_CARD", "PROFILE_SWIPER", "DETAIL_PAGE"]),
 });
 
-// Submit feedback on an event
-export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+const deleteSchema = z.object({
+  ref: refSchema,
+});
 
+async function requireUserId(): Promise<
+  { ok: true; userId: string } | { ok: false; res: NextResponse }
+> {
+  const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return {
+      ok: false,
+      res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    };
+  }
+  return { ok: true, userId: session.user.id };
+}
+
+export async function POST(request: NextRequest) {
+  const auth = await requireUserId();
+  if (!auth.ok) return auth.res;
+
+  const body = await request.json().catch(() => null);
+  const parsed = postSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid body", details: parsed.error.flatten() },
+      { status: 400 }
+    );
   }
 
   try {
-    const body = await request.json();
-    const { eventId, feedbackType } = feedbackSchema.parse(body);
-
-    // Get event details for category/venue
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { category: true, venueName: true, tags: true },
+    const row = await upsertFeedback({
+      userId: auth.userId,
+      ref: parsed.data.ref,
+      status: parsed.data.status,
+      source: parsed.data.source,
     });
-
-    if (!event) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 });
-    }
-
-    // Upsert feedback
-    const feedback = await prisma.userFeedback.upsert({
-      where: {
-        userId_eventId: {
-          userId: session.user.id,
-          eventId,
-        },
-      },
-      update: {
-        feedbackType: feedbackType as FeedbackType,
-        category: event.category,
-        venueName: event.venueName,
-        tags: event.tags,
-      },
-      create: {
-        userId: session.user.id,
-        eventId,
-        feedbackType: feedbackType as FeedbackType,
-        category: event.category,
-        venueName: event.venueName,
-        tags: event.tags,
-      },
-    });
-
-    return NextResponse.json({ success: true, feedback });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: error.errors[0].message },
-        { status: 400 }
-      );
-    }
-    console.error("Feedback error:", error);
+    const profileCompletion = await getProfileCompletion(auth.userId);
+    return NextResponse.json({ feedback: row, profileCompletion });
+  } catch (err) {
+    console.error("[api/feedback POST] error:", err);
     return NextResponse.json(
-      { error: "Failed to save feedback" },
+      {
+        error: "Feedback write failed",
+        details: err instanceof Error ? err.message : String(err),
+      },
       { status: 500 }
     );
   }
 }
 
-// Get user's feedback history
-export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const feedback = await prisma.userFeedback.findMany({
-    where: { userId: session.user.id },
-    include: {
-      event: {
-        select: {
-          id: true,
-          title: true,
-          category: true,
-          venueName: true,
-        },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  return NextResponse.json({ feedback });
-}
-
-// Delete feedback
 export async function DELETE(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const auth = await requireUserId();
+  if (!auth.ok) return auth.res;
 
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const body = await request.json().catch(() => null);
+  const parsed = deleteSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid body", details: parsed.error.flatten() },
+      { status: 400 }
+    );
   }
 
-  const { searchParams } = new URL(request.url);
-  const eventId = searchParams.get("eventId");
-
-  if (!eventId) {
-    return NextResponse.json({ error: "Event ID required" }, { status: 400 });
+  try {
+    const deleted = await deleteFeedback({
+      userId: auth.userId,
+      ref: parsed.data.ref,
+    });
+    const profileCompletion = await getProfileCompletion(auth.userId);
+    return NextResponse.json({ deleted, profileCompletion });
+  } catch (err) {
+    console.error("[api/feedback DELETE] error:", err);
+    return NextResponse.json(
+      {
+        error: "Feedback delete failed",
+        details: err instanceof Error ? err.message : String(err),
+      },
+      { status: 500 }
+    );
   }
-
-  await prisma.userFeedback.deleteMany({
-    where: {
-      userId: session.user.id,
-      eventId,
-    },
-  });
-
-  return NextResponse.json({ success: true });
 }
