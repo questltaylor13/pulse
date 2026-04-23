@@ -78,9 +78,15 @@ async function HomeBody({
   occasion: string;
   scope: "near" | "all";
 }) {
+  // PRD 6 Phase 2 — session lookup hoisted so userId can flow into
+  // fetchHomeFeed / fetchPlacesFeed for personalized rail ordering.
+  // Session reads are JWT-based, not DB-hitting.
+  const sessionForFeed = await getServerSession(authOptions);
+  const feedUserId = sessionForFeed?.user?.id ?? null;
+
   const eventsData: HomeFeedResponse | null =
     tab === "events"
-      ? await fetchHomeFeed(category as RailCategory, scope).catch((err) => {
+      ? await fetchHomeFeed(category as RailCategory, scope, feedUserId).catch((err) => {
           console.error("[home] fetchHomeFeed failed:", err);
           return null;
         })
@@ -88,7 +94,7 @@ async function HomeBody({
 
   const placesData: PlacesFeedResponse | null =
     tab === "places"
-      ? await fetchPlacesFeed(category as PlacesRailCategory).catch((err) => {
+      ? await fetchPlacesFeed(category as PlacesRailCategory, feedUserId).catch((err) => {
           console.error("[home] fetchPlacesFeed failed:", err);
           return null;
         })
@@ -121,10 +127,10 @@ async function HomeBody({
   // PRD 5 Phase 1 — batch-fetch current user's feedback for every item the
   // feed will render. One query per page load; used to (a) stamp the
   // "Interested" pill on WANT cards, (b) hide PASS/DONE cards pre-render.
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  const session = sessionForFeed;
+  const userId = feedUserId;
   const feedbackMaps = await getFeedbackMaps({
-    userId,
+    userId: userId ?? undefined,
     eventIds: events.map((e) => e.id),
     placeIds: places.map((p) => p.id),
   });

@@ -80,9 +80,20 @@ export async function POST(request: NextRequest) {
         budgetTier,
         sparkResponse: sparkResponse || null,
         ...scores,
+        // PRD 6 Phase 2 — bump version so the precompute cron knows to re-rank.
+        version: { increment: 1 },
       },
     });
   });
+
+  // PRD 6 Phase 2 — invalidate the ranked-feed cache so the profile change
+  // takes effect on next precompute. Non-fatal if it fails.
+  try {
+    const { markDirty } = await import("@/lib/ranking/cache");
+    await markDirty(userId);
+  } catch (err) {
+    console.warn("[onboarding] markDirty failed:", err);
+  }
 
   return NextResponse.json({ success: true, profile });
 }

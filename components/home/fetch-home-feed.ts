@@ -16,6 +16,8 @@ import {
   type RegionalScope,
 } from "@/lib/queries/events";
 import { sortByEditorialRank } from "@/lib/ranking";
+import { buildCacheLookup, readCache, sortByCacheScore } from "@/lib/ranking/cache";
+import { isRankingV2Enabled } from "@/lib/ranking/flags";
 import { SEED_GUIDES } from "@/lib/home/seed-guides";
 import {
   placeWhereForPlacesRail,
@@ -134,10 +136,16 @@ const PLACE_SELECT = {
 } as const;
 
 export async function fetchPlacesFeed(
-  cat: PlacesRailCategory
+  cat: PlacesRailCategory,
+  userId?: string | null,
 ): Promise<PlacesFeedResponse> {
   const now = new Date();
   const placeCat = placeWhereForPlacesRail(cat);
+  // PRD 6 Phase 2 — when RANKING_V2 is on and we have a userId, re-sort
+  // each rail by the user's personalized cache score. Cache miss = keep
+  // the existing sort (sortByCacheScore returns items unchanged when the
+  // lookup is empty).
+  const cacheLookup = await maybeReadCacheLookup(userId);
 
   const [newInDenver, neighborhoods, localFavorites, dateNight, goodForGroups, workFriendly] =
     await Promise.all([
@@ -201,14 +209,30 @@ export async function fetchPlacesFeed(
     ]);
 
   return {
-    newInDenver: newInDenver.map(toPlaceCompact),
+    newInDenver: sortByCacheScore(newInDenver, "place", cacheLookup).map(toPlaceCompact),
     neighborhoods,
-    localFavorites: localFavorites.map(toPlaceCompact),
-    dateNight: dateNight.map(toPlaceCompact),
-    goodForGroups: goodForGroups.map(toPlaceCompact),
-    workFriendly: workFriendly.map(toPlaceCompact),
+    localFavorites: sortByCacheScore(localFavorites, "place", cacheLookup).map(toPlaceCompact),
+    dateNight: sortByCacheScore(dateNight, "place", cacheLookup).map(toPlaceCompact),
+    goodForGroups: sortByCacheScore(goodForGroups, "place", cacheLookup).map(toPlaceCompact),
+    workFriendly: sortByCacheScore(workFriendly, "place", cacheLookup).map(toPlaceCompact),
     lastUpdatedAt: now.toISOString(),
   };
+}
+
+/**
+ * Read the user's RankedFeedCache once and build a score lookup map for
+ * the rail rewirers. Returns an empty map when personalization is off,
+ * the user is anonymous, or the cache misses.
+ */
+async function maybeReadCacheLookup(userId?: string | null): Promise<Map<string, number>> {
+  if (!userId || !isRankingV2Enabled()) return new Map();
+  try {
+    const cache = await readCache(userId);
+    return buildCacheLookup(cache);
+  } catch (err) {
+    console.warn("[fetch-home-feed] cache read failed, using legacy sort:", err);
+    return new Map();
+  }
 }
 
 // ---------- Guide helpers ----------
@@ -329,10 +353,12 @@ export async function fetchGuidesFeed(
 
 export async function fetchHomeFeed(
   cat: RailCategory,
-  scope: RegionalScope = "near"
+  scope: RegionalScope = "near",
+  userId?: string | null,
 ): Promise<HomeFeedResponse> {
   const now = new Date();
   const eodToday = endOfTodayLocal(now);
+  const cacheLookup = await maybeReadCacheLookup(userId);
   const { start: weekendStart, end: weekendEnd } = upcomingWeekendRange(now);
   const eightWeeksOut = new Date(now.getTime() + 56 * 24 * 60 * 60 * 1000);
 
@@ -419,24 +445,35 @@ export async function fetchHomeFeed(
     }),
   ]);
 
-  const weekendRanked = sortByEditorialRank(
-    weekend.map((e) => ({ ...e, viewCount: 0, saveCount: 0 })),
-    { now }
-  ).slice(0, 10);
+  // When the user has a cache, personalize each rail's order. Items
+  // absent from the cache keep their existing relative position at the
+  // tail (sortByCacheScore's stable-order semantics).
+  const weekendPersonalized = sortByCacheScore(weekend, "event", cacheLookup);
+  const weekendRanked =
+    cacheLookup.size > 0
+      ? weekendPersonalized.slice(0, 10)
+      : sortByEditorialRank(
+          weekend.map((e) => ({ ...e, viewCount: 0, saveCount: 0 })),
+          { now },
+        ).slice(0, 10);
 
+  const outsideEventsPersonalized = sortByCacheScore(outsideEvents, "event", cacheLookup);
+  const outsidePlacesPersonalized = sortByCacheScore(outsidePlaces, "place", cacheLookup);
   const outsideTheCity: HomeFeedResponse["outsideTheCity"] = [
-    ...outsideEvents.map((e) => ({ kind: "event" as const, ...toEventCompact(e) })),
-    ...outsidePlaces.map((p) => ({ kind: "place" as const, ...toPlaceCompact(p) })),
+    ...outsideEventsPersonalized.map((e) => ({ kind: "event" as const, ...toEventCompact(e) })),
+    ...outsidePlacesPersonalized.map((p) => ({ kind: "place" as const, ...toPlaceCompact(p) })),
   ].slice(0, 10);
 
   // PRD 2 §5.4: hide Worth-a-weekend when <3 high-signal events.
   const worthAWeekendOut =
-    worthAWeekend.length >= 3 ? worthAWeekend.map(toEventCompact) : [];
+    worthAWeekend.length >= 3
+      ? sortByCacheScore(worthAWeekend, "event", cacheLookup).map(toEventCompact)
+      : [];
 
   return {
-    today: today.map(toEventCompact),
+    today: sortByCacheScore(today, "event", cacheLookup).map(toEventCompact),
     weekendPicks: weekendRanked.map(toEventCompact),
-    newInDenver: newPlaces.map(toPlaceCompact),
+    newInDenver: sortByCacheScore(newPlaces, "place", cacheLookup).map(toPlaceCompact),
     outsideTheCity,
     worthAWeekend: worthAWeekendOut,
     guidesFromCreators: SEED_GUIDES,
