@@ -1,3 +1,8 @@
+/**
+ * @deprecated PRD 6 replaces this with lib/ranking/. Remove in Phase 8.5
+ * once RANKING_V2_ENABLED has run green for a week. New code should import
+ * from lib/ranking/ instead.
+ */
 import {
   Category,
   RelationshipStatus,

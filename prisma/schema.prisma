@@ -210,6 +210,10 @@ model User {
   // strip in the home feed. Strip hides for 48h after this timestamp, then
   // reappears until completion hits 80%. Null = never dismissed.
   profileStripDismissedAt DateTime?
+  // PRD 6 Phase 6 — A/B variant assignment. Hash-based on signup; all
+  // existing users backfilled to "control". Variant lookup happens in
+  // lib/ranking/variants.ts; unknown variants fall back to "control".
+  rankingVariant          String              @default("control")
   isAdmin                 Boolean             @default(false)
   isInfluencer            Boolean             @default(false) // Verified curator flag
   referralCode            String?             @unique // Unique referral code
@@ -242,6 +246,8 @@ model User {
   eventFeedViews      EventFeedView[]
   detailedPreferences DetailedPreferences?
   profile             UserProfile?
+  // PRD 6 — precomputed ranked feed (one row per user). See RankedFeedCache.
+  rankedFeedCache     RankedFeedCache?
   // Plans
   plans               Plan[]
   // New place alerts
@@ -1036,8 +1042,60 @@ model UserProfile {
   aspirationCategories String[]
   aspirationText       String?
 
+  // PRD 6 Phase 0 — scalar version bumped on profile write. Drives cache
+  // invalidation in the precompute cron without having to diff JSON fields.
+  version Int @default(1)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// PRD 6 — Ranking engine
+// ============================================================================
+
+/// Per-user precomputed ranked feed. Written hourly by the precompute cron
+/// (app/api/ranking/precompute) and read by lib/ranking/rails.ts to power
+/// the Home rails and /api/feed. Holds the full ranked list as Json.
+model RankedFeedCache {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Array of RankedItem — {itemType, itemId, score, reasons[]}. Shape
+  /// defined in lib/ranking/types.ts. Writers must serialize through the
+  /// writeCache() helper so the shape stays consistent.
+  rankedItems Json
+
+  computedAt     DateTime @default(now())
+  /// Mirror of UserProfile.version at compute time. Cron skips re-rank
+  /// when this matches current UserProfile.version AND isDirty=false.
+  profileVersion Int
+  /// Count of UserItemStatus rows for this user at compute time. Cron
+  /// also uses this to detect new feedback since last rank.
+  feedbackCount  Int
+  /// Set by markDirty() whenever feedback or profile changes invalidate
+  /// this cache. Next precompute run re-ranks and clears the flag.
+  isDirty        Boolean  @default(false)
+
+  @@index([computedAt])
+}
+
+/// Observability log for every precompute iteration. 14-day retention via
+/// the cleanup cron (Phase 7). Intentionally no FK on userId so rows
+/// survive user deletion for post-hoc debugging.
+model RankingRun {
+  id               String   @id @default(cuid())
+  userId           String?
+  variant          String   @default("control")
+  poolSize         Int      @default(0)
+  rankedCount      Int      @default(0)
+  serendipityCount Int      @default(0)
+  durationMs       Int      @default(0)
+  error            String?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
 }
 
 // Detailed user preferences for recommendations

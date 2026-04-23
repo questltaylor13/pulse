@@ -1,4 +1,7 @@
 /**
+ * @deprecated PRD 6 replaces this with lib/ranking/. Remove in Phase 8.5
+ * once RANKING_V2_ENABLED has run green for a week.
+ *
  * Recommendation Engine V2 for Pulse
  *
  * Supports both Events and Places with:
