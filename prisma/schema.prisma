@@ -195,22 +195,26 @@ enum LeaderboardType {
 }
 
 model User {
-  id                 String              @id @default(cuid())
-  email              String              @unique
-  username           String?             @unique // URL-friendly unique username
-  name               String?
-  bio                String? // User bio for profile
-  profileImageUrl    String? // Profile picture URL
-  passwordHash       String?
-  citySlug           String              @default("denver")
-  relationshipStatus RelationshipStatus?
-  denverTenure       DenverTenure?
-  onboardingComplete Boolean             @default(false)
-  isAdmin            Boolean             @default(false)
-  isInfluencer       Boolean             @default(false) // Verified curator flag
-  referralCode       String?             @unique // Unique referral code
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  id                      String              @id @default(cuid())
+  email                   String              @unique
+  username                String?             @unique // URL-friendly unique username
+  name                    String?
+  bio                     String? // User bio for profile
+  profileImageUrl         String? // Profile picture URL
+  passwordHash            String?
+  citySlug                String              @default("denver")
+  relationshipStatus      RelationshipStatus?
+  denverTenure            DenverTenure?
+  onboardingComplete      Boolean             @default(false)
+  // PRD 5 Phase 2 §2.1 — last time the user dismissed the profile completion
+  // strip in the home feed. Strip hides for 48h after this timestamp, then
+  // reappears until completion hits 80%. Null = never dismissed.
+  profileStripDismissedAt DateTime?
+  isAdmin                 Boolean             @default(false)
+  isInfluencer            Boolean             @default(false) // Verified curator flag
+  referralCode            String?             @unique // Unique referral code
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
 
   preferences         Preference[]
   interactions        UserEventInteraction[]
