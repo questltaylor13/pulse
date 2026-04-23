@@ -174,6 +174,106 @@ What PRD 5 guarantees to PRD 4:
 
 ---
 
+## Behavioral signals (added by PRD 5 Phase 5)
+
+Behavioral feedback is captured in `UserItemStatus` (extended by PRD 5 to
+cover Events, Places, and Discoveries). UI copy maps to the existing
+`ItemStatus` enum:
+
+| UI label | `ItemStatus` |
+|---|---|
+| "Interested" | `WANT` |
+| "Not for me" | `PASS` |
+| "I've been there" | `DONE` |
+
+### Ranking effects
+
+| Status | Effect on ranking | Magnitude |
+|---|---|---|
+| `WANT` on item X | Tag-similarity boost on items sharing ≥ 2 tags with X | `+0.25` per similar item, capped `+0.40` total across all WANTs |
+| `PASS` on item X | Tag-similarity penalty on items sharing ≥ 2 tags with X | `-0.30` per similar item, capped `-0.50` total across all PASSes |
+| `DONE` on item X | Hard filter — X never appears in this user's feed again | n/a |
+
+PASSes bite harder than WANTs boost. Reddit research on discovery apps is
+clear that "please stop showing me this" is structurally stronger signal
+than "more of this."
+
+### Behavioral-vs-stated weighting
+
+**Behavioral signal overrides stated preferences when they conflict.**
+
+Example: a user selects "Try new restaurants" at onboarding (Q5 aspiration
+category boost of `+0.20` per matching item, §aspirationCategories) but
+has PASSed five Italian restaurants. The aspiration boost for restaurants
+stays in place — but the similar-Italian-restaurant penalty stacks on top
+and wins the aggregate for any new Italian place.
+
+No manual reweighting is needed across time. Because behavioral boosts /
+penalties are 0 when there's nothing to compare against, stated
+preferences naturally dominate early; as feedback accumulates the
+behavioral contribution crowds out the stated floor.
+
+### Updated MVP ranking formula
+
+```
+rank = base_quality_score
+     × strategy_multiplier[contextSegment]          // Q1, 0.8–1.2
+     + social_tag_boost                              // Q2, 0–0.15
+     + vibe_tag_boost                                // Q3, 0–0.32
+     + aspiration_category_boost                     // Q5, 0–0.40
+     - budget_penalty                                // Q4, 0–0.25
+     + recency_boost                                 // 0 or +0.05
+     + want_similarity_boost                         // PRD 5, 0 to +0.40
+     - pass_similarity_penalty                       // PRD 5, 0 to -0.50
+
+Then apply:
+  - budget_filter                                    // Q4
+  - strategy-preset-specific filters                 // Q1
+  - DONE filter (PRD 5 — remove items user marked BEEN_THERE)
+```
+
+Then inject serendipity slots (10-15%, 20% for `IN_A_RUT`).
+
+### Cold-start handling
+
+Users with zero `UserItemStatus` rows rely fully on stated preferences
+(PRD 4). As feedback accumulates, behavioral signal contribution grows.
+This is automatic — no special logic needed because behavioral boosts are
+0 when there's no feedback to compare against.
+
+### Legacy-source rows
+
+`UserItemStatus` rows with `source = LEGACY` (backfilled from the
+pre-PRD-5 Want/Done/Pass UI) count identically to explicit feedback for
+ranking. They just can't be attributed to a specific surface
+(FEED_CARD / PROFILE_SWIPER / DETAIL_PAGE) in analytics.
+
+---
+
+## Contract guarantees
+
+What PRD 4 guarantees to PRD 5:
+- Every new user completing onboarding writes all 5 fields to `UserProfile`
+- Chip-to-category mapping lives in `lib/onboarding/chip-mapping.ts` and is stable
+- Schema doesn't change without updating this document
+
+What PRD 5 guarantees to PRD 6 (Matching Engine):
+- `UserItemStatus` is polymorphic across Event / Place / Discovery / Item,
+  with exactly one FK non-null per row (enforced by SQL CHECK)
+- `FeedbackSource` is always populated (`LEGACY` default for pre-PRD-5 rows)
+- Denormalized snapshot columns survive item deletion for history use cases
+- Schema doesn't change without updating this document
+
+What PRD 5 guarantees to PRD 4:
+- Missing profiles don't crash the feed
+- Every field in `UserProfile` actually influences ranking (no dead fields)
+- Ranking stays explainable — a developer should be able to look at a scored feed item and point to exactly which profile fields contributed to its position
+
+---
+
 ## Changelog
 
+- **v1.1** — PRD 5 Phase 5 behavioral signal section: WANT boost, PASS
+  penalty, DONE filter, behavioral-vs-stated weighting, cold-start
+  handling, updated MVP formula.
 - **v1.0** — initial draft, matches PRD 4 final 5-question flow
