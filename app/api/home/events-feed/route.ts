@@ -215,6 +215,7 @@ export async function GET(req: NextRequest) {
     newInDenver: newPlaces.map(toPlaceCompact),
     outsideTheCity,
     worthAWeekend: [],
+    outsideYourUsual: [], // unauthenticated JSON endpoint — no personalization
     guidesFromCreators: SEED_GUIDES,
     lastUpdatedAt: now.toISOString(),
     regionalScope: "near",
