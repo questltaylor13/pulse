@@ -313,3 +313,142 @@ PRD 5 behavior documented in `PRD/signal-map.md` §Behavioral signals:
 - Your Denver promotion to top-level nav (gated on usage cohort threshold)
 - Removing the Item-polymorphic bridge entirely — 438 legacy rows still
   live through it; new writes all go direct.
+
+---
+
+## PRD 6: Matching Engine
+
+Everything upstream produced inputs; PRD 6 is where they converge into
+a ranked per-user feed. In-process `lib/ranking/` module — no separate
+service — backed by an hourly precompute cron and a per-user
+RankedFeedCache row. Formula is a pure function; caller helpers handle
+all DB + async.
+
+### Architecture
+
+**Precomputed with real-time rails.** Background cron runs hourly per
+user and writes `RankedFeedCache.rankedItems` as Json. Home rails
+(`fetchHomeFeed`) read the cache at render time and re-sort each
+rail's raw items by the user's personalized score via
+`sortByCacheScore`. Cache miss or legacy user → rails keep their
+current universal sort. Formula in `lib/ranking/formula.ts` is pure
+so `npm run test` can lock scoring behavior without a DB.
+
+**Formula (per `PRD/signal-map.md` §Updated formula):**
+```
+inner = base_quality × strategy.qualityMultiplier
+      + softRank × (vibe_boost + aspiration_boost + social_boost)
+      + want_similarity − pass_similarity
+      − budget_penalty
+      + recency_boost
+final = inner × novelty_adjustment
+```
+
+Locked decisions: novelty multiplies the whole inner sum (not just
+recency). softRank (0.6x) dampens profile-derived boosts in
+cold-start mode (first 7 days OR <15 feedback; VISITING short-circuits
+the age gate). WANT similarity caps at +0.40; PASS at −0.50. DONE is
+a hard pool filter, not a score adjustment.
+
+### Schema (migration `20260423150000_prd6_ranking_cache`)
+
+- `RankedFeedCache` — one row per user; Json `rankedItems`,
+  `computedAt`, `profileVersion`, `feedbackCount`, `isDirty`.
+- `RankingRun` — 14-day observability log (one row per precompute
+  iteration). Daily cleanup cron trims rows older than that.
+- `User.rankingVariant` — A/B bucket; default "control".
+- `UserProfile.version` — scalar bumped on profile write to trigger
+  cache invalidation without JSON-diffing.
+
+### Module map
+
+- `lib/ranking/config.ts` — weights, strategy presets, cold-start
+  params, serendipity interval, candidate-pool limits, precompute
+  schedule, fallback. All editable without admin UI. Variant overrides
+  in `RANKING_VARIANTS` (V1 ships control-only).
+- `lib/ranking/formula.ts` — pure `score()` function.
+- `lib/ranking/normalizers.ts` — bridge Event/Place/Discovery into
+  unified `RankableItem` (quality, price tier, tag union).
+- `lib/ranking/candidate-pool.ts` — Prisma query layer; applies
+  status/scope/budget-drop/DONE filters before scoring.
+- `lib/ranking/serendipity.ts` — injects non-match picks at every Nth
+  slot (default 5); prefers Hidden Gems; variety-constrained.
+- `lib/ranking/precompute.ts` — per-user orchestrator called by cron.
+- `lib/ranking/cache.ts` — read/write/markDirty + the helpers home
+  rails use to re-sort by personalized score.
+- `lib/ranking/context.ts` — builds `RankingContext` (profile +
+  feedback + familiarity) in two round-trips.
+- `lib/ranking/explanation.ts` — factor → Pulse-voice copy mapping.
+- `lib/ranking/outside-usual.ts` — hydrates the serendipity-tagged
+  items from cache into EventCompact/PlaceCompact for the rail.
+- `lib/ranking/fallback.ts` — quality-only sort fallback.
+- `lib/ranking/variants.ts` — A/B config merger + hash-bucket assigner.
+- `lib/ranking/flags.ts` — `RANKING_V2_ENABLED` + `OUTSIDE_USUAL_ENABLED`
+  env reads.
+
+### Routes
+
+- `GET /api/ranking/precompute` — hourly cron (`0 */1 * * *`).
+  CRON_SECRET-gated. Iterates users dirty→uncached→stale, respects
+  a 45s per-run budget.
+- `GET /api/ranking/sanity` — weekly cron (Mondays 10:00 UTC). Logs
+  warnings on top-10 homogeneity, serendipity hit rate, cross-segment
+  top-10 overlap.
+- `GET /api/cron/cleanup-ranking-runs` — daily (04:30 UTC). Trims
+  RankingRun rows older than 14 days.
+- `GET /api/feed/why?itemType=<>&itemId=<>` — session-gated; returns
+  `{present, rank, reasons, isSerendipity, computedAt}` for a single
+  item from the user's own cache.
+
+### UI surfaces
+
+- Home rails (`EventsTabBody`, `PlacesTabBody`): when
+  `RANKING_V2_ENABLED=true` and the user is signed in, each rail's
+  items re-sort by cache score. Items absent from the cache keep
+  their legacy relative order at the tail.
+- "Outside your usual" rail (`OutsideYourUsualRail`): renders between
+  "Just added on Pulse" and "Outside the city" when
+  `OUTSIDE_USUAL_ENABLED=true`, user has ≥5 feedback, and cache has
+  serendipity-tagged items. Cards carry a "Stretch" pill.
+- "Why am I seeing this?" (`WhyThisSheet`): new indigo row in the
+  three-dot ActionSheet (CardMoreMenu + DetailFeedback). Modal with
+  rank position, top 5 positive reasons with magnitude bars,
+  serendipity callout, feedback CTA.
+
+### Rollout
+
+Clean-break end state per locked decision §A, but transition-gated.
+Legacy modules (`lib/scoring.ts`, `lib/ranking.ts`,
+`lib/recommendations-v2.ts`) are marked `@deprecated` and stay in tree
+until `RANKING_V2_ENABLED` has run green for a week, then Phase 8.5
+deletes them.
+
+`RANKING_V2_ENABLED=false` initially → precompute cron still runs and
+writes cache in the background, but `fetchHomeFeed` stays on legacy
+sorts. Internal dogfood by flipping per-user. Cohort ramp via the
+existing variant hash once dashboards are clean.
+
+### Admin observability
+
+`/admin/ranking` — isAdmin-gated. Tiles for users / cache coverage /
+fresh (<4h) / stale counts. Precompute job detail (last run, duration,
+pool size, serendipity count, error). Fallback-incident count (7d).
+Variant cohort table. Last 20 RankingRun samples.
+
+### Tests
+
+`lib/ranking/__tests__/*.test.ts` — 40 passing via vitest. Formula
+(12 fixtures covering all 4 context segments + cold-start + cap
+behaviors + novelty precedence), normalizers (16), serendipity (6),
+variants (4). Tests are locked via `npm run test` (vitest added in
+Pre-Phase 0).
+
+### Known deferred (PRD 6)
+- Live user location — separate PRD once the app supports permissions.
+- `aspirationText` free-text LLM extraction — gated on 200+ collected
+  responses.
+- Social graph signals (friend saves, aggregate counts).
+- Real A/B variants (only "control" ships in V1; scaffolding ready).
+- Legacy module deletion (Phase 8.5, after a week green).
+- Analytics vendor wire-up still deferred; ranking events flow
+  through the same `track()` stub.
