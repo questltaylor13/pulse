@@ -3,8 +3,11 @@
 import { useState } from "react";
 import type { ItemStatus } from "@prisma/client";
 import type { FeedbackRef } from "@/lib/feedback/types";
+import { isEventRef, isPlaceRef, isDiscoveryRef } from "@/lib/feedback/types";
 import { useFeedback } from "@/lib/feedback/hooks";
+import type { RankedItemType } from "@/lib/ranking/types";
 import ActionSheet from "./ActionSheet";
+import WhyThisSheet from "./WhyThisSheet";
 
 // PRD 5 §1.1 — three-dot trigger. Sits top-left opposite SaveButton on
 // compact feed cards. Opens the ActionSheet (§1.2). Drives the optimistic
@@ -29,10 +32,16 @@ export default function CardMoreMenu({
   onRemove,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [whyOpen, setWhyOpen] = useState(false);
   const { status, submitting, errorMessage, upsert } = useFeedback({
     ref: ref_,
     initialStatus,
   });
+
+  // PRD 6 Phase 4 — derive itemType + itemId from the FeedbackRef for the
+  // "Why am I seeing this?" path. Legacy itemRef (Item bridge) has no
+  // ranking cache entry so we hide the Why row for those.
+  const whyTarget = resolveWhyTarget(ref_);
 
   const handleSelect = async (next: ItemStatus) => {
     const prev = status;
@@ -87,7 +96,35 @@ export default function CardMoreMenu({
         errorMessage={errorMessage}
         onSelect={handleSelect}
         onShare={handleShare}
+        onWhy={
+          whyTarget
+            ? () => {
+                setOpen(false);
+                setWhyOpen(true);
+              }
+            : undefined
+        }
       />
+      {whyTarget && (
+        <WhyThisSheet
+          open={whyOpen}
+          onClose={() => setWhyOpen(false)}
+          itemType={whyTarget.itemType}
+          itemId={whyTarget.itemId}
+          itemTitle={itemTitle}
+          onOpenFeedback={() => {
+            setWhyOpen(false);
+            setOpen(true);
+          }}
+        />
+      )}
     </>
   );
+}
+
+function resolveWhyTarget(ref: FeedbackRef): { itemType: RankedItemType; itemId: string } | null {
+  if (isEventRef(ref)) return { itemType: "event", itemId: ref.eventId };
+  if (isPlaceRef(ref)) return { itemType: "place", itemId: ref.placeId };
+  if (isDiscoveryRef(ref)) return { itemType: "discovery", itemId: ref.discoveryId };
+  return null;
 }

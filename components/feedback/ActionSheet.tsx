@@ -19,10 +19,14 @@ interface Props {
   errorMessage: string | null;
   onSelect: (status: ItemStatus) => void;
   onShare: () => void;
+  /** PRD 6 Phase 4 — optional "Why am I seeing this?" entry. If omitted,
+   *  the row is hidden. Parent components include this when the user is
+   *  signed in and the feature flag is on. */
+  onWhy?: () => void;
 }
 
 interface Row {
-  status: ItemStatus | "SHARE";
+  status: ItemStatus | "SHARE" | "WHY";
   icon: string;
   label: string;
   subtitle: string;
@@ -63,6 +67,14 @@ const ROWS: Row[] = [
     iconBg: "bg-amber-100",
     iconText: "text-amber-700",
   },
+  {
+    status: "WHY",
+    icon: "💡",
+    label: "Why am I seeing this?",
+    subtitle: "See how this matched your taste",
+    iconBg: "bg-indigo-100",
+    iconText: "text-indigo-700",
+  },
 ];
 
 export default function ActionSheet({
@@ -74,6 +86,7 @@ export default function ActionSheet({
   errorMessage,
   onSelect,
   onShare,
+  onWhy,
 }: Props) {
   useEffect(() => {
     if (!open) return;
@@ -107,8 +120,11 @@ export default function ActionSheet({
         </div>
 
         <ul className="divide-y divide-mute-divider">
-          {ROWS.map((row) => {
-            const isCurrent = row.status !== "SHARE" && currentStatus === row.status;
+          {ROWS.filter((row) => row.status !== "WHY" || onWhy).map((row) => {
+            const isCurrent =
+              row.status !== "SHARE" &&
+              row.status !== "WHY" &&
+              currentStatus === row.status;
             return (
               <li key={row.status}>
                 <button
@@ -116,6 +132,7 @@ export default function ActionSheet({
                   disabled={submitting}
                   onClick={() => {
                     if (row.status === "SHARE") onShare();
+                    else if (row.status === "WHY") onWhy?.();
                     else onSelect(row.status);
                   }}
                   className={`flex w-full items-center gap-3 px-5 py-3.5 text-left transition active:bg-slate-50 disabled:opacity-50 ${
