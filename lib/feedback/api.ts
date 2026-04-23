@@ -15,8 +15,10 @@ import { prisma } from "@/lib/prisma";
 import type {
   FeedbackSource,
   ItemStatus,
+  Prisma,
   UserItemStatus,
 } from "@prisma/client";
+import { markDirty } from "@/lib/ranking/cache";
 import type { FeedbackRef } from "./types";
 import {
   isDiscoveryRef,
@@ -92,6 +94,24 @@ async function loadDiscoverySnapshot(
   };
 }
 
+/**
+ * Wrap a Prisma write in a cache-invalidation hook. Flags the user's
+ * RankedFeedCache as dirty so the next precompute run re-ranks them.
+ * Keeps the ranking dependency out of every individual upsert call site.
+ */
+function markDirtyAfter<T>(userId: string, p: Promise<T>): Promise<T> {
+  return p.then(async (result) => {
+    try {
+      await markDirty(userId);
+    } catch (err) {
+      // Dirty-flagging failure is non-fatal — the next scheduled precompute
+      // will still pick up the feedback via count + profileVersion changes.
+      console.warn("[feedback.markDirty] failed:", err);
+    }
+    return result;
+  });
+}
+
 export async function upsertFeedback(params: {
   userId: string;
   ref: FeedbackRef;
@@ -103,35 +123,35 @@ export async function upsertFeedback(params: {
 
   if (isItemRef(ref)) {
     const snap = await loadItemSnapshot(ref.itemId);
-    return prisma.userItemStatus.upsert({
+    return markDirtyAfter(userId, prisma.userItemStatus.upsert({
       where: { userId_itemId: { userId, itemId: ref.itemId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
       create: { userId, itemId: ref.itemId, ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
-    });
+    }));
   }
   if (isEventRef(ref)) {
     const snap = await loadEventSnapshot(ref.eventId);
-    return prisma.userItemStatus.upsert({
+    return markDirtyAfter(userId, prisma.userItemStatus.upsert({
       where: { userId_eventId: { userId, eventId: ref.eventId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
       create: { userId, eventId: ref.eventId, ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
-    });
+    }));
   }
   if (isPlaceRef(ref)) {
     const snap = await loadPlaceSnapshot(ref.placeId);
-    return prisma.userItemStatus.upsert({
+    return markDirtyAfter(userId, prisma.userItemStatus.upsert({
       where: { userId_placeId: { userId, placeId: ref.placeId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
       create: { userId, placeId: ref.placeId, ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
-    });
+    }));
   }
   if (isDiscoveryRef(ref)) {
     const snap = await loadDiscoverySnapshot(ref.discoveryId);
-    return prisma.userItemStatus.upsert({
+    return markDirtyAfter(userId, prisma.userItemStatus.upsert({
       where: { userId_discoveryId: { userId, discoveryId: ref.discoveryId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
       create: { userId, discoveryId: ref.discoveryId, ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
-    });
+    }));
   }
   throw new Error("upsertFeedback: ref missing valid id");
 }
@@ -141,17 +161,14 @@ export async function deleteFeedback(params: {
   ref: FeedbackRef;
 }): Promise<number> {
   const { userId, ref } = params;
-  if (isItemRef(ref)) {
-    return (await prisma.userItemStatus.deleteMany({ where: { userId, itemId: ref.itemId } })).count;
-  }
-  if (isEventRef(ref)) {
-    return (await prisma.userItemStatus.deleteMany({ where: { userId, eventId: ref.eventId } })).count;
-  }
-  if (isPlaceRef(ref)) {
-    return (await prisma.userItemStatus.deleteMany({ where: { userId, placeId: ref.placeId } })).count;
-  }
-  if (isDiscoveryRef(ref)) {
-    return (await prisma.userItemStatus.deleteMany({ where: { userId, discoveryId: ref.discoveryId } })).count;
-  }
+  const runDelete = async (where: Prisma.UserItemStatusWhereInput): Promise<number> => {
+    const count = (await prisma.userItemStatus.deleteMany({ where })).count;
+    try { await markDirty(userId); } catch (err) { console.warn("[feedback.markDirty] failed:", err); }
+    return count;
+  };
+  if (isItemRef(ref)) return runDelete({ userId, itemId: ref.itemId });
+  if (isEventRef(ref)) return runDelete({ userId, eventId: ref.eventId });
+  if (isPlaceRef(ref)) return runDelete({ userId, placeId: ref.placeId });
+  if (isDiscoveryRef(ref)) return runDelete({ userId, discoveryId: ref.discoveryId });
   throw new Error("deleteFeedback: ref missing valid id");
 }
