@@ -4,6 +4,7 @@ import EventCardCompact from "./EventCardCompact";
 import PlaceCardCompact from "./PlaceCardCompact";
 import GuideCard from "./GuideCard";
 import LastUpdatedIndicator from "./LastUpdatedIndicator";
+import OutsideYourUsualRail from "./OutsideYourUsualRail";
 import RegionalScopeFilter from "./RegionalScopeFilter";
 import type { HomeFeedResponse } from "@/lib/home/types";
 import { RAIL_LABELS, type RailCategory } from "@/lib/home/category-filters";
@@ -33,6 +34,7 @@ export default function EventsTabBody({ category, data, feedbackMaps }: Props) {
     newInDenver,
     outsideTheCity,
     worthAWeekend,
+    outsideYourUsual,
     guidesFromCreators,
     lastUpdatedAt,
     regionalScope,
@@ -114,6 +116,16 @@ export default function EventsTabBody({ category, data, feedbackMaps }: Props) {
           ))}
         </ScrollSection>
       )}
+
+      {/* PRD 6 Phase 5 — "Outside your usual" rail. Appears between
+          "Just added on Pulse" (Section 3) and "Outside the city"
+          (Section 4). Auto-hides when empty (flag off, anon, <5 feedback,
+          or cache miss). */}
+      <OutsideYourUsualRail
+        items={outsideYourUsual ?? []}
+        eventStatus={eventStatus}
+        placeStatus={placeStatus}
+      />
 
       {/* Section 4: Outside the city */}
       {outsideTheCity.length === 0 && category !== "all" ? (

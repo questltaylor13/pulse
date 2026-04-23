@@ -17,7 +17,9 @@ import {
 } from "@/lib/queries/events";
 import { sortByEditorialRank } from "@/lib/ranking";
 import { buildCacheLookup, readCache, sortByCacheScore } from "@/lib/ranking/cache";
-import { isRankingV2Enabled } from "@/lib/ranking/flags";
+import { isOutsideUsualEnabled, isRankingV2Enabled } from "@/lib/ranking/flags";
+import { fetchOutsideUsual } from "@/lib/ranking/outside-usual";
+import { prisma as prismaDb } from "@/lib/prisma";
 import { SEED_GUIDES } from "@/lib/home/seed-guides";
 import {
   placeWhereForPlacesRail,
@@ -470,14 +472,33 @@ export async function fetchHomeFeed(
       ? sortByCacheScore(worthAWeekend, "event", cacheLookup).map(toEventCompact)
       : [];
 
+  // PRD 6 Phase 5 — "Outside your usual" rail. Gated on flag + userId +
+  // ≥5 feedback. fetchOutsideUsual returns [] when any gate fails.
+  const outsideYourUsual = await maybeFetchOutsideUsual(userId, scope);
+
   return {
     today: sortByCacheScore(today, "event", cacheLookup).map(toEventCompact),
     weekendPicks: weekendRanked.map(toEventCompact),
     newInDenver: sortByCacheScore(newPlaces, "place", cacheLookup).map(toPlaceCompact),
     outsideTheCity,
     worthAWeekend: worthAWeekendOut,
+    outsideYourUsual,
     guidesFromCreators: SEED_GUIDES,
     lastUpdatedAt: now.toISOString(),
     regionalScope: scope,
   };
+}
+
+async function maybeFetchOutsideUsual(
+  userId: string | null | undefined,
+  scope: RegionalScope,
+): Promise<import("@/lib/ranking/outside-usual").OutsideUsualItem[]> {
+  if (!userId || !isOutsideUsualEnabled()) return [];
+  try {
+    const feedbackCount = await prismaDb.userItemStatus.count({ where: { userId } });
+    return await fetchOutsideUsual(userId, feedbackCount, { scope });
+  } catch (err) {
+    console.warn("[fetch-home-feed] outsideYourUsual failed:", err);
+    return [];
+  }
 }

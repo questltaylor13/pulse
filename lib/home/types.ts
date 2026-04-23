@@ -114,6 +114,10 @@ export interface HomeFeedResponse {
   // PRD 2 §5.4: mountain-destination events scored >= 8 on worth-the-drive.
   // Section hides when count < 3.
   worthAWeekend: EventCompact[];
+  /** PRD 6 Phase 5 — "Outside your usual" horizontal rail. Serialized
+   *  via lib/ranking/outside-usual.ts. Empty array when feature flag is
+   *  off, user is anonymous, cache miss, or feedback count < threshold. */
+  outsideYourUsual: import("@/lib/ranking/outside-usual").OutsideUsualItem[];
   guidesFromCreators: SeedGuide[];
   lastUpdatedAt: string; // ISO
   // PRD 2 §5.3: echoed back so the UI can render the filter chip in its
