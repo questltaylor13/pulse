@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import StickyChrome from "@/components/home/StickyChrome";
 import BottomNav from "@/components/home/BottomNav";
 import EventsTabBody from "@/components/home/EventsTabBody";
@@ -9,13 +10,20 @@ import PlacesTabBody from "@/components/home/PlacesTabBody";
 import GuidesTabBody from "@/components/home/GuidesTabBody";
 import EventsTabSkeleton from "@/components/home/EventsTabSkeleton";
 import NoticeToast from "@/components/home/NoticeToast";
+import ProfileCompletionStrip from "@/components/feedback/ProfileCompletionStrip";
+import TasteSwiper from "@/components/feedback/TasteSwiper";
 import { fetchHomeFeed, fetchPlacesFeed, fetchGuidesFeed } from "@/components/home/fetch-home-feed";
 import { getFeedbackMaps, isFilteredFromFeed } from "@/lib/feedback/server";
+import { calculateCompletion } from "@/lib/feedback/profile-completion";
 import type { HomeTab } from "@/components/home/TopTabs";
 import { isRailCategory, type RailCategory } from "@/lib/home/category-filters";
 import { isPlacesRailCategory, type PlacesRailCategory } from "@/lib/home/places-rail-filters";
 import { isOccasionTag } from "@/lib/constants/occasion-tags";
 import type { EventCompact, HomeFeedResponse, PlaceCompact, PlacesFeedResponse, GuidesFeedResponse } from "@/lib/home/types";
+
+// PRD 5 §2.1 — strip auto-hides for 48h after dismiss + permanently at 80%.
+const STRIP_DISMISS_WINDOW_MS = 48 * 60 * 60 * 1000;
+const STRIP_AUTO_HIDE_PCT = 80;
 
 export const metadata: Metadata = {
   title: "Pulse — Denver tonight, this weekend, and beyond",
@@ -29,7 +37,7 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 interface PageProps {
-  searchParams: Promise<{ tab?: string; cat?: string; occasion?: string; scope?: string }>;
+  searchParams: Promise<{ tab?: string; cat?: string; occasion?: string; scope?: string; swiper?: string }>;
 }
 
 export default async function HomePage({ searchParams }: PageProps) {
@@ -44,6 +52,7 @@ export default async function HomePage({ searchParams }: PageProps) {
     tab === "guides" && isOccasionTag(sp.occasion) ? sp.occasion : "all";
   // PRD 2 §5.3 — "Near Denver" default ON. Only "all" overrides.
   const scope: "near" | "all" = sp.scope === "all" ? "all" : "near";
+  const swiperOpen = sp.swiper === "1";
 
   return (
     <div className="relative flex min-h-screen flex-col bg-surface pb-[72px] md:pb-0">
@@ -52,6 +61,7 @@ export default async function HomePage({ searchParams }: PageProps) {
       </Suspense>
       <BottomNav />
       <NoticeToast />
+      {swiperOpen && <TasteSwiper />}
     </div>
   );
 }
@@ -112,11 +122,36 @@ async function HomeBody({
   // feed will render. One query per page load; used to (a) stamp the
   // "Interested" pill on WANT cards, (b) hide PASS/DONE cards pre-render.
   const session = await getServerSession(authOptions);
+  const userId = session?.user?.id;
   const feedbackMaps = await getFeedbackMaps({
-    userId: session?.user?.id,
+    userId,
     eventIds: events.map((e) => e.id),
     placeIds: places.map((p) => p.id),
   });
+
+  // PRD 5 Phase 2 §2.1 — profile-completion strip visibility. Computed here
+  // so SSR doesn't ship DOM when it shouldn't show (clean no-flash render).
+  let showCompletionStrip = false;
+  let completionPct = 0;
+  if (userId) {
+    const [userRow, feedbackCount] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { onboardingComplete: true, profileStripDismissedAt: true },
+      }),
+      prisma.userItemStatus.count({ where: { userId } }),
+    ]);
+    completionPct = calculateCompletion({
+      onboardingComplete: Boolean(userRow?.onboardingComplete),
+      feedbackCount,
+    });
+    const dismissedWithinWindow =
+      userRow?.profileStripDismissedAt
+        ? Date.now() - userRow.profileStripDismissedAt.getTime() < STRIP_DISMISS_WINDOW_MS
+        : false;
+    showCompletionStrip =
+      completionPct < STRIP_AUTO_HIDE_PCT && !dismissedWithinWindow;
+  }
 
   // Filtered copies of the feed structures with PASS/DONE excluded.
   const filteredEventsData: HomeFeedResponse | null = eventsData
@@ -164,6 +199,9 @@ async function HomeBody({
         searchableEvents={events}
         searchablePlaces={places}
       />
+      {showCompletionStrip && (
+        <ProfileCompletionStrip completion={completionPct} />
+      )}
       <div className="flex-1" id={`panel-${tab}`} role="tabpanel">
         {tab === "events" && filteredEventsData && (
           <EventsTabBody
