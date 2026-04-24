@@ -21,9 +21,15 @@ export default function BottomNav() {
     { label: "Saved", href: "/lists", icon: SavedIcon, matchPrefix: "/lists" },
     {
       label: "Profile",
-      href: session ? "/profile" : "/auth/login",
+      // /profile doesn't exist; username-based public profile when we have
+      // one, otherwise the settings page (which also carries the sign-out).
+      href: session?.user?.username
+        ? `/u/${session.user.username}`
+        : session
+          ? "/settings/profile"
+          : "/auth/login",
       icon: ProfileIcon,
-      matchPrefix: session ? "/profile" : "/auth",
+      matchPrefix: session ? "/settings" : "/auth",
     },
   ];
 
