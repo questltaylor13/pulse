@@ -105,6 +105,9 @@ export interface PlacesFeedResponse {
 
 export interface HomeFeedResponse {
   today: EventCompact[];
+  /** Total count of events matching today's filter before the Today rail cap.
+   *  Drives the "See all" link visibility (shown only when count exceeds the cap). */
+  todayCount: number;
   weekendPicks: EventCompact[];
   newInDenver: PlaceCompact[];
   outsideTheCity: Array<

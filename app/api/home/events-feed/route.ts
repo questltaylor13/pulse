@@ -129,20 +129,23 @@ export async function GET(req: NextRequest) {
   const eventCat = eventWhereForCategory(cat);
   const placeCat = placeWhereForCategory(cat);
 
+  const todayWhere = {
+    AND: [
+      activeEventsWhere(now),
+      eventCat,
+      { startTime: { gte: now, lte: eodToday } },
+    ],
+  };
+
   // Parallel fetch of all four section queries.
-  const [today, weekend, newPlaces, outsideEvents, outsidePlaces] = await Promise.all([
+  const [today, todayCount, weekend, newPlaces, outsideEvents, outsidePlaces] = await Promise.all([
     prisma.event.findMany({
-      where: {
-        AND: [
-          activeEventsWhere(now),
-          eventCat,
-          { startTime: { gte: now, lte: eodToday } },
-        ],
-      },
+      where: todayWhere,
       select: EVENT_SELECT,
       orderBy: { startTime: "asc" },
-      take: 10,
+      take: 25,
     }),
+    prisma.event.count({ where: todayWhere }),
     prisma.event.findMany({
       where: {
         AND: [
@@ -152,7 +155,7 @@ export async function GET(req: NextRequest) {
         ],
       },
       select: EVENT_SELECT,
-      take: 40,
+      take: 60,
     }),
     // "Just added on Pulse" — curator-flagged (isNew OR isFeatured) picks.
     // See components/home/fetch-home-feed.ts for rationale.
@@ -166,7 +169,7 @@ export async function GET(req: NextRequest) {
       },
       select: PLACE_SELECT,
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      take: 10,
+      take: 15,
     }),
     prisma.event.findMany({
       where: {
@@ -178,7 +181,7 @@ export async function GET(req: NextRequest) {
       },
       select: EVENT_SELECT,
       orderBy: { startTime: "asc" },
-      take: 6,
+      take: 10,
     }),
     prisma.place.findMany({
       where: {
@@ -186,11 +189,11 @@ export async function GET(req: NextRequest) {
       },
       select: PLACE_SELECT,
       orderBy: { updatedAt: "desc" },
-      take: 6,
+      take: 10,
     }),
   ]);
 
-  // "This weekend's picks" sorted by editorial rank. Keep top 10.
+  // "This weekend's picks" sorted by editorial rank. Keep top 20.
   const weekendRanked = sortByEditorialRank(
     weekend.map((e) => ({
       ...e,
@@ -199,18 +202,19 @@ export async function GET(req: NextRequest) {
       saveCount: 0,
     })),
     { now }
-  ).slice(0, 10);
+  ).slice(0, 20);
 
   const outsideTheCity: HomeFeedResponse["outsideTheCity"] = [
     ...outsideEvents.map((e) => ({ kind: "event" as const, ...toEventCompact(e) })),
     ...outsidePlaces.map((p) => ({ kind: "place" as const, ...toPlaceCompact(p) })),
-  ].slice(0, 10);
+  ].slice(0, 15);
 
   // Simpler API surface — Worth-a-weekend / scope filter lives in the
   // server component path; this unauthenticated JSON endpoint keeps the
   // pre-Phase-5 shape for callers that already consume it.
   const body: HomeFeedResponse = {
     today: today.map(toEventCompact),
+    todayCount,
     weekendPicks: weekendRanked.map(toEventCompact),
     newInDenver: newPlaces.map(toPlaceCompact),
     outsideTheCity,

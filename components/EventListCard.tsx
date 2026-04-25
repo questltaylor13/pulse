@@ -24,6 +24,7 @@ interface EventListCardProps {
 function formatDate(date: Date): string {
   const d = new Date(date);
   return d.toLocaleDateString("en-US", {
+    timeZone: "America/Denver",
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -33,6 +34,7 @@ function formatDate(date: Date): string {
 function formatTime(date: Date): string {
   const d = new Date(date);
   return d.toLocaleTimeString("en-US", {
+    timeZone: "America/Denver",
     hour: "numeric",
     minute: "2-digit",
   });

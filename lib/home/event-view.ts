@@ -1,5 +1,11 @@
 import type { Category } from "@prisma/client";
 import { CATEGORY_LABELS } from "@/lib/constants/categories";
+import {
+  addDaysDenver,
+  denverDateKey,
+  formatTimeDenver,
+  formatWeekdayDateDenver,
+} from "@/lib/time/denver";
 import type { EventCompact, PlaceCompact } from "./types";
 
 // Sentence-case category label (lowercase for display per PRD typography rule).
@@ -12,24 +18,11 @@ export function formatEventTime(iso: string, isRecurring: boolean): string {
   if (isRecurring) return "Ongoing";
   const d = new Date(iso);
   const now = new Date();
-  const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-
-  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  if (sameDay) return `Today · ${time}`;
-
-  const tomorrow = new Date(now);
-  tomorrow.setDate(now.getDate() + 1);
-  const isTomorrow =
-    d.getFullYear() === tomorrow.getFullYear() &&
-    d.getMonth() === tomorrow.getMonth() &&
-    d.getDate() === tomorrow.getDate();
-  if (isTomorrow) return `Tomorrow · ${time}`;
-
-  const datePart = d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-  return `${datePart} · ${time}`;
+  const time = formatTimeDenver(d);
+  const dayKey = denverDateKey(d);
+  if (dayKey === denverDateKey(now)) return `Today · ${time}`;
+  if (dayKey === denverDateKey(addDaysDenver(now, 1))) return `Tomorrow · ${time}`;
+  return `${formatWeekdayDateDenver(d)} · ${time}`;
 }
 
 /**
@@ -76,7 +69,14 @@ export function placeSecondaryMeta(p: PlaceCompact): string {
 
 export function startsAfterPM(iso: string, hour = 17): boolean {
   const d = new Date(iso);
-  return d.getHours() >= hour;
+  const denverHour = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Denver",
+      hour: "numeric",
+      hour12: false,
+    }).format(d),
+  );
+  return denverHour >= hour;
 }
 
 export function daysSince(iso: string | null): number | null {

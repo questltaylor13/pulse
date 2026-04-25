@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { endOfTodayDenver } from "@/lib/time/denver";
 
 /**
  * Where clause that excludes stale (past, non-recurring, archived) events
@@ -124,7 +125,5 @@ export function upcomingWeekendRange(now: Date = new Date()): { start: Date; end
 }
 
 export function endOfTodayLocal(now: Date = new Date()): Date {
-  const d = new Date(now);
-  d.setHours(23, 59, 59, 999);
-  return d;
+  return endOfTodayDenver(now);
 }

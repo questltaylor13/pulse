@@ -104,6 +104,7 @@ const EVENT_SELECT = {
   tags: true,
   oneLiner: true,
   createdAt: true,
+  source: true,
   // PRD 2 Phase 0: regional metadata
   region: true,
   townName: true,
@@ -166,13 +167,13 @@ export async function fetchPlacesFeed(
         },
         select: PLACE_SELECT,
         orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-        take: 10,
+        take: 15,
       }),
       // 2. Neighborhoods
       prisma.neighborhood.findMany({
         where: { isFeatured: true },
         orderBy: { displayOrder: "asc" },
-        take: 6,
+        take: 10,
         select: {
           slug: true,
           name: true,
@@ -185,28 +186,28 @@ export async function fetchPlacesFeed(
         where: { AND: [localFavoritesWhere(), placeCat] },
         select: PLACE_SELECT,
         orderBy: { updatedAt: "desc" },
-        take: 8,
+        take: 12,
       }),
       // 4. Date night
       prisma.place.findMany({
         where: { AND: [dateNightPlacesWhere(), placeCat] },
         select: PLACE_SELECT,
         orderBy: { updatedAt: "desc" },
-        take: 8,
+        take: 12,
       }),
       // 5. Good for groups
       prisma.place.findMany({
         where: { AND: [groupFriendlyPlacesWhere(), placeCat] },
         select: PLACE_SELECT,
         orderBy: { updatedAt: "desc" },
-        take: 8,
+        take: 12,
       }),
       // 6. Work friendly
       prisma.place.findMany({
         where: { AND: [workFriendlyPlacesWhere(), placeCat] },
         select: PLACE_SELECT,
         orderBy: { updatedAt: "desc" },
-        take: 8,
+        take: 12,
       }),
     ]);
 
@@ -369,20 +370,23 @@ export async function fetchHomeFeed(
   const scopeEventFilter = regionalScopeWhere(scope);
   const scopePlaceFilter = regionalScopePlaceWhere(scope);
 
-  const [today, weekend, newPlaces, outsideEvents, outsidePlaces, worthAWeekend] = await Promise.all([
+  const todayWhere = {
+    AND: [
+      activeEventsWhere(now),
+      eventCat,
+      scopeEventFilter,
+      { startTime: { gte: now, lte: eodToday } },
+    ],
+  };
+
+  const [today, todayCount, weekend, newPlaces, outsideEvents, outsidePlaces, worthAWeekend] = await Promise.all([
     prisma.event.findMany({
-      where: {
-        AND: [
-          activeEventsWhere(now),
-          eventCat,
-          scopeEventFilter,
-          { startTime: { gte: now, lte: eodToday } },
-        ],
-      },
+      where: todayWhere,
       select: EVENT_SELECT,
       orderBy: { startTime: "asc" },
-      take: 10,
+      take: 25,
     }),
+    prisma.event.count({ where: todayWhere }),
     prisma.event.findMany({
       where: {
         AND: [
@@ -393,7 +397,7 @@ export async function fetchHomeFeed(
         ],
       },
       select: EVENT_SELECT,
-      take: 40,
+      take: 60,
     }),
     // "Just added on Pulse" — see fetchPlacesFeed() for rationale.
     prisma.place.findMany({
@@ -407,7 +411,7 @@ export async function fetchHomeFeed(
       },
       select: PLACE_SELECT,
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      take: 10,
+      take: 15,
     }),
     // "Outside the city": Front Range + Mountain Gateway (day trips), sorted
     // by worthTheDriveScore when available, else startTime.
@@ -417,13 +421,13 @@ export async function fetchHomeFeed(
       },
       select: EVENT_SELECT,
       orderBy: [{ worthTheDriveScore: { sort: "desc", nulls: "last" } }, { startTime: "asc" }],
-      take: 6,
+      take: 10,
     }),
     prisma.place.findMany({
       where: { AND: [placeCat, outsideDenverPlaceWhere(), { isDayTrip: true }] },
       select: PLACE_SELECT,
       orderBy: { updatedAt: "desc" },
-      take: 6,
+      take: 10,
     }),
     // PRD 2 §5.4: "Worth a weekend" — Mountain Destination events only,
     // high worth-the-drive scores, upcoming 8 weeks. Caller filters below 3.
@@ -453,18 +457,18 @@ export async function fetchHomeFeed(
   const weekendPersonalized = sortByCacheScore(weekend, "event", cacheLookup);
   const weekendRanked =
     cacheLookup.size > 0
-      ? weekendPersonalized.slice(0, 10)
+      ? weekendPersonalized.slice(0, 20)
       : sortByEditorialRank(
           weekend.map((e) => ({ ...e, viewCount: 0, saveCount: 0 })),
           { now },
-        ).slice(0, 10);
+        ).slice(0, 20);
 
   const outsideEventsPersonalized = sortByCacheScore(outsideEvents, "event", cacheLookup);
   const outsidePlacesPersonalized = sortByCacheScore(outsidePlaces, "place", cacheLookup);
   const outsideTheCity: HomeFeedResponse["outsideTheCity"] = [
     ...outsideEventsPersonalized.map((e) => ({ kind: "event" as const, ...toEventCompact(e) })),
     ...outsidePlacesPersonalized.map((p) => ({ kind: "place" as const, ...toPlaceCompact(p) })),
-  ].slice(0, 10);
+  ].slice(0, 15);
 
   // PRD 2 §5.4: hide Worth-a-weekend when <3 high-signal events.
   const worthAWeekendOut =
@@ -478,6 +482,7 @@ export async function fetchHomeFeed(
 
   return {
     today: sortByCacheScore(today, "event", cacheLookup).map(toEventCompact),
+    todayCount,
     weekendPicks: weekendRanked.map(toEventCompact),
     newInDenver: sortByCacheScore(newPlaces, "place", cacheLookup).map(toPlaceCompact),
     outsideTheCity,

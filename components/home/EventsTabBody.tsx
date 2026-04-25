@@ -30,6 +30,7 @@ function CollapsedSection({ title, category }: { title: string; category: RailCa
 export default function EventsTabBody({ category, data, feedbackMaps }: Props) {
   const {
     today,
+    todayCount,
     weekendPicks,
     newInDenver,
     outsideTheCity,
@@ -56,7 +57,7 @@ export default function EventsTabBody({ category, data, feedbackMaps }: Props) {
           title="Today"
           subtitle="Happening in Denver right now"
           count={today.length}
-          seeAllHref="/browse/today"
+          seeAllHref={todayCount > 25 ? "/browse/today" : undefined}
           empty={
             <div className="rounded-card bg-mute-hush p-4 text-body text-mute">
               No events today. Check out this weekend →

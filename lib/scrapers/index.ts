@@ -14,6 +14,8 @@ import { scrapeVisitGolden } from "./regional/visit-golden";
 import { scrapeVisitSteamboatChamber } from "./regional/visit-steamboat-chamber";
 import { enrichEvent } from "@/lib/enrich-event";
 import { deriveRegionalFields } from "@/lib/regional/metadata";
+import { denverDateKey } from "@/lib/time/denver";
+import { prioritize } from "./source-priority";
 
 // Note: 303magazine disabled 2026-04-18. The site migrated away from a
 // structured event calendar (JSON-LD Event schema) to a JS-rendered Tribe
@@ -86,7 +88,7 @@ function normalizeVenue(venue: string): string {
   return venue
     .toLowerCase()
     .trim()
-    .replace(/\b(the|amphitheatre|amphitheater|theater|theatre|ballroom|auditorium|hall|club|live|room)\b/g, "")
+    .replace(/\b(at|the|and|amphitheatre|amphitheater|theater|theatre|ballroom|auditorium|hall|club|live|room|park)\b/g, "")
     .replace(/[^\w\s]/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -96,11 +98,19 @@ function deduplicateEvents(events: ScrapedEvent[]): ScrapedEvent[] {
   const seen = new Map<string, ScrapedEvent>();
 
   for (const event of events) {
-    // Key = normalizedTitle | normalizedVenue | YYYY-MM-DD. Same title at
-    // different venues on the same day is NOT a duplicate (see PRD 1 §F #3).
-    const key = `${normalizeTitle(event.title)}|${normalizeVenue(event.venueName)}|${event.startTime.toISOString().slice(0, 10)}`;
-    if (!seen.has(key)) {
+    // Key = normalizedTitle | normalizedVenue | Denver-local YYYY-MM-DD.
+    // Using the Denver date (not UTC .toISOString().slice(0,10)) prevents
+    // late-evening events from splitting across two UTC days when different
+    // scrapers anchor differently. Same title at different venues on the
+    // same day is NOT a duplicate (PRD 1 §F #3).
+    const key = `${normalizeTitle(event.title)}|${normalizeVenue(event.venueName)}|${denverDateKey(event.startTime)}`;
+    const existing = seen.get(key);
+    if (!existing) {
       seen.set(key, event);
+    } else {
+      // Collision: pick the higher-priority source. Lets Quest tune the
+      // winner by reordering lib/scrapers/source-priority.ts.
+      seen.set(key, prioritize(existing, event));
     }
   }
 

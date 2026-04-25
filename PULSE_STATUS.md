@@ -452,3 +452,44 @@ Pre-Phase 0).
 - Legacy module deletion (Phase 8.5, after a week green).
 - Analytics vendor wire-up still deferred; ranking events flow
   through the same `track()` stub.
+
+## 2026-04-24 — Today Rail Density Fix
+
+**Context.** 04-24 diagnostic found DB had **43 events for "today"** but the home Today rail was only surfacing **10**. Quest was opening the app and feeling the feed was thin despite rich underlying data. A known duplicate (Subtronics at Red Rocks) was appearing twice, and ~15 events/day displayed "1:00 AM" timestamps.
+
+### What was changed
+
+**1. Section cap raises (`components/home/fetch-home-feed.ts`, `app/api/home/events-feed/route.ts`).**
+- Today rail: `take: 10` → `25` (+ new `prisma.event.count(...)` for `todayCount`).
+- Weekend picks: raw `take: 40` → `60`, post-sort `.slice(0, 10)` → `.slice(0, 20)`.
+- Just added on Pulse: `take: 10` → `15`.
+- Outside the city: dual `take: 6` → `10` each, final slice `10` → `15`.
+- Places-tab rails: Explore by neighborhood `6→10`, Where locals / First date / Groups / Work-from `8→12`.
+
+**2. Scrape-time dedup strengthened (`lib/scrapers/index.ts`).**
+- Date component of the dedup key changed from `startTime.toISOString().slice(0,10)` (UTC) to `denverDateKey(startTime)` (America/Denver). This was the Subtronics leak: red-rocks stored the event as `2026-04-25` UTC and do303 stored it as `2026-04-24` UTC, so the existing dedup never matched.
+- Venue normalization now also strips "at", "and", "park".
+- On collision, `prioritize()` (new `lib/scrapers/source-priority.ts`) picks the winner by the configurable `SOURCE_PRIORITY` list: `do303 > red-rocks > westword > visit-denver > visit-golden > chautauqua > pikes-peak-center > visit-estes-park > visit-steamboat-chamber > ticketmaster > eventbrite`. Ties break on metadata richness.
+
+**3. Timezone bug fixed (the real "1:00 AM" culprit).** New `lib/time/denver.ts` provides `endOfTodayDenver`, `startOfTodayDenver`, `denverDateKey`, `formatTimeDenver`, `formatWeekdayDateDenver`, `addDaysDenver` — all via `Intl.DateTimeFormat` with `timeZone: "America/Denver"`, no new dependencies.
+- `lib/queries/events.ts` → `endOfTodayLocal` now delegates to `endOfTodayDenver`.
+- `lib/home/event-view.ts` → `formatEventTime` and `startsAfterPM` use Denver TZ for same-day comparisons and hour-of-day checks.
+- `components/EventListCard.tsx` → `formatTime`/`formatDate` pass `timeZone: "America/Denver"`.
+
+**4. Today "See all" conditional (`components/home/EventsTabBody.tsx`).** Link renders only when `todayCount > 25`.
+
+**5. `source` added to `EVENT_SELECT`** for dedup observability (not displayed in UI yet).
+
+**6. Diagnostic script** `scripts/diagnose-today-rail.ts` — prints the ladder `eventsInDb ≥ eventsAfterActiveWhere ≥ eventsAfterTodayWindow ≥ eventsAfterDedup ≥ eventsSurfaced`, lists any residual duplicate keys, and reports whether the "See all" link will be visible. Runs via `npx tsx scripts/diagnose-today-rail.ts`.
+
+### Surprises
+
+- **The "1:00 AM" reading was wrong.** Scrapers default to **19:00 MT**, not 01:00, when time parsing fails (`red-rocks.ts:54`, `chautauqua.ts:55`, `visit-denver.ts:67`). The UI was rendering `toLocaleTimeString()` in the server's local TZ (UTC on Vercel), which turned 7pm MT into 1–2am. No `hasParsedTime` flag / migration was needed — a TZ-aware formatter fixed it.
+- **Scrape-time dedup already existed.** The PRD framed this as a new query-time layer, but the existing cross-scraper dedup in `lib/scrapers/index.ts:104-125` just needed a TZ-aware date key and a priority-aware winner.
+- **`endOfTodayLocal` was also UTC.** The "today" window was shifted 6–7 hours on Vercel. Part of the 43→10 gap may have been window miscomputation rather than just the cap.
+
+### Follow-ups not in this PR
+
+- One-off `scripts/dedup-existing-events.ts` to collapse pre-existing duplicate rows (new dedup only applies to future scrape runs).
+- Optional `hasParsedTime` flag for cases where visit-denver / chautauqua *intentionally* anchor at 19:00 (source page truly had no time) — would let those sort to the bottom with a "Time TBA" label.
+- `home_rail_capped` analytics event when `surfacedCount < dbCount` for silent density-regression telemetry.
