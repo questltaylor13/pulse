@@ -395,10 +395,32 @@ export async function runAllScrapers(): Promise<{
     }
     const sumRaw = Array.from(rowsBySource.values()).reduce((s, n) => s + n, 0) || 1;
 
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
     for (const [source, meta] of perSourceMeta.entries()) {
       const rawCount = meta.rawCount;
       const weight = rawCount / sumRaw;
       const sportsDropped = sportsDroppedBySource.get(source) ?? 0;
+
+      // Coverage-anomaly check (PR 2 step 9). Compute against PRIOR runs
+      // only — the new row is inserted with the computed flag below.
+      // Cold-start guard: ≥7 succeeded runs in the 14d window AND median
+      // ≥5. Without this, the median lags after a coverage fix's volume
+      // jump and produces 14 days of false-clean signals.
+      const priorRuns = await prisma.scraperRun.findMany({
+        where: { source, succeeded: true, startedAt: { gte: fourteenDaysAgo } },
+        select: { rawCount: true },
+      });
+      let coverageAnomaly = false;
+      if (priorRuns.length >= 7) {
+        const counts = priorRuns.map((r) => r.rawCount).sort((a, b) => a - b);
+        const mid = Math.floor(counts.length / 2);
+        const median =
+          counts.length % 2 === 0 ? (counts[mid - 1] + counts[mid]) / 2 : counts[mid];
+        if (median >= 5 && rawCount < 0.5 * median) {
+          coverageAnomaly = true;
+        }
+      }
+
       await prisma.scraperRun.create({
         data: {
           source,
@@ -411,6 +433,7 @@ export async function runAllScrapers(): Promise<{
           errorCount: meta.errors.length,
           errors: meta.errors.slice(0, 5),
           succeeded: meta.errors.length === 0 || rawCount > 0,
+          coverageAnomaly,
         },
       });
     }
