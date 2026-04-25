@@ -6,151 +6,234 @@ import { classifyEvent, extractTags } from "./classify";
 import type { Category } from "@prisma/client";
 
 const SOURCE = "visit-denver";
-const RSS_URL = "https://www.visitdenver.com/event/rss/";
+const BASE = "https://visitdenver.com";
+const LIST_URL = `${BASE}/events/`;
+
+// Diagnosed 2026-04-25: the Simpleview RSS feed (/event/rss/) misses the
+// short-window events (earliest entry was 7+ days out, 0 events for "today").
+// /events/calendar/ is fully JS-rendered — useless for static fetch. The
+// /events/ root page lists ~49 unique event URLs inline. Each detail page
+// carries a clean schema.org ld+json Event block with startDate, endDate,
+// location, image, and description. We list -> fan out concurrently to
+// detail pages -> parse ld+json.
+
+// Cap detail-page fetches per run to stay within PER_SCRAPER_TIMEOUT (10s).
+// 30 pages * ~150ms warm CDN / concurrency 5 ~= 1s. Listing order is
+// "featured first" so we get the highest-signal events when we slice.
+const MAX_DETAIL_FETCHES = 30;
+const DETAIL_CONCURRENCY = 5;
+const JITTER_MS = 150;
 
 function stableId(url: string): string {
   return createHash("sha256").update(url).digest("hex").slice(0, 16);
 }
 
-/**
- * Visit Denver's Simpleview CMS exposes a public RSS feed that bypasses the
- * client-side widget + Akamai-protected JSON API. Each <item> carries title,
- * link, one or more <category> tags, and a CDATA description containing the
- * event's date range (MM/DD/YYYY) and a short blurb.
- *
- * The <pubDate> is always end-of-day on the event's *last* day (it's the
- * feed's expiry marker, not the start time), so we parse the real dates out
- * of the description body.
- */
+const SKIP_TITLE_RX =
+  /\b(conference|convention|seminar|symposium|summit|training|meeting|exposition)\b/i;
+const SKIP_URL_RX = /\/conventions?_\d+/i;
 
-const DATE_RX = /\b(\d{2})\/(\d{2})\/(\d{4})\b/g;
-
-interface RawItem {
-  title: string;
-  link: string;
-  categories: string[];
-  pubDate: string;
-  descriptionHtml: string;
-}
-
-function parseItems(rssXml: string): RawItem[] {
-  const $ = cheerio.load(rssXml, { xmlMode: true });
-  const items: RawItem[] = [];
-
-  $("item").each((_, el) => {
-    const $el = $(el);
-    const title = $el.find("title").first().text().trim();
-    const link = $el.find("link").first().text().trim();
-    const pubDate = $el.find("pubDate").first().text().trim();
-    const categories = $el
-      .find("category")
-      .map((_, c) => $(c).text().trim())
-      .get()
-      .filter(Boolean);
-    const descriptionHtml = $el.find("description").first().text();
-
-    if (!title || !link) return;
-
-    items.push({ title, link, categories, pubDate, descriptionHtml });
-  });
-
-  return items;
-}
-
-function parseDateRange(descriptionHtml: string): { start: Date | null; end: Date | null } {
-  const matches = Array.from(descriptionHtml.matchAll(DATE_RX));
-  if (matches.length === 0) return { start: null, end: null };
-
-  const toDate = (m: RegExpMatchArray) => {
-    const mm = Number(m[1]);
-    const dd = Number(m[2]);
-    const yyyy = Number(m[3]);
-    if (!mm || !dd || !yyyy || mm > 12 || dd > 31) return null;
-    // Anchor at 19:00 Mountain Time — most Denver events are evening.
-    // MT is UTC-6 (DST) ~Mar–Nov, UTC-7 otherwise. We use a flat offset
-    // that's close enough for day-bucketing in the feed.
-    const isDST = mm >= 3 && mm <= 10;
-    const offset = isDST ? 6 : 7;
-    const d = new Date(Date.UTC(yyyy, mm - 1, dd, 19 + offset, 0, 0));
-    return isNaN(d.getTime()) ? null : d;
+interface LdJsonEvent {
+  "@type"?: string;
+  name?: string;
+  startDate?: string;
+  endDate?: string;
+  description?: string;
+  image?: string;
+  url?: string;
+  location?: {
+    name?: string;
+    address?: {
+      streetAddress?: string;
+      addressLocality?: string;
+      addressRegion?: string;
+      postalCode?: string;
+    };
   };
-
-  const start = toDate(matches[0]);
-  const end = matches.length > 1 ? toDate(matches[matches.length - 1]) : null;
-  return { start, end };
 }
 
-function cleanDescription(descriptionHtml: string): string {
-  // Strip HTML, collapse whitespace, drop leading date-range text
-  const $ = cheerio.load(`<div>${descriptionHtml}</div>`);
-  const text = $("div").text().replace(/\s+/g, " ").trim();
-  // Remove standalone "MM/DD/YYYY to MM/DD/YYYY - " prefixes
-  return text.replace(/^\d{2}\/\d{2}\/\d{4}(?:\s*to\s*\d{2}\/\d{2}\/\d{4})?\s*-\s*/i, "").trim();
+function parseEventUrlsFromListing(html: string): string[] {
+  const $ = cheerio.load(html);
+  const urls = new Set<string>();
+  $('a[href*="/event/"]').each((_, el) => {
+    const href = ($(el).attr("href") || "").split("?")[0];
+    if (/^\/event\/[a-zA-Z0-9%-]+\/\d+\/?$/.test(href)) {
+      urls.add(`${BASE}${href}`);
+    }
+  });
+  return Array.from(urls);
 }
 
-function categoryFromRssTag(tags: string[], title: string, venue: string): Category {
-  const joined = tags.join(" ").toLowerCase();
-  if (/food|drink|dining|restaurant/.test(joined)) return "FOOD";
-  if (/music|concert/.test(joined)) return "LIVE_MUSIC";
-  if (/art|museum|visual|gallery|theater|theatre|performing/.test(joined)) return "ART";
-  if (/festival|holiday|seasonal/.test(joined)) return "SEASONAL";
-  if (/sport|fitness|outdoor/.test(joined)) return "OUTDOORS";
-  if (/comedy/.test(joined)) return "COMEDY";
-  if (/nightlife|bar|club/.test(joined)) return "BARS";
-  if (/family|kids/.test(joined)) return "SOCIAL";
-  // Fall back to the cross-source classifier
+function parseLdJson(html: string): LdJsonEvent | null {
+  const $ = cheerio.load(html);
+  let parsed: LdJsonEvent | null = null;
+  $('script[type="application/ld+json"]').each((_, el) => {
+    if (parsed) return;
+    const raw = $(el).contents().text();
+    try {
+      const obj = JSON.parse(raw);
+      const candidate = Array.isArray(obj)
+        ? obj.find((o: LdJsonEvent) => o["@type"] === "Event")
+        : obj;
+      if (candidate && candidate["@type"] === "Event") {
+        parsed = candidate as LdJsonEvent;
+      }
+    } catch {
+      // ignore broken json
+    }
+  });
+  return parsed;
+}
+
+function buildAddress(loc?: LdJsonEvent["location"]): string {
+  if (!loc?.address) return "Denver, CO";
+  const a = loc.address;
+  const street = a.streetAddress?.trim();
+  const city = a.addressLocality?.trim() || "Denver";
+  const region = a.addressRegion?.trim() || "CO";
+  const zip = a.postalCode?.trim();
+  const cityRegion = `${city}, ${region}${zip ? ` ${zip}` : ""}`;
+  return [street, cityRegion].filter(Boolean).join(", ");
+}
+
+// Convert "2026-05-02" or full ISO datetime into a Date. Date-only values
+// are anchored at 19:00 Mountain Time (DST-aware) — most VD events are
+// evening, and same-day bucketing in the home feed is what we care about.
+export function parseEventDate(s: string | undefined): Date | null {
+  if (!s) return null;
+  if (s.includes("T")) {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const yyyy = Number(m[1]);
+  const mm = Number(m[2]);
+  const dd = Number(m[3]);
+  const isDST = mm >= 3 && mm <= 10;
+  const offset = isDST ? 6 : 7;
+  const d = new Date(Date.UTC(yyyy, mm - 1, dd, 19 + offset, 0, 0));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+const VD_CATEGORY_RULES: [RegExp, Category][] = [
+  [/food|drink|dining|restaurant/i, "FOOD"],
+  [/music|concert/i, "LIVE_MUSIC"],
+  [/art|museum|visual|gallery|theater|theatre|performing/i, "ART"],
+  [/festival|holiday|seasonal/i, "SEASONAL"],
+  [/sport|fitness|outdoor/i, "OUTDOORS"],
+  [/comedy/i, "COMEDY"],
+  [/nightlife|bar|club/i, "BARS"],
+  [/family|kids/i, "SOCIAL"],
+];
+
+function categorize(title: string, description: string, venue: string): Category {
+  const haystack = `${title} ${description}`;
+  for (const [rx, cat] of VD_CATEGORY_RULES) {
+    if (rx.test(haystack)) return cat;
+  }
   return classifyEvent(title, venue);
+}
+
+async function fetchInBatches<T>(
+  items: string[],
+  handler: (url: string) => Promise<T | null>,
+  concurrency: number,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency);
+    const results = await Promise.all(
+      batch.map((u) => handler(u).catch(() => null)),
+    );
+    for (const r of results) if (r) out.push(r);
+    if (i + concurrency < items.length) {
+      const wait = JITTER_MS + Math.floor(Math.random() * JITTER_MS);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+  return out;
+}
+
+export function buildEventFromLdJson(
+  ld: LdJsonEvent,
+  url: string,
+  now = Date.now(),
+): ScrapedEvent | null {
+  if (!ld?.name) return null;
+  if (SKIP_TITLE_RX.test(ld.name)) return null;
+  if (SKIP_URL_RX.test(url)) return null;
+
+  const start = parseEventDate(ld.startDate);
+  const end = parseEventDate(ld.endDate);
+  if (!start) return null;
+
+  // Drop past events; keep ongoing exhibits (start in past, end in future).
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const isOngoing = end && end.getTime() > now && start.getTime() < now;
+  if (start.getTime() < now - oneDayMs && !isOngoing) return null;
+
+  const venueName = ld.location?.name?.trim() || "See VisitDenver listing";
+  const description = (ld.description || "").trim() || "Featured via VisitDenver.";
+  const category = categorize(ld.name, description, venueName);
+  const tags = extractTags(ld.name, venueName);
+
+  return {
+    title: ld.name,
+    description,
+    category,
+    tags,
+    venueName,
+    address: buildAddress(ld.location),
+    startTime: isOngoing ? new Date(Math.max(now, start.getTime())) : start,
+    endTime: end && end.getTime() > start.getTime() ? end : undefined,
+    priceRange: "$$",
+    source: SOURCE,
+    sourceUrl: url,
+    externalId: stableId(url),
+    imageUrl: ld.image?.trim() || undefined,
+  };
 }
 
 export async function scrapeVisitDenver(): Promise<ScraperResult> {
   const errors: string[] = [];
   try {
-    const rss = await fetchPage(RSS_URL, 15_000);
-    const items = parseItems(rss);
+    const listingHtml = await fetchPage(LIST_URL, 6_000);
+    const eventUrls = parseEventUrlsFromListing(listingHtml).slice(
+      0,
+      MAX_DETAIL_FETCHES,
+    );
 
-    const events: ScrapedEvent[] = [];
-    const now = Date.now();
-
-    for (const item of items) {
-      // VisitDenver's RSS mixes in their convention/meeting calendar. URLs
-      // like /event/.../conventions_XXXXX/ are B2B — skip them entirely.
-      if (/\/conventions?_\d+/i.test(item.link)) continue;
-      if (/\b(conference|convention|seminar|symposium|summit|training|meeting|exposition)\b/i.test(item.title)) {
-        continue;
-      }
-      const { start, end } = parseDateRange(item.descriptionHtml);
-      // Effective event date: use start if future, else end if future (multi-
-      // day / ongoing exhibits), else skip.
-      let effectiveStart: Date | null = null;
-      if (start && start.getTime() > now - 24 * 60 * 60 * 1000) effectiveStart = start;
-      else if (end && end.getTime() > now) effectiveStart = new Date(Math.max(now, end.getTime() - 60 * 60 * 1000));
-      if (!effectiveStart) continue;
-
-      const description = cleanDescription(item.descriptionHtml) || "Featured via VisitDenver.";
-      const venueName = "See VisitDenver listing";
-      const category = categoryFromRssTag(item.categories, item.title, venueName);
-      const tags = Array.from(
-        new Set([...extractTags(item.title, venueName), ...item.categories.map((c) => c.toLowerCase().replace(/\s+/g, "-"))])
-      );
-
-      events.push({
-        title: item.title,
-        description,
-        category,
-        tags,
-        venueName,
-        address: "Denver, CO",
-        startTime: effectiveStart,
-        endTime: end && end.getTime() > effectiveStart.getTime() ? end : undefined,
-        priceRange: "$$",
+    if (eventUrls.length === 0) {
+      return {
         source: SOURCE,
-        sourceUrl: item.link,
-        externalId: stableId(item.link),
-      });
+        events: [],
+        errors: ["visit-denver: no event links found on /events/"],
+      };
     }
 
+    const now = Date.now();
+    const events = await fetchInBatches(
+      eventUrls,
+      async (url): Promise<ScrapedEvent | null> => {
+        try {
+          const detail = await fetchPage(url, 5_000);
+          const ld = parseLdJson(detail);
+          if (!ld) return null;
+          return buildEventFromLdJson(ld, url, now);
+        } catch {
+          return null;
+        }
+      },
+      DETAIL_CONCURRENCY,
+    );
+
     if (events.length === 0) {
-      errors.push("visit-denver: RSS feed returned no future-dated items");
+      errors.push(
+        "visit-denver: no future-dated events extracted from /events/ detail pages",
+      );
     }
 
     return { source: SOURCE, events, errors };
@@ -164,3 +247,11 @@ export async function scrapeVisitDenver(): Promise<ScraperResult> {
     };
   }
 }
+
+// Exported for tests
+export const _internals = {
+  parseEventUrlsFromListing,
+  parseLdJson,
+  buildEventFromLdJson,
+  parseEventDate,
+};
