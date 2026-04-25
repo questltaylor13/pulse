@@ -493,3 +493,67 @@ Pre-Phase 0).
 - One-off `scripts/dedup-existing-events.ts` to collapse pre-existing duplicate rows (new dedup only applies to future scrape runs).
 - Optional `hasParsedTime` flag for cases where visit-denver / chautauqua *intentionally* anchor at 19:00 (source page truly had no time) — would let those sort to the bottom with a "Time TBA" label.
 - `home_rail_capped` analytics event when `surfacedCount < dbCount` for silent density-regression telemetry.
+
+## 2026-04-25 — Scraper Coverage Fix (PR 2)
+
+**Context.** 04-24 diagnostic (now part of PR 1 docs) showed Westword pulling 12 events when its public listing has ~47 (≈25% coverage), and VisitDenver hitting an RSS feed (`/event/rss/`) whose earliest entry was May 2 — **0 events in the next-7-day window**. Both scrapers reported `succeeded=true` with low `rawCount`, so nothing alerted. After PR 1 raised the Today rail cap to 25, the rail still felt sparse because the data layer itself was thin.
+
+### What was changed
+
+**1. VisitDenver — full rewrite (`lib/scrapers/visit-denver.ts`).**
+- Old: hit `/event/rss/`, parse 17-ish items, regex out date from CDATA description, default 19:00 MT. Earliest event May 2 → 0 in next-7d.
+- New: GET `/events/` (apex domain) → ~45 unique `/event/<slug>/<id>/` links inline. Cap at 30 detail-page fetches per run, fan out with `concurrency=5` and 150–300ms jitter between batches to stay polite + within `PER_SCRAPER_TIMEOUT` (10s).
+- Each detail page has a clean schema.org ld+json `Event` with `name`, `startDate`, `endDate`, `image`, `location.{name,address}`. Date-only values anchor at 19:00 Mountain Time (DST-aware).
+- Filters: skip past events (start > 24h ago and not ongoing); keep ongoing exhibits (start past, end future, anchored at `now`); skip `/conventions_NNNNN/` URLs and titles matching conference/seminar/training/summit/meeting/exposition.
+- PRD recommended `/events/calendar/` — diagnosed as fully JS-rendered (0 inline event links). Useless for static fetch. Not used.
+- ScrapedEvent shape preserved exactly so dedup, source-priority, enrichment, and quality gates need no changes.
+
+**2. Westword — no code change; documented JS-render ceiling (`lib/scrapers/westword.ts`).**
+- Diagnosed: `/things-to-do/` returns 12 `a.event-item` elements (10 unique events). Pages 2 through 8 all return the **same 10 events** — pagination is JS-driven. `/feed/` is a generic news RSS, not events.
+- Static-fetch ceiling is ~10–12 events. Reaching the public ~47-event listing requires Playwright/Puppeteer.
+- **Follow-up flagged:** Westword JS rendering. Not in this PR per Q1 in the PRD review.
+
+**3. Pro-sports drop filter (new `lib/scrapers/exclusions.ts`).**
+- Exports `PRO_SPORTS_TEAMS` array and `isProSportsEvent(title, description)`. Matches Nuggets / Avs / Avalanche / Broncos / Rockies / Rapids / Mammoth / Nuggs with `\b…\b` case-insensitive.
+- False-positive guards: brewery/cafe/coffee/distillery names, "Hot Springs" / trail / hike, participatory races (5K, marathon).
+- Wired into `runAllScrapers()` (`lib/scrapers/index.ts`) **before dedup**, so dropped events never reach the DB and don't displace higher-priority sources in dedup collisions. Per-source attribution feeds `ScraperRun.droppedCount`. First 5 dropped titles log per run for verification.
+
+**4. Lacrosse-as-music classify nudge (`lib/scrapers/classify.ts`).**
+- The diagnostic flagged "First Round: TBD vs Colorado Mammoth" miscategorized as `LIVE_MUSIC`. Root cause: Ball Arena routes to `LIVE_MUSIC` in `VENUE_MAP` because it hosts concerts. Fix: if a title contains sports-context keywords (`vs`, `tournament`, `playoff`, `finals`, `championship`) and lacks music-context keywords (`concert`, `tour`, `band`, `dj`, `album`, `live music`, `presents`), `classifyEvent` returns `OTHER` and lets enrichment categorize. Pro sports themselves are already dropped earlier; this nudge mostly catches rec/community tournaments at shared-use venues.
+
+**5. Coverage anomaly observability (`prisma/schema.prisma` + `lib/scrapers/index.ts`).**
+- New column: `ScraperRun.coverageAnomaly Boolean @default(false)`. Migration `20260425212832_scraper_coverage_anomaly` is additive and backwards-compatible.
+- Compute (per source, per run): query the last 14 days of succeeded `ScraperRun` rows for the source. If ≥7 prior runs **and** median `rawCount` ≥ 5 **and** today's `rawCount` < 0.5 × median → `coverageAnomaly = true`. The 7-run / median-5 cold-start guards prevent the post-PR-2 volume jump on Westword/VisitDenver from generating 14 days of false-clean signals.
+- Surfaced as `coverageAnomaly: boolean` on each source in `GET /api/admin/scraper-status` (latest-run flag). Rendered as a red **anomaly** badge in `app/(site)/admin/scrapers` (distinct from the amber **degraded** badge).
+
+**6. Tests (new `lib/scrapers/__tests__/`).**
+- `exclusions.test.ts` (12 tests): positive cases for every team + variants, false-positive guards (Mammoth Hot Springs, Avalanche Brewing, 5K races), perf guard against catastrophic regex backtracking.
+- `visit-denver.test.ts` (13 tests): listing parser yields ≥40 unique canonical URLs from the saved fixture; ld+json extraction; `buildEventFromLdJson` round-trips, anchors date-only at 19:00 MDT correctly, filters past/convention/missing-name/unparseable-date.
+- `westword.test.ts` (3 tests): selectors still match the live fixture; **regression guard** asserting the static page has no pagination links and no schema.org Event ld+json — if either flips true, the JS-render ceiling note is stale and the scraper can be expanded.
+- HTML fixtures committed at `tests/fixtures/scrapers/` (westword listing, visit-denver listing, visit-denver detail page).
+- Test count: 67 total (was 40).
+
+### Before / after
+
+| Source | Before (2026-04-24 diagnostic) | After (expected, first scrape post-deploy) |
+|---|---|---|
+| Westword | 12 raw / 10 unique | 12 raw / 10 unique (unchanged — JS-render ceiling, see follow-up) |
+| VisitDenver | 17 raw via RSS, **0 in next-7d** | 25–30 raw via `/events/`, 8–15 in next-7d (depends on what's listed today) |
+| Pro-sports events | unfiltered (Mammoth/Avs/etc. could land in feed) | dropped at ingest, logged per run |
+| Coverage anomaly signal | none | red badge on `/admin/scrapers` when latest rawCount < 50% of 14-day median (≥7 runs / median≥5 guards) |
+
+The first cron after deploy (or manual "Refresh now" via `/admin/scrapers`) will fill in the real after numbers — admin endpoint will surface them under `runsLast7Days` / `totalInserted`.
+
+### Surprises during diagnosis
+
+- **Westword pagination is theatrical.** `/things-to-do/page/N/` returns 200 OK for every N (tested 2 through 8) but always serves the same first page. The path looks like real pagination but is purely JS-driven. Catching this kind of fake pagination is what the new fixture-based regression test (`westword.test.ts`) is for.
+- **PRD's recommended VisitDenver URL was a dead end.** `/events/calendar/` is fully JS-rendered (0 event links statically). The right URL was `/events/` — the same root we already had in `BASE`, but never used in the old RSS-only scraper.
+- **Local `.env` DATABASE_URL is unmigrated.** Discovered while trying to capture before-numbers locally — the local DB has no `Event.isArchived` column and no `ScraperRun` table, meaning the prod schema has drifted ahead of whatever this DB was last seeded from. Not a PR-2 concern but worth flagging: anyone running scripts against this DATABASE_URL will hit P2022/P2021 errors. (Production migrations apply via `prisma migrate deploy` on Vercel build.)
+
+### Follow-ups not in this PR
+
+- **Westword Playwright/Puppeteer** to break the static ceiling and capture the full ~47-event listing.
+- **Weekly fixture-refresh cron** that re-fetches the live HTML and asserts the parser still produces ≥N events; would actually close the silent-decay loop instead of just catching it after-the-fact.
+- **Slack / push alert when `coverageAnomaly=true`.** Manual-check workflow is fine for beta but not durable.
+- **Per-source target counts** in config; compute "% of expected" in addition to relative-to-median (catches gradual decay the median can't see).
+- **Unit tests + fixtures for the other existing scrapers** (do303, red-rocks, regional Simpleview RSS feeds).
