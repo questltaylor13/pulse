@@ -182,7 +182,20 @@ function matchesKeyword(text: string, keyword: string): boolean {
   return new RegExp(`\\b${escaped}\\b`, "i").test(text);
 }
 
+// Sports-context guard. The lacrosse-as-LIVE_MUSIC miscategorization
+// (e.g. "First Round: TBD vs Colorado Mammoth" at Ball Arena) happens
+// because Ball Arena routes to LIVE_MUSIC in VENUE_MAP. If the title
+// looks like sports content and not music content, return OTHER and let
+// enrichment categorize. Pro sports themselves are dropped earlier
+// by lib/scrapers/exclusions.ts; this rule mostly catches rec/community
+// tournaments at shared-use venues.
+const SPORTS_CONTEXT_RX = /\b(vs\.?|tournament|playoff(?:s)?|finals|championship)\b/i;
+const MUSIC_CONTEXT_RX = /\b(concert|tour|band|bands|dj\s|album|live\s+music|presents)\b/i;
+
 export function classifyEvent(title: string, venueName: string): Category {
+  if (SPORTS_CONTEXT_RX.test(title) && !MUSIC_CONTEXT_RX.test(title)) {
+    return "OTHER";
+  }
   // 1. Venue-based classification (strongest signal)
   for (const [pattern, category] of VENUE_MAP) {
     if (pattern.test(venueName)) {
