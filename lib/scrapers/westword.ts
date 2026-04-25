@@ -7,6 +7,13 @@ import { createHash } from "crypto";
 const SOURCE = "westword";
 const EVENTS_URL = "https://www.westword.com/things-to-do/";
 
+// Static-fetch ceiling: ~10-12 events. Diagnosed 2026-04-25 — the listing
+// uses JS-driven infinite scroll; /things-to-do/page/N/ returns 200 OK for
+// any N but always serves the same first page. No static pagination, no
+// usable RSS (the site /feed/ is news, not events). Reaching the full
+// ~47-event public listing requires Playwright/Puppeteer; tracked as a
+// follow-up in PULSE_STATUS.md.
+
 function stableId(url: string): string {
   return createHash("sha256").update(url).digest("hex").slice(0, 16);
 }
