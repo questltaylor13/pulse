@@ -16,6 +16,7 @@ import { enrichEvent } from "@/lib/enrich-event";
 import { deriveRegionalFields } from "@/lib/regional/metadata";
 import { denverDateKey } from "@/lib/time/denver";
 import { prioritize } from "./source-priority";
+import { isProSportsEvent } from "./exclusions";
 
 // Note: 303magazine disabled 2026-04-18. The site migrated away from a
 // structured event calendar (JSON-LD Event schema) to a JS-rendered Tribe
@@ -197,7 +198,31 @@ export async function runAllScrapers(): Promise<{
     }
   }
 
-  const allEvents = allResults.flatMap((r) => r.events);
+  // Drop pro-sports events at ingest (before dedup) so they never reach
+  // the DB — fans already know when their team plays and the surface is
+  // dominated by tickets-for-sale rather than discovery value. See
+  // lib/scrapers/exclusions.ts for the team list. Per-source attribution
+  // feeds ScraperRun.droppedCount below.
+  const sportsDroppedBySource = new Map<string, number>();
+  const sportsDroppedTitles: string[] = [];
+  for (const result of allResults) {
+    for (const ev of result.events) {
+      if (isProSportsEvent(ev.title, ev.description)) {
+        sportsDroppedBySource.set(result.source, (sportsDroppedBySource.get(result.source) ?? 0) + 1);
+        if (sportsDroppedTitles.length < 5) sportsDroppedTitles.push(`${result.source}: ${ev.title}`);
+      }
+    }
+  }
+  const proSportsDropped = Array.from(sportsDroppedBySource.values()).reduce((s, n) => s + n, 0);
+  if (proSportsDropped > 0) {
+    console.info(
+      `[runAllScrapers] dropped ${proSportsDropped} pro-sports event(s) pre-dedup: ${sportsDroppedTitles.join("; ")}`,
+    );
+  }
+
+  const allEvents = allResults
+    .flatMap((r) => r.events)
+    .filter((e) => !isProSportsEvent(e.title, e.description));
   const allErrors = allResults.flatMap((r) => r.errors);
   const deduplicated = deduplicateEvents(allEvents);
 
@@ -373,6 +398,7 @@ export async function runAllScrapers(): Promise<{
     for (const [source, meta] of perSourceMeta.entries()) {
       const rawCount = meta.rawCount;
       const weight = rawCount / sumRaw;
+      const sportsDropped = sportsDroppedBySource.get(source) ?? 0;
       await prisma.scraperRun.create({
         data: {
           source,
@@ -381,7 +407,7 @@ export async function runAllScrapers(): Promise<{
           insertedCount: Math.round(inserted * weight),
           updatedCount: Math.round(updated * weight),
           enrichedCount: Math.round(enriched * weight),
-          droppedCount: Math.round(dropped * weight),
+          droppedCount: Math.round(dropped * weight) + sportsDropped,
           errorCount: meta.errors.length,
           errors: meta.errors.slice(0, 5),
           succeeded: meta.errors.length === 0 || rawCount > 0,
@@ -392,5 +418,12 @@ export async function runAllScrapers(): Promise<{
     console.error("[runAllScrapers] failed to write ScraperRun:", logErr);
   }
 
-  return { total: deduplicated.length, inserted, updated, enriched, dropped, errors: allErrors };
+  return {
+    total: deduplicated.length,
+    inserted,
+    updated,
+    enriched,
+    dropped: dropped + proSportsDropped,
+    errors: allErrors,
+  };
 }
