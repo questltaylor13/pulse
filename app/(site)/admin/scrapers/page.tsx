@@ -16,6 +16,7 @@ interface RunRow {
   totalErrors: number;
   lastErrors: string[];
   degraded: boolean;
+  coverageAnomaly: boolean;
 }
 
 /**
@@ -68,6 +69,7 @@ export default async function AdminScrapersPage() {
       totalErrors: sourceRuns.reduce((s, r) => s + r.errorCount, 0),
       lastErrors: latest.errors.slice(0, 3),
       degraded,
+      coverageAnomaly: latest.coverageAnomaly,
     });
   }
   sources.sort((a, b) => a.source.localeCompare(b.source));

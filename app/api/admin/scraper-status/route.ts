@@ -15,6 +15,10 @@ interface SourceHealth {
   totalErrors: number;
   lastErrors: string[];
   degraded: boolean;
+  // PR 2 step 10: latest run's coverage-anomaly flag — true when rawCount
+  // dropped well below the source's 14-day rolling median (cold-start
+  // guards in lib/scrapers/index.ts).
+  coverageAnomaly: boolean;
 }
 
 export async function GET() {
@@ -73,6 +77,7 @@ export async function GET() {
       totalErrors,
       lastErrors: latest.errors.slice(0, 3),
       degraded,
+      coverageAnomaly: latest.coverageAnomaly,
     });
   }
 

@@ -12,6 +12,7 @@ interface Source {
   totalErrors: number;
   lastErrors: string[];
   degraded: boolean;
+  coverageAnomaly: boolean;
 }
 
 const HEALTH_COLORS: Record<Source["health"], string> = {
@@ -110,6 +111,14 @@ export default function ScraperStatusBoard({ sources }: { sources: Source[] }) {
                     {s.degraded && (
                       <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] uppercase text-amber-800">
                         degraded
+                      </span>
+                    )}
+                    {s.coverageAnomaly && (
+                      <span
+                        className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[10px] uppercase text-red-800"
+                        title="Latest rawCount is <50% of the 14-day median. Selectors may have drifted."
+                      >
+                        anomaly
                       </span>
                     )}
                   </td>
