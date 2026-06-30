@@ -17,3 +17,13 @@ export function isRankingV2Enabled(): boolean {
 export function isOutsideUsualEnabled(): boolean {
   return process.env.OUTSIDE_USUAL_ENABLED === "true";
 }
+
+/**
+ * Gates the personalized "For You" landing feed. Reads the same
+ * RankedFeedCache as RANKING_V2 but behind its own flag so the new surface
+ * can be rolled out / rolled back independently. When on, "For You" also
+ * becomes the default home tab.
+ */
+export function isForYouEnabled(): boolean {
+  return process.env.FOR_YOU_ENABLED === "true";
+}

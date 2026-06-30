@@ -13,6 +13,9 @@ import NoticeToast from "@/components/home/NoticeToast";
 import ProfileCompletionStrip from "@/components/feedback/ProfileCompletionStrip";
 import TasteSwiper from "@/components/feedback/TasteSwiper";
 import { fetchHomeFeed, fetchPlacesFeed, fetchGuidesFeed } from "@/components/home/fetch-home-feed";
+import { fetchForYouFeed } from "@/components/home/fetch-for-you-feed";
+import ForYouTabBody from "@/components/home/ForYouTabBody";
+import { isForYouEnabled } from "@/lib/ranking/flags";
 import { getFeedbackMaps, isFilteredFromFeed } from "@/lib/feedback/server";
 import { calculateCompletion } from "@/lib/feedback/profile-completion";
 import type { HomeTab } from "@/components/home/TopTabs";
@@ -20,7 +23,7 @@ import { isRailCategory, type RailCategory } from "@/lib/home/category-filters";
 import { isPlacesRailCategory, type PlacesRailCategory } from "@/lib/home/places-rail-filters";
 import { isOccasionTag } from "@/lib/constants/occasion-tags";
 import { parseDateFilter, type SelectedDateFilter } from "@/lib/queries/events";
-import type { EventCompact, HomeFeedResponse, PlaceCompact, PlacesFeedResponse, GuidesFeedResponse } from "@/lib/home/types";
+import type { EventCompact, HomeFeedResponse, PlaceCompact, PlacesFeedResponse, GuidesFeedResponse, ForYouFeedResponse } from "@/lib/home/types";
 
 // PRD 5 §2.1 — strip auto-hides for 48h after dismiss + permanently at 80%.
 const STRIP_DISMISS_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -43,8 +46,16 @@ interface PageProps {
 
 export default async function HomePage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const tab: HomeTab =
-    sp.tab === "places" || sp.tab === "guides" ? sp.tab : "events";
+  // "For You" is the default landing tab when enabled (behind FOR_YOU_ENABLED);
+  // otherwise the default stays Events and the tab is hidden.
+  const forYouOn = isForYouEnabled();
+  const VALID_TABS: HomeTab[] = forYouOn
+    ? ["foryou", "events", "places", "guides"]
+    : ["events", "places", "guides"];
+  const defaultTab: HomeTab = forYouOn ? "foryou" : "events";
+  const tab: HomeTab = (VALID_TABS as readonly string[]).includes(sp.tab ?? "")
+    ? (sp.tab as HomeTab)
+    : defaultTab;
   const category: RailCategory | PlacesRailCategory =
     tab === "places"
       ? isPlacesRailCategory(sp.cat) ? sp.cat : "all"
@@ -60,7 +71,7 @@ export default async function HomePage({ searchParams }: PageProps) {
   return (
     <div className="relative flex min-h-screen flex-col bg-surface pb-[72px] md:pb-0">
       <Suspense fallback={<EventsTabSkeleton />}>
-        <HomeBody tab={tab} category={category} occasion={occasion} scope={scope} dateFilter={dateFilter} />
+        <HomeBody tab={tab} category={category} occasion={occasion} scope={scope} dateFilter={dateFilter} tabs={VALID_TABS} defaultTab={defaultTab} />
       </Suspense>
       <BottomNav />
       <NoticeToast />
@@ -76,12 +87,16 @@ async function HomeBody({
   occasion,
   scope,
   dateFilter,
+  tabs,
+  defaultTab,
 }: {
   tab: HomeTab;
   category: RailCategory | PlacesRailCategory;
   occasion: string;
   scope: "near" | "all";
   dateFilter: SelectedDateFilter | null;
+  tabs: HomeTab[];
+  defaultTab: HomeTab;
 }) {
   // PRD 6 Phase 2 — session lookup hoisted so userId can flow into
   // fetchHomeFeed / fetchPlacesFeed for personalized rail ordering.
@@ -113,6 +128,14 @@ async function HomeBody({
         })
       : null;
 
+  const forYouData: ForYouFeedResponse | null =
+    tab === "foryou"
+      ? await fetchForYouFeed(scope, feedUserId).catch((err) => {
+          console.error("[home] fetchForYouFeed failed:", err);
+          return null;
+        })
+      : null;
+
   const events: EventCompact[] = eventsData
     ? [
         ...eventsData.today,
@@ -134,10 +157,14 @@ async function HomeBody({
   // "Interested" pill on WANT cards, (b) hide PASS/DONE cards pre-render.
   const session = sessionForFeed;
   const userId = feedUserId;
+  const forYouItems = forYouData ? forYouData.sections.flatMap((s) => s.items) : [];
+  const forYouEventIds = forYouItems.filter((i) => i.kind === "event").map((i) => i.id);
+  const forYouPlaceIds = forYouItems.filter((i) => i.kind === "place").map((i) => i.id);
+
   const feedbackMaps = await getFeedbackMaps({
     userId: userId ?? undefined,
-    eventIds: events.map((e) => e.id),
-    placeIds: places.map((p) => p.id),
+    eventIds: [...events.map((e) => e.id), ...forYouEventIds],
+    placeIds: [...places.map((p) => p.id), ...forYouPlaceIds],
   });
 
   // PRD 5 Phase 2 §2.1 — profile-completion strip visibility. Computed here
@@ -207,6 +234,8 @@ async function HomeBody({
         tab={tab}
         category={category}
         occasion={occasion}
+        tabs={tabs}
+        defaultTab={defaultTab}
         searchableEvents={events}
         searchablePlaces={places}
       />
@@ -214,6 +243,14 @@ async function HomeBody({
         <ProfileCompletionStrip completion={completionPct} />
       )}
       <div className="flex-1" id={`panel-${tab}`} role="tabpanel">
+        {tab === "foryou" && forYouData && (
+          <ForYouTabBody data={forYouData} feedbackMaps={feedbackMaps} />
+        )}
+        {tab === "foryou" && !forYouData && (
+          <div className="px-5 py-10 text-center text-body text-mute">
+            Couldn&apos;t load your feed right now. Try again in a moment.
+          </div>
+        )}
         {tab === "events" && filteredEventsData && (
           <EventsTabBody
             category={category as RailCategory}

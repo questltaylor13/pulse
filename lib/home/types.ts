@@ -143,3 +143,21 @@ export interface HomeFeedResponse {
    *  writes back. `null` means the implicit "today" default. */
   selectedDateFilter: "tomorrow" | "weekend" | string | null;
 }
+
+/** One horizon section of the personalized "For You" feed (events + places). */
+export interface ForYouSection {
+  id: string;
+  title: string;
+  subtitle?: string;
+  items: Array<
+    | ({ kind: "event" } & EventCompact)
+    | ({ kind: "place" } & PlaceCompact)
+  >;
+}
+
+export interface ForYouFeedResponse {
+  sections: ForYouSection[];
+  /** True when ordering came from the user's RankedFeedCache (vs a quality fallback). */
+  personalized: boolean;
+  lastUpdatedAt: string; // ISO
+}

@@ -15,6 +15,8 @@ interface Props {
   tab: HomeTab;
   category: RailCategory | PlacesRailCategory;
   occasion?: string;
+  tabs?: HomeTab[];
+  defaultTab?: HomeTab;
   /** @deprecated No longer used — search overlay fetches from API now */
   searchableEvents?: EventCompact[];
   /** @deprecated No longer used — search overlay fetches from API now */
@@ -25,6 +27,8 @@ export default function StickyChrome({
   tab,
   category,
   occasion = "all",
+  tabs,
+  defaultTab,
 }: Props) {
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -44,7 +48,7 @@ export default function StickyChrome({
         <SearchBar placeholder={placeholder} onOpen={() => setSearchOpen(true)} />
       </div>
       <div className="sticky top-[104px] z-chromeTabs bg-surface">
-        <TopTabs active={tab} />
+        <TopTabs active={tab} tabs={tabs} defaultTab={defaultTab} />
       </div>
       {(tab === "events" || tab === "places") && (
         <div className="sticky top-[152px] z-chromeRail bg-surface">

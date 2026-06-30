@@ -3,18 +3,26 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 
-export type HomeTab = "events" | "places" | "guides";
-const TABS: { value: HomeTab; label: string }[] = [
-  { value: "events", label: "Events" },
-  { value: "places", label: "Places" },
-  { value: "guides", label: "Guides" },
-];
+export type HomeTab = "foryou" | "events" | "places" | "guides";
+
+const TAB_LABELS: Record<HomeTab, string> = {
+  foryou: "For You",
+  events: "Events",
+  places: "Places",
+  guides: "Guides",
+};
+
+const DEFAULT_TABS: HomeTab[] = ["events", "places", "guides"];
 
 interface Props {
   active: HomeTab;
+  /** Visible tabs, in order. Defaults to Events/Places/Guides. */
+  tabs?: HomeTab[];
+  /** The tab that maps to no `?tab=` param. Defaults to "events". */
+  defaultTab?: HomeTab;
 }
 
-export default function TopTabs({ active }: Props) {
+export default function TopTabs({ active, tabs = DEFAULT_TABS, defaultTab = "events" }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -22,10 +30,13 @@ export default function TopTabs({ active }: Props) {
   function handleSelect(tab: HomeTab) {
     if (tab === active) return;
     const params = new URLSearchParams(searchParams?.toString() ?? "");
-    if (tab === "events") params.delete("tab");
+    if (tab === defaultTab) params.delete("tab");
     else params.set("tab", tab);
-    // Drop category when leaving Events tab.
-    if (tab !== "events") params.delete("cat");
+    // Drop Events-only params when leaving the Events tab.
+    if (tab !== "events") {
+      params.delete("cat");
+      params.delete("date");
+    }
     const qs = params.toString();
     startTransition(() => {
       router.replace(qs ? `/?${qs}` : "/", { scroll: false });
@@ -38,15 +49,15 @@ export default function TopTabs({ active }: Props) {
       aria-label="Home sections"
       className="flex h-12 items-stretch border-b border-mute-divider bg-surface"
     >
-      {TABS.map((tab) => {
-        const isActive = tab.value === active;
+      {tabs.map((value) => {
+        const isActive = value === active;
         return (
           <button
-            key={tab.value}
+            key={value}
             role="tab"
             aria-selected={isActive}
-            aria-controls={`panel-${tab.value}`}
-            onClick={() => handleSelect(tab.value)}
+            aria-controls={`panel-${value}`}
+            onClick={() => handleSelect(value)}
             data-pending={isPending ? "" : undefined}
             className={`flex flex-1 items-center justify-center border-b-2 text-[15px] transition-colors ${
               isActive
@@ -54,7 +65,7 @@ export default function TopTabs({ active }: Props) {
                 : "border-transparent font-normal text-mute hover:text-ink"
             }`}
           >
-            {tab.label}
+            {TAB_LABELS[value]}
           </button>
         );
       })}
