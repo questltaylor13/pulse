@@ -3,6 +3,7 @@ import type { ItemStatus } from "@prisma/client";
 import SaveButton from "./SaveButton";
 import VibeTagPill from "./VibeTagPill";
 import CardMoreMenu from "@/components/feedback/CardMoreMenu";
+import NotForMeButton from "@/components/feedback/NotForMeButton";
 import FeedbackTag from "@/components/feedback/FeedbackTag";
 import { JustOpenedBadge } from "./Badges";
 import { categoryLabel, daysSince, placeSecondaryMeta } from "@/lib/home/event-view";
@@ -33,24 +34,26 @@ export default function PlaceCardCompact({
   return (
     <Link
       href={href}
-      className="relative block shrink-0 snap-start"
+      className="group relative block shrink-0 snap-start"
       style={{ width: cardWidth }}
     >
-      <article className="overflow-hidden rounded-card border border-mute-divider bg-surface">
-        <div className="relative w-full bg-mute-hush" style={{ height: imgHeight }}>
+      <article className="overflow-hidden rounded-card border border-mute-divider bg-surface shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-cardHover">
+        <div className="relative w-full overflow-hidden bg-mute-hush" style={{ height: imgHeight }}>
           <img
             src={place.imageUrl || FALLBACK_IMG}
             alt=""
             loading="lazy"
             decoding="async"
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/20 via-transparent to-transparent" />
           {showJustOpened && <JustOpenedBadge />}
           <SaveButton
             itemId={place.id}
             itemType="place"
             initialSaved={feedbackStatus === "WANT"}
           />
+          <NotForMeButton ref_={{ placeId: place.id }} initialStatus={feedbackStatus} />
           <CardMoreMenu
             ref_={{ placeId: place.id }}
             itemTitle={place.name}

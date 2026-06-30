@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ItemStatus } from "@prisma/client";
 import SaveButton from "./SaveButton";
 import CardMoreMenu from "@/components/feedback/CardMoreMenu";
+import NotForMeButton from "@/components/feedback/NotForMeButton";
 import FeedbackTag from "@/components/feedback/FeedbackTag";
 import { EditorPickBadge, FreeBadge, TodayBadge, TrendingBadge } from "./Badges";
 import {
@@ -44,24 +45,26 @@ export default function EventCardCompact({
   return (
     <Link
       href={href}
-      className="relative block shrink-0 snap-start"
+      className="group relative block shrink-0 snap-start"
       style={{ width: cardWidth }}
     >
-      <article className="overflow-hidden rounded-card border border-mute-divider bg-surface">
-        <div className="relative w-full bg-mute-hush" style={{ height: imgHeight }}>
+      <article className="overflow-hidden rounded-card border border-mute-divider bg-surface shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-cardHover">
+        <div className="relative w-full overflow-hidden bg-mute-hush" style={{ height: imgHeight }}>
           <img
             src={event.imageUrl || FALLBACK_IMG}
             alt=""
             loading="lazy"
             decoding="async"
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/20 via-transparent to-transparent" />
           {pickBadge}
           <SaveButton
             itemId={event.id}
             itemType="event"
             initialSaved={feedbackStatus === "WANT"}
           />
+          <NotForMeButton ref_={{ eventId: event.id }} initialStatus={feedbackStatus} />
           <CardMoreMenu
             ref_={{ eventId: event.id }}
             itemTitle={event.title}

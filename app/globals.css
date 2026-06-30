@@ -104,6 +104,13 @@ body {
   animation: fade-in 0.2s ease-out;
 }
 
+/* Save / like celebration pop. */
+@keyframes pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
 @layer components {
   /* Shared chip/pill states. Active = coral→teal brand gradient (was flat
      black `bg-ink`); idle = subtle line border. Adopted by every filter chip. */

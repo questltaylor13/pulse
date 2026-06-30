@@ -51,9 +51,13 @@ export default function SaveButton({ itemId, itemType, initialSaved = false }: P
         aria-pressed={saved}
         onClick={handleClick}
         disabled={pending}
-        className="absolute right-2 top-2 flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white/85 text-ink backdrop-blur transition hover:bg-white"
+        className="absolute right-2 top-2 flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white/85 text-ink backdrop-blur transition hover:bg-white active:scale-90"
       >
-        <SavedIcon size={16} className={saved ? "fill-coral text-coral" : ""} />
+        <SavedIcon
+          key={saved ? "on" : "off"}
+          size={16}
+          className={saved ? "fill-coral text-coral animate-[pop_0.3s_ease-out]" : ""}
+        />
       </button>
       <SoftAuthModal
         open={authPromptOpen}
