@@ -57,7 +57,11 @@ export default function EventCardCompact({
             className="h-full w-full object-cover"
           />
           {pickBadge}
-          <SaveButton itemId={event.id} itemType="event" />
+          <SaveButton
+            itemId={event.id}
+            itemType="event"
+            initialSaved={feedbackStatus === "WANT"}
+          />
           <CardMoreMenu
             ref_={{ eventId: event.id }}
             itemTitle={event.title}

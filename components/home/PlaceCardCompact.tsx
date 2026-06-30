@@ -46,7 +46,11 @@ export default function PlaceCardCompact({
             className="h-full w-full object-cover"
           />
           {showJustOpened && <JustOpenedBadge />}
-          <SaveButton itemId={place.id} itemType="place" />
+          <SaveButton
+            itemId={place.id}
+            itemType="place"
+            initialSaved={feedbackStatus === "WANT"}
+          />
           <CardMoreMenu
             ref_={{ placeId: place.id }}
             itemTitle={place.name}
