@@ -6,6 +6,7 @@ import GuideCard from "./GuideCard";
 import LastUpdatedIndicator from "./LastUpdatedIndicator";
 import OutsideYourUsualRail from "./OutsideYourUsualRail";
 import RegionalScopeFilter from "./RegionalScopeFilter";
+import EventDateFilter from "./EventDateFilter";
 import type { HomeFeedResponse } from "@/lib/home/types";
 import { RAIL_LABELS, type RailCategory } from "@/lib/home/category-filters";
 import type { FeedbackMaps } from "@/lib/feedback/server";
@@ -15,6 +16,10 @@ interface Props {
   data: HomeFeedResponse;
   feedbackMaps?: FeedbackMaps;
 }
+
+// selectedDate.iso values that are presets (use the label verbatim);
+// everything else is a concrete date/range and gets an "On " prefix.
+const PRESET_DATE_ISOS = ["tomorrow", "weekend", "this-week", "next-week", "next-7"];
 
 function CollapsedSection({ title, category }: { title: string; category: RailCategory }) {
   return (
@@ -35,61 +40,123 @@ export default function EventsTabBody({ category, data, feedbackMaps }: Props) {
     newInDenver,
     outsideTheCity,
     worthAWeekend,
+    comingUp,
     outsideYourUsual,
     guidesFromCreators,
     lastUpdatedAt,
     regionalScope,
+    selectedDate,
+    selectedDateFilter,
   } = data;
+  const todayIsoDenver = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Denver",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
   const eventStatus = (id: string) => feedbackMaps?.byEventId.get(id) ?? null;
   const placeStatus = (id: string) => feedbackMaps?.byPlaceId.get(id) ?? null;
 
   return (
     <>
+      {/* Date selector — Today/Tomorrow/This-weekend/This-week/Next-week +
+          custom date. When a non-today filter is active, fetchHomeFeed returns
+          selectedDate and the default Today/Weekend rails are suppressed. */}
+      <EventDateFilter value={selectedDateFilter} minDate={todayIsoDenver} />
+
       {/* PRD 2 §5.3 — "Near Denver" / "All" filter chip. Defaults to "near" so
           mountain-destination content doesn't surprise first-time users. */}
       <RegionalScopeFilter scope={regionalScope} />
 
-      {/* Section 1: Today */}
-      {today.length === 0 && category !== "all" ? (
-        <CollapsedSection title="Today" category={category} />
-      ) : (
+      {selectedDate ? (
+        // Single rail in place of Today + This-weekend. Presets use the label
+        // verbatim ("Tomorrow", "This weekend"); specific dates get "On Mon, May 11".
         <ScrollSection
-          title="Today"
-          subtitle="Happening in Denver right now"
-          count={today.length}
-          seeAllHref={todayCount > 25 ? "/browse/today" : undefined}
+          title={
+            PRESET_DATE_ISOS.includes(selectedDate.iso)
+              ? selectedDate.label
+              : `On ${selectedDate.label}`
+          }
+          subtitle="Events for the time you picked"
+          count={selectedDate.count}
           empty={
             <div className="rounded-card bg-mute-hush p-4 text-body text-mute">
-              No events today. Check out this weekend →
+              No events found. Try another date →
             </div>
           }
         >
-          {today.map((e) => (
+          {selectedDate.items.map((e) => (
             <EventCardCompact
               key={e.id}
               event={e}
               variant="standard"
-              showTodayBadge
               feedbackStatus={eventStatus(e.id)}
             />
           ))}
         </ScrollSection>
+      ) : (
+        <>
+          {/* Section 1: Today */}
+          {today.length === 0 && category !== "all" ? (
+            <CollapsedSection title="Today" category={category} />
+          ) : (
+            <ScrollSection
+              title="Today"
+              subtitle="Happening in Denver right now"
+              count={today.length}
+              seeAllHref={todayCount > 25 ? "/browse/today" : undefined}
+              empty={
+                <div className="rounded-card bg-mute-hush p-4 text-body text-mute">
+                  No events today. Check out this weekend →
+                </div>
+              }
+            >
+              {today.map((e) => (
+                <EventCardCompact
+                  key={e.id}
+                  event={e}
+                  variant="standard"
+                  showTodayBadge
+                  feedbackStatus={eventStatus(e.id)}
+                />
+              ))}
+            </ScrollSection>
+          )}
+
+          {/* Section 2: This weekend's picks */}
+          {weekendPicks.length === 0 && category !== "all" ? (
+            <CollapsedSection title="This weekend's picks" category={category} />
+          ) : (
+            <ScrollSection
+              title="This weekend's picks"
+              subtitle="Editor-curated plans for Fri–Sun"
+              seeAllHref="/browse/this-weekend"
+            >
+              {weekendPicks.map((e) => (
+                <EventCardCompact
+                  key={e.id}
+                  event={e}
+                  variant="wide"
+                  feedbackStatus={eventStatus(e.id)}
+                />
+              ))}
+            </ScrollSection>
+          )}
+        </>
       )}
 
-      {/* Section 2: This weekend's picks */}
-      {weekendPicks.length === 0 && category !== "all" ? (
-        <CollapsedSection title="This weekend's picks" category={category} />
-      ) : (
+      {/* Coming up — longer-horizon upcoming events (after this weekend).
+          Only shown in the default view; comingUp is [] under a date filter. */}
+      {comingUp.length > 0 && (
         <ScrollSection
-          title="This weekend's picks"
-          subtitle="Editor-curated plans for Fri–Sun"
-          seeAllHref="/browse/this-weekend"
+          title="Coming up"
+          subtitle="On the calendar over the next few weeks"
         >
-          {weekendPicks.map((e) => (
+          {comingUp.map((e) => (
             <EventCardCompact
-              key={e.id}
+              key={`cu-${e.id}`}
               event={e}
-              variant="wide"
+              variant="standard"
               feedbackStatus={eventStatus(e.id)}
             />
           ))}

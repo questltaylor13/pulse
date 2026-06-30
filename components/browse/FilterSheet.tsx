@@ -126,7 +126,7 @@ export default function FilterSheet({ onClose }: Props) {
                   onClick={() => setCategories(toggleSet(categories, cat))}
                   className={`rounded-pill px-3 py-1.5 text-body transition-colors ${
                     active
-                      ? "bg-ink text-surface"
+                      ? "bg-brand-gradient-strong text-white shadow-pill"
                       : "border border-mute-divider bg-surface text-ink"
                   }`}
                 >
@@ -149,7 +149,7 @@ export default function FilterSheet({ onClose }: Props) {
                   onClick={() => setPrice(opt.value)}
                   className={`rounded-pill px-3 py-1.5 text-body transition-colors ${
                     active
-                      ? "bg-ink text-surface"
+                      ? "bg-brand-gradient-strong text-white shadow-pill"
                       : "border border-mute-divider bg-surface text-ink"
                   }`}
                 >
@@ -172,7 +172,7 @@ export default function FilterSheet({ onClose }: Props) {
                   onClick={() => setVibes(toggleSet(vibes, tag))}
                   className={`rounded-pill px-3 py-1.5 text-body capitalize transition-colors ${
                     active
-                      ? "bg-ink text-surface"
+                      ? "bg-brand-gradient-strong text-white shadow-pill"
                       : "border border-mute-divider bg-surface text-ink"
                   }`}
                 >
@@ -195,7 +195,7 @@ export default function FilterSheet({ onClose }: Props) {
                   onClick={() => setTimes(toggleSet(times, opt.value))}
                   className={`rounded-pill px-3 py-1.5 text-body transition-colors ${
                     active
-                      ? "bg-ink text-surface"
+                      ? "bg-brand-gradient-strong text-white shadow-pill"
                       : "border border-mute-divider bg-surface text-ink"
                   }`}
                 >
@@ -218,7 +218,7 @@ export default function FilterSheet({ onClose }: Props) {
                   onClick={() => setSort(opt.value)}
                   className={`rounded-pill px-3 py-1.5 text-body transition-colors ${
                     active
-                      ? "bg-ink text-surface"
+                      ? "bg-brand-gradient-strong text-white shadow-pill"
                       : "border border-mute-divider bg-surface text-ink"
                   }`}
                 >

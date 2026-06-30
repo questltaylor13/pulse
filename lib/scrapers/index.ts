@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Category } from "@prisma/client";
 import { ScrapedEvent, ScraperResult, Scraper } from "./types";
+import { sendScraperAlert } from "./alerts";
 import { scrapeDenverEvents } from "./denver-events";
 import { scrapeWestword } from "./westword";
 import { scrapeTicketmaster } from "./ticketmaster";
@@ -388,6 +389,7 @@ export async function runAllScrapers(): Promise<{
   // from the totals; precise attribution would require per-source upsert
   // tracking which isn't worth the extra DB calls. Wrapped in try/catch so
   // a logging failure never breaks the scrape.
+  const coverageAnomalies: { source: string; rawCount: number; median: number }[] = [];
   try {
     const rowsBySource = new Map<string, number>();
     for (const r of allResults) {
@@ -418,6 +420,7 @@ export async function runAllScrapers(): Promise<{
           counts.length % 2 === 0 ? (counts[mid - 1] + counts[mid]) / 2 : counts[mid];
         if (median >= 5 && rawCount < 0.5 * median) {
           coverageAnomaly = true;
+          coverageAnomalies.push({ source, rawCount, median });
         }
       }
 
@@ -440,6 +443,11 @@ export async function runAllScrapers(): Promise<{
   } catch (logErr) {
     console.error("[runAllScrapers] failed to write ScraperRun:", logErr);
   }
+
+  // Notify on coverage anomalies (no-op unless SCRAPER_ALERT_WEBHOOK_URL set).
+  // Critical after activating Ticketmaster/Eventbrite so a key that returns
+  // nothing surfaces immediately instead of silently.
+  await sendScraperAlert(coverageAnomalies);
 
   return {
     total: deduplicated.length,

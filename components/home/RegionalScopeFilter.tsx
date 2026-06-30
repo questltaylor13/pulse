@@ -38,7 +38,7 @@ export default function RegionalScopeFilter({ scope }: Props) {
         className={[
           "rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors",
           active
-            ? "bg-ink text-surface"
+            ? "bg-brand-gradient-strong text-white shadow-pill"
             : "border border-line bg-surface text-mute hover:text-ink",
         ].join(" ")}
         aria-pressed={active}

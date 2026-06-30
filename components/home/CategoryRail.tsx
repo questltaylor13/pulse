@@ -99,7 +99,7 @@ export default function CategoryRail({ active, railSet = "events" }: Props) {
             data-pending={isPending ? "" : undefined}
             className={`flex min-w-[72px] flex-col items-center justify-center gap-1 border-b-2 px-3 pb-2 pt-3 transition-colors ${
               isActive
-                ? "border-ink text-ink"
+                ? "border-coral text-coral"
                 : "border-transparent text-mute hover:text-ink"
             }`}
           >

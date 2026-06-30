@@ -12,9 +12,12 @@ import {
   outsideDenverWhere,
   regionalScopeWhere,
   regionalScopePlaceWhere,
+  resolveDateFilterRange,
   upcomingWeekendRange,
   type RegionalScope,
+  type SelectedDateFilter,
 } from "@/lib/queries/events";
+import { formatWeekdayDateDenver, denverDateKey } from "@/lib/time/denver";
 import { sortByEditorialRank } from "@/lib/ranking";
 import { buildCacheLookup, readCache, sortByCacheScore } from "@/lib/ranking/cache";
 import { isOutsideUsualEnabled, isRankingV2Enabled } from "@/lib/ranking/flags";
@@ -358,6 +361,7 @@ export async function fetchHomeFeed(
   cat: RailCategory,
   scope: RegionalScope = "near",
   userId?: string | null,
+  dateFilter: SelectedDateFilter | null = null,
 ): Promise<HomeFeedResponse> {
   const now = new Date();
   const eodToday = endOfTodayLocal(now);
@@ -370,6 +374,10 @@ export async function fetchHomeFeed(
   const scopeEventFilter = regionalScopeWhere(scope);
   const scopePlaceFilter = regionalScopePlaceWhere(scope);
 
+  // When a date filter is active, the Today + This-weekend rails are
+  // replaced with a single "On [date]" rail and Worth-a-weekend is hidden.
+  const dateRange = dateFilter ? resolveDateFilterRange(dateFilter, now) : null;
+
   const todayWhere = {
     AND: [
       activeEventsWhere(now),
@@ -379,7 +387,7 @@ export async function fetchHomeFeed(
     ],
   };
 
-  const [today, todayCount, weekend, newPlaces, outsideEvents, outsidePlaces, worthAWeekend] = await Promise.all([
+  const [today, todayCount, weekend, newPlaces, outsideEvents, outsidePlaces, worthAWeekend, selectedDateEvents, comingUpEvents] = await Promise.all([
     prisma.event.findMany({
       where: todayWhere,
       select: EVENT_SELECT,
@@ -449,6 +457,47 @@ export async function fetchHomeFeed(
       orderBy: [{ worthTheDriveScore: { sort: "desc", nulls: "last" } }, { startTime: "asc" }],
       take: 10,
     }),
+    // Selected-date rail. Cap mirrors the Today rail. Range start is the
+    // greater of dateRange.start and `now` so a same-day filter still
+    // hides past events, but a future-day filter starts at midnight.
+    prisma.event.findMany({
+      where: dateRange
+        ? {
+            AND: [
+              activeEventsWhere(now),
+              eventCat,
+              scopeEventFilter,
+              {
+                startTime: {
+                  gte: dateRange.start > now ? dateRange.start : now,
+                  lte: dateRange.end,
+                },
+              },
+            ],
+          }
+        // No date filter — short-circuit with an impossible predicate so
+        // Prisma returns [] without us having to fork the result type.
+        : { id: "__no_match__" },
+      select: EVENT_SELECT,
+      orderBy: { startTime: "asc" },
+      take: dateRange ? 60 : 0,
+    }),
+    // "Coming up" — near-scope upcoming events AFTER this weekend, out to
+    // 8 weeks. Surfaces longer-horizon content the Today/Weekend rails miss
+    // (and that Worth-a-weekend hides in "near" scope).
+    prisma.event.findMany({
+      where: {
+        AND: [
+          activeEventsWhere(now),
+          eventCat,
+          scopeEventFilter,
+          { startTime: { gt: weekendEnd, lte: eightWeeksOut } },
+        ],
+      },
+      select: EVENT_SELECT,
+      orderBy: { startTime: "asc" },
+      take: 12,
+    }),
   ]);
 
   // When the user has a cache, personalize each rail's order. Items
@@ -480,18 +529,83 @@ export async function fetchHomeFeed(
   // ≥5 feedback. fetchOutsideUsual returns [] when any gate fails.
   const outsideYourUsual = await maybeFetchOutsideUsual(userId, scope);
 
+  const selectedDate = dateFilter
+    ? buildSelectedDate(dateFilter, selectedDateEvents, cacheLookup, now)
+    : undefined;
+
   return {
-    today: sortByCacheScore(today, "event", cacheLookup).map(toEventCompact),
-    todayCount,
-    weekendPicks: weekendRanked.map(toEventCompact),
+    // Suppress Today + This-weekend + Worth-a-weekend when a date filter is
+    // active — they're replaced by the single "On [date]" rail.
+    today: dateFilter ? [] : sortByCacheScore(today, "event", cacheLookup).map(toEventCompact),
+    todayCount: dateFilter ? 0 : todayCount,
+    weekendPicks: dateFilter ? [] : weekendRanked.map(toEventCompact),
     newInDenver: sortByCacheScore(newPlaces, "place", cacheLookup).map(toPlaceCompact),
     outsideTheCity,
-    worthAWeekend: worthAWeekendOut,
+    worthAWeekend: dateFilter ? [] : worthAWeekendOut,
+    comingUp: dateFilter
+      ? []
+      : sortByCacheScore(comingUpEvents, "event", cacheLookup).map(toEventCompact),
     outsideYourUsual,
     guidesFromCreators: SEED_GUIDES,
     lastUpdatedAt: now.toISOString(),
     regionalScope: scope,
+    selectedDate,
+    selectedDateFilter: serializeDateFilter(dateFilter),
   };
+}
+
+function buildSelectedDate<E extends { id: string }>(
+  filter: SelectedDateFilter,
+  events: E[],
+  cacheLookup: Map<string, number>,
+  _now: Date,
+): NonNullable<HomeFeedResponse["selectedDate"]> {
+  const items = sortByCacheScore(events, "event", cacheLookup).map(toEventCompact);
+  const base = { items, count: items.length };
+  switch (filter.kind) {
+    case "tomorrow":
+      return { iso: "tomorrow", label: "Tomorrow", ...base };
+    case "weekend":
+      return { iso: "weekend", label: "This weekend", ...base };
+    case "thisWeek":
+      return { iso: "this-week", label: "This week", ...base };
+    case "nextWeek":
+      return { iso: "next-week", label: "Next week", ...base };
+    case "next7":
+      return { iso: "next-7", label: "Next 7 days", ...base };
+    case "range":
+      return {
+        iso: `${denverDateKey(filter.start)}..${denverDateKey(filter.end)}`,
+        label: `${formatWeekdayDateDenver(filter.start)} – ${formatWeekdayDateDenver(filter.end)}`,
+        ...base,
+      };
+    case "specific":
+      return {
+        iso: denverDateKey(filter.date),
+        label: formatWeekdayDateDenver(filter.date),
+        ...base,
+      };
+  }
+}
+
+function serializeDateFilter(filter: SelectedDateFilter | null): string | null {
+  if (!filter) return null;
+  switch (filter.kind) {
+    case "tomorrow":
+      return "tomorrow";
+    case "weekend":
+      return "weekend";
+    case "thisWeek":
+      return "this-week";
+    case "nextWeek":
+      return "next-week";
+    case "next7":
+      return "next-7";
+    case "range":
+      return `${denverDateKey(filter.start)}..${denverDateKey(filter.end)}`;
+    case "specific":
+      return denverDateKey(filter.date);
+  }
 }
 
 async function maybeFetchOutsideUsual(

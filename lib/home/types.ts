@@ -117,6 +117,9 @@ export interface HomeFeedResponse {
   // PRD 2 §5.4: mountain-destination events scored >= 8 on worth-the-drive.
   // Section hides when count < 3.
   worthAWeekend: EventCompact[];
+  /** Near-scope upcoming events after this weekend → +8 weeks. Gives the
+   *  default feed a longer planning horizon. Empty when a date filter is active. */
+  comingUp: EventCompact[];
   /** PRD 6 Phase 5 — "Outside your usual" horizontal rail. Serialized
    *  via lib/ranking/outside-usual.ts. Empty array when feature flag is
    *  off, user is anonymous, cache miss, or feedback count < threshold. */
@@ -126,4 +129,17 @@ export interface HomeFeedResponse {
   // PRD 2 §5.3: echoed back so the UI can render the filter chip in its
   // current state without re-parsing URL params.
   regionalScope: "near" | "all";
+  /** Present when the user has chosen a date filter other than "today".
+   *  Replaces the Today + This-weekend rails with one "On [label]" rail. */
+  selectedDate?: {
+    // "tomorrow"/"weekend"/"this-week"/"next-week"/"next-7", a "YYYY-MM-DD"
+    // date, or a "YYYY-MM-DD..YYYY-MM-DD" range.
+    iso: string;
+    label: string; // e.g. "Tomorrow", "This week", "Wed, May 11"
+    items: EventCompact[];
+    count: number;
+  };
+  /** URL-param echo for the date chip — same wire format that the chip
+   *  writes back. `null` means the implicit "today" default. */
+  selectedDateFilter: "tomorrow" | "weekend" | string | null;
 }

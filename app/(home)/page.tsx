@@ -19,6 +19,7 @@ import type { HomeTab } from "@/components/home/TopTabs";
 import { isRailCategory, type RailCategory } from "@/lib/home/category-filters";
 import { isPlacesRailCategory, type PlacesRailCategory } from "@/lib/home/places-rail-filters";
 import { isOccasionTag } from "@/lib/constants/occasion-tags";
+import { parseDateFilter, type SelectedDateFilter } from "@/lib/queries/events";
 import type { EventCompact, HomeFeedResponse, PlaceCompact, PlacesFeedResponse, GuidesFeedResponse } from "@/lib/home/types";
 
 // PRD 5 §2.1 — strip auto-hides for 48h after dismiss + permanently at 80%.
@@ -37,7 +38,7 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 interface PageProps {
-  searchParams: Promise<{ tab?: string; cat?: string; occasion?: string; scope?: string; swiper?: string }>;
+  searchParams: Promise<{ tab?: string; cat?: string; occasion?: string; scope?: string; swiper?: string; date?: string }>;
 }
 
 export default async function HomePage({ searchParams }: PageProps) {
@@ -53,11 +54,13 @@ export default async function HomePage({ searchParams }: PageProps) {
   // PRD 2 §5.3 — "Near Denver" default ON. Only "all" overrides.
   const scope: "near" | "all" = sp.scope === "all" ? "all" : "near";
   const swiperOpen = sp.swiper === "1";
+  // Date filter for the Events tab. `null` = implicit "today" default.
+  const dateFilter: SelectedDateFilter | null = parseDateFilter(sp.date);
 
   return (
     <div className="relative flex min-h-screen flex-col bg-surface pb-[72px] md:pb-0">
       <Suspense fallback={<EventsTabSkeleton />}>
-        <HomeBody tab={tab} category={category} occasion={occasion} scope={scope} />
+        <HomeBody tab={tab} category={category} occasion={occasion} scope={scope} dateFilter={dateFilter} />
       </Suspense>
       <BottomNav />
       <NoticeToast />
@@ -72,11 +75,13 @@ async function HomeBody({
   category,
   occasion,
   scope,
+  dateFilter,
 }: {
   tab: HomeTab;
   category: RailCategory | PlacesRailCategory;
   occasion: string;
   scope: "near" | "all";
+  dateFilter: SelectedDateFilter | null;
 }) {
   // PRD 6 Phase 2 — session lookup hoisted so userId can flow into
   // fetchHomeFeed / fetchPlacesFeed for personalized rail ordering.
@@ -86,7 +91,7 @@ async function HomeBody({
 
   const eventsData: HomeFeedResponse | null =
     tab === "events"
-      ? await fetchHomeFeed(category as RailCategory, scope, feedUserId).catch((err) => {
+      ? await fetchHomeFeed(category as RailCategory, scope, feedUserId, dateFilter).catch((err) => {
           console.error("[home] fetchHomeFeed failed:", err);
           return null;
         })

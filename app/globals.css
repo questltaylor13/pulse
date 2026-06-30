@@ -103,3 +103,27 @@ body {
 .animate-fade-in {
   animation: fade-in 0.2s ease-out;
 }
+
+@layer components {
+  /* Shared chip/pill states. Active = coral→teal brand gradient (was flat
+     black `bg-ink`); idle = subtle line border. Adopted by every filter chip. */
+  .pill-active {
+    @apply border border-transparent bg-brand-gradient-strong text-white shadow-pill;
+  }
+  .pill-idle {
+    @apply border border-line bg-surface text-mute hover:text-ink;
+  }
+}
+
+/* Honor reduced-motion globally: neutralize transitions/animations so the
+   incoming framer-motion + CSS effects never override a user's OS preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

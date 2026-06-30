@@ -40,7 +40,7 @@ export default function DayPills() {
             onClick={() => setDay(d.value)}
             className={`shrink-0 rounded-pill px-4 py-1.5 text-body font-medium transition-colors ${
               isActive
-                ? "bg-ink text-surface"
+                ? "bg-brand-gradient-strong text-white shadow-pill"
                 : "border border-mute-divider bg-surface text-ink"
             }`}
           >

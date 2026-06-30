@@ -111,3 +111,31 @@ export function addDaysDenver(date: Date, days: number): Date {
   const { year, month, day, hour, minute, second } = getDenverParts(date);
   return denverWallClockToUtc(year, month, day + days, hour, minute, second, 0);
 }
+
+/**
+ * Day of week (0=Sunday .. 6=Saturday) for the Denver wall-clock day that
+ * `date` falls on, regardless of the server timezone.
+ */
+export function denverWeekday(date: Date): number {
+  const { year, month, day } = getDenverParts(date);
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+}
+
+/**
+ * Denver midnight (00:00:00.000) of the first day of the week containing
+ * `now`. `weekStartsOn` defaults to 0 (Sunday). DST-correct — builds on the
+ * Denver wall-clock helpers rather than naive getDay()/setDate.
+ */
+export function startOfWeekDenver(now: Date = new Date(), weekStartsOn = 0): Date {
+  const diff = (denverWeekday(now) - weekStartsOn + 7) % 7;
+  return addDaysDenver(startOfTodayDenver(now), -diff);
+}
+
+/**
+ * Denver 23:59:59.999 of the last day of the week containing `now`.
+ * `weekStartsOn` defaults to 0 (Sunday). DST-correct.
+ */
+export function endOfWeekDenver(now: Date = new Date(), weekStartsOn = 0): Date {
+  const start = startOfWeekDenver(now, weekStartsOn);
+  return endOfTodayDenver(addDaysDenver(start, 6));
+}

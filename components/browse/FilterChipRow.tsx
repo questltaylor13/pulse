@@ -80,7 +80,7 @@ export default function FilterChipRow() {
               onClick={() => toggleQuickChip(chip.param, chip.value)}
               className={`shrink-0 rounded-pill px-3 py-1.5 text-body transition-colors ${
                 active
-                  ? "bg-ink text-surface"
+                  ? "bg-brand-gradient-strong text-white shadow-pill"
                   : "border border-mute-divider bg-surface text-ink"
               }`}
             >

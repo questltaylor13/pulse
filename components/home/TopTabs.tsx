@@ -50,7 +50,7 @@ export default function TopTabs({ active }: Props) {
             data-pending={isPending ? "" : undefined}
             className={`flex flex-1 items-center justify-center border-b-2 text-[15px] transition-colors ${
               isActive
-                ? "border-ink font-medium text-ink"
+                ? "border-coral font-medium text-coral"
                 : "border-transparent font-normal text-mute hover:text-ink"
             }`}
           >

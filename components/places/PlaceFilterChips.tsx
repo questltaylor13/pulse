@@ -34,7 +34,7 @@ export default function PlaceFilterChips({ activeCat, baseHref }: Props) {
             }
             className={`whitespace-nowrap rounded-full px-3 py-1.5 text-body transition ${
               isActive
-                ? "bg-ink text-surface"
+                ? "bg-brand-gradient-strong text-white shadow-pill"
                 : "border border-mute-divider bg-surface text-ink"
             }`}
           >
