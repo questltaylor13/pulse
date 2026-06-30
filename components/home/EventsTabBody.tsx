@@ -7,9 +7,10 @@ import LastUpdatedIndicator from "./LastUpdatedIndicator";
 import OutsideYourUsualRail from "./OutsideYourUsualRail";
 import RegionalScopeFilter from "./RegionalScopeFilter";
 import EventDateFilter from "./EventDateFilter";
+import DayGroupLabel from "@/components/browse/DayGroupLabel";
 import type { HomeFeedResponse } from "@/lib/home/types";
 import { RAIL_LABELS, type RailCategory } from "@/lib/home/category-filters";
-import type { FeedbackMaps } from "@/lib/feedback/server";
+import { type FeedbackMaps, isFilteredFromFeed } from "@/lib/feedback/server";
 
 interface Props {
   category: RailCategory;
@@ -46,6 +47,7 @@ export default function EventsTabBody({ category, data, feedbackMaps }: Props) {
     lastUpdatedAt,
     regionalScope,
     selectedDate,
+    weekAgenda,
     selectedDateFilter,
   } = data;
   const todayIsoDenver = new Intl.DateTimeFormat("en-CA", {
@@ -56,6 +58,16 @@ export default function EventsTabBody({ category, data, feedbackMaps }: Props) {
   }).format(new Date());
   const eventStatus = (id: string) => feedbackMaps?.byEventId.get(id) ?? null;
   const placeStatus = (id: string) => feedbackMaps?.byPlaceId.get(id) ?? null;
+
+  // Drop PASS/DONE items from the agenda and skip days that empty out.
+  const agendaDays = weekAgenda
+    ? weekAgenda.days
+        .map((d) => ({
+          ...d,
+          items: d.items.filter((e) => !isFilteredFromFeed(eventStatus(e.id))),
+        }))
+        .filter((d) => d.items.length > 0)
+    : [];
 
   return (
     <>
@@ -68,7 +80,37 @@ export default function EventsTabBody({ category, data, feedbackMaps }: Props) {
           mountain-destination content doesn't surprise first-time users. */}
       <RegionalScopeFilter scope={regionalScope} />
 
-      {selectedDate ? (
+      {weekAgenda ? (
+        // Multi-day agenda: events grouped by Denver day. Replaces the
+        // Today + This-weekend rails entirely.
+        <div className="pb-1">
+          <div className="px-5 pt-3 pb-1">
+            <h2 className="text-display-sm font-display text-ink">{weekAgenda.rangeLabel}</h2>
+            <p className="mt-0.5 text-body text-mute">What&apos;s on, day by day</p>
+          </div>
+          {agendaDays.length === 0 ? (
+            <div className="mx-5 rounded-card bg-mute-hush p-4 text-body text-mute">
+              No events in this range. Try another week →
+            </div>
+          ) : (
+            agendaDays.map((day) => (
+              <div key={day.iso}>
+                <DayGroupLabel label={`${day.label} · ${day.items.length}`} />
+                <div className="no-scrollbar flex gap-3 overflow-x-auto px-5 pb-2">
+                  {day.items.map((e) => (
+                    <EventCardCompact
+                      key={e.id}
+                      event={e}
+                      variant="standard"
+                      feedbackStatus={eventStatus(e.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : selectedDate ? (
         // Single rail in place of Today + This-weekend. Presets use the label
         // verbatim ("Tomorrow", "This weekend"); specific dates get "On Mon, May 11".
         <ScrollSection

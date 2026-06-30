@@ -14,6 +14,7 @@ import {
   regionalScopePlaceWhere,
   resolveDateFilterRange,
   upcomingWeekendRange,
+  isAgendaFilter,
   type RegionalScope,
   type SelectedDateFilter,
 } from "@/lib/queries/events";
@@ -480,7 +481,8 @@ export async function fetchHomeFeed(
         : { id: "__no_match__" },
       select: EVENT_SELECT,
       orderBy: { startTime: "asc" },
-      take: dateRange ? 60 : 0,
+      // Multi-day agenda needs a wider cap than the single-day rail.
+      take: dateRange ? (dateFilter && isAgendaFilter(dateFilter) ? 150 : 60) : 0,
     }),
     // "Coming up" — near-scope upcoming events AFTER this weekend, out to
     // 8 weeks. Surfaces longer-horizon content the Today/Weekend rails miss
@@ -529,9 +531,12 @@ export async function fetchHomeFeed(
   // ≥5 feedback. fetchOutsideUsual returns [] when any gate fails.
   const outsideYourUsual = await maybeFetchOutsideUsual(userId, scope);
 
-  const selectedDate = dateFilter
-    ? buildSelectedDate(dateFilter, selectedDateEvents, cacheLookup, now)
-    : undefined;
+  const agenda = !!dateFilter && isAgendaFilter(dateFilter);
+  const selectedDate =
+    dateFilter && !agenda
+      ? buildSelectedDate(dateFilter, selectedDateEvents, cacheLookup, now)
+      : undefined;
+  const weekAgenda = agenda ? buildWeekAgenda(dateFilter!, selectedDateEvents) : undefined;
 
   return {
     // Suppress Today + This-weekend + Worth-a-weekend when a date filter is
@@ -550,8 +555,43 @@ export async function fetchHomeFeed(
     lastUpdatedAt: now.toISOString(),
     regionalScope: scope,
     selectedDate,
+    weekAgenda,
     selectedDateFilter: serializeDateFilter(dateFilter),
   };
+}
+
+function buildWeekAgenda<E extends { id: string }>(
+  filter: SelectedDateFilter,
+  events: E[],
+): NonNullable<HomeFeedResponse["weekAgenda"]> {
+  // Events arrive ordered by startTime asc — keep that within each day.
+  const compact = events.map(toEventCompact);
+  const byDay = new Map<string, ReturnType<typeof toEventCompact>[]>();
+  for (const e of compact) {
+    const key = denverDateKey(new Date(e.startTime));
+    const bucket = byDay.get(key);
+    if (bucket) bucket.push(e);
+    else byDay.set(key, [e]);
+  }
+  const days = Array.from(byDay.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([iso, items]) => ({
+      iso,
+      label: formatWeekdayDateDenver(new Date(`${iso}T12:00:00Z`)),
+      items,
+      count: items.length,
+    }));
+  const rangeLabel =
+    filter.kind === "thisWeek"
+      ? "This week"
+      : filter.kind === "nextWeek"
+        ? "Next week"
+        : filter.kind === "next7"
+          ? "Next 7 days"
+          : filter.kind === "range"
+            ? `${formatWeekdayDateDenver(filter.start)} – ${formatWeekdayDateDenver(filter.end)}`
+            : "Selected dates";
+  return { rangeLabel, days };
 }
 
 function buildSelectedDate<E extends { id: string }>(

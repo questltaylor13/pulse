@@ -139,6 +139,13 @@ export interface HomeFeedResponse {
     items: EventCompact[];
     count: number;
   };
+  /** Present for multi-day filters (this-week / next-week / next-7 / range):
+   *  events grouped by Denver day for a vertical agenda. Mutually exclusive
+   *  with selectedDate (single-day filters use that instead). */
+  weekAgenda?: {
+    rangeLabel: string;
+    days: Array<{ iso: string; label: string; items: EventCompact[]; count: number }>;
+  };
   /** URL-param echo for the date chip — same wire format that the chip
    *  writes back. `null` means the implicit "today" default. */
   selectedDateFilter: "tomorrow" | "weekend" | string | null;
