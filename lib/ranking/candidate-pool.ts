@@ -55,8 +55,16 @@ export async function buildCandidatePool(
         ...(visitingWindowEnd ? { lte: visitingWindowEnd } : {}),
       },
       ...(regionFilter ? { region: regionFilter } : {}),
+      // Exclude DONE'd events from BOTH stores: the legacy EventUserStatus
+      // relation (`userStatuses`, written by the event-detail toggle) AND the
+      // new UserItemStatus relation (`userItemStatuses`, written by the taste
+      // swiper / feed-card DONE). Filtering only the legacy one let new-flow
+      // DONE'd events keep reappearing in the feed (Wave 2 review finding).
       ...(doneIds.length
-        ? { userStatuses: { none: { userId: ctx.userId, status: "DONE" } } }
+        ? {
+            userStatuses: { none: { userId: ctx.userId, status: "DONE" } },
+            userItemStatuses: { none: { userId: ctx.userId, status: "DONE" } },
+          }
         : {}),
     },
     select: {

@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { activeEventsWhere, upcomingWeekendRange, endOfTodayLocal, outsideDenverWhere, OUTSIDE_DENVER_REGIONS } from "@/lib/queries/events";
-import { addDaysDenver, denverHour } from "@/lib/time/denver";
+import { addDaysDenver, denverHour, startOfTodayDenver, endOfTodayDenver } from "@/lib/time/denver";
 import { matchesTimeOfDay } from "./filter-logic";
 import { localFavoritesWhere, groupFriendlyPlacesWhere, workFriendlyPlacesWhere, dateNightPlacesWhere } from "@/lib/home/places-section-filters";
 import type { BrowseConfig } from "./browse-configs";
@@ -31,50 +31,44 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
   const now = new Date();
 
   if (config.source === "events" || config.source === "mixed") {
-    const where: any = { ...activeEventsWhere(now) };
+    // Build the where as an AND array so each concern is an independent clause.
+    // (Plain property assignment collided: activeEventsWhere + outsideDenverWhere
+    // + a vibe filter all wanted `OR`, and later assignments clobbered earlier
+    // ones — dropping the active/upcoming guard and region scoping.)
+    const and: any[] = [activeEventsWhere(now)];
 
     // The user's When filter overrides the config default (both were dead for
     // filters.when before Wave 2 — only config.defaults.when was ever read).
     const effectiveWhen = filters.when ?? config.defaults.when ?? null;
     const isWeekendView = effectiveWhen === "weekend" || effectiveWhen === "this-weekend";
-    if (effectiveWhen === "today") {
-      where.startTime = { gte: now, lte: endOfTodayLocal(now) };
+    const dayNarrowed = isWeekendView && !!filters.day && filters.day !== "all";
+
+    if (dayNarrowed) {
+      // A single weekend day (Fri/Sat/Sun) replaces the full-weekend window.
+      // Use DST-correct Denver wall-clock boundaries — the previous
+      // server-local setHours offset the day by the UTC offset (6–7h).
+      const { start } = upcomingWeekendRange(now);
+      const dayOffset = { fri: 0, sat: 1, sun: 2 }[filters.day!] ?? 0;
+      const dayStart = addDaysDenver(startOfTodayDenver(start), dayOffset);
+      and.push({ startTime: { gte: dayStart, lte: endOfTodayDenver(dayStart) } });
+    } else if (effectiveWhen === "today") {
+      and.push({ startTime: { gte: now, lte: endOfTodayLocal(now) } });
     } else if (isWeekendView) {
       const { start, end } = upcomingWeekendRange(now);
-      where.startTime = { gte: start, lte: end };
+      and.push({ startTime: { gte: start, lte: end } });
     } else if (effectiveWhen === "next-7") {
-      where.startTime = { gte: now, lte: endOfTodayLocal(addDaysDenver(now, 6)) };
-    }
-    if (config.defaults.location === "outside") {
-      Object.assign(where, outsideDenverWhere());
+      and.push({ startTime: { gte: now, lte: endOfTodayLocal(addDaysDenver(now, 6)) } });
     }
 
-    if (filters.categories.length) {
-      where.category = { in: filters.categories };
-    }
-    if (filters.price === "free") {
-      where.priceRange = { in: ["Free", "$0", "Free entry"] };
-    }
+    if (config.defaults.location === "outside") and.push(outsideDenverWhere());
+    if (filters.categories.length) and.push({ category: { in: filters.categories } });
+    if (filters.price === "free") and.push({ priceRange: { in: ["Free", "$0", "Free entry"] } });
     if (filters.vibes.length) {
       // Vibe can live in either the vibe-specific or general tag array.
-      where.OR = [
-        { vibeTags: { hasSome: filters.vibes } },
-        { tags: { hasSome: filters.vibes } },
-      ];
+      and.push({ OR: [{ vibeTags: { hasSome: filters.vibes } }, { tags: { hasSome: filters.vibes } }] });
     }
-    // Day-of-weekend narrowing applies ONLY to a weekend view. Previously it
-    // ran unconditionally, so a stray ?day= overwrote today's/next-7's window
-    // (the DayPills bug on /browse/today).
-    if (isWeekendView && filters.day && filters.day !== "all") {
-      const { start } = upcomingWeekendRange(now);
-      const dayOffset = { fri: 0, sat: 1, sun: 2 }[filters.day] ?? 0;
-      const dayStart = new Date(start);
-      dayStart.setDate(start.getDate() + dayOffset);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(dayStart);
-      dayEnd.setHours(23, 59, 59, 999);
-      where.startTime = { gte: dayStart, lte: dayEnd };
-    }
+
+    const where: any = { AND: and };
 
     let orderBy: any = { startTime: "asc" };
     if (filters.sort === "price-low" || filters.sort === "price") orderBy = { priceRange: "asc" };
