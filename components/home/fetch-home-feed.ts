@@ -24,6 +24,7 @@ import { buildCacheLookup, readCache, sortByCacheScore } from "@/lib/ranking/cac
 import { isOutsideUsualEnabled, isRankingV2Enabled } from "@/lib/ranking/flags";
 import { fetchOutsideUsual } from "@/lib/ranking/outside-usual";
 import { livePlaceIdSet } from "@/lib/scrapers/venue-match";
+import { interleave } from "@/lib/home/interleave";
 import { prisma as prismaDb } from "@/lib/prisma";
 import { SEED_GUIDES } from "@/lib/home/seed-guides";
 import {
@@ -539,10 +540,11 @@ export async function fetchHomeFeed(
 
   const outsideEventsPersonalized = sortByCacheScore(outsideEvents, "event", cacheLookup);
   const outsidePlacesPersonalized = sortByCacheScore(outsidePlaces, "place", cacheLookup);
-  const outsideTheCity: HomeFeedResponse["outsideTheCity"] = [
-    ...outsideEventsPersonalized.map((e) => ({ kind: "event" as const, ...toEventCompact(e) })),
-    ...outsidePlacesPersonalized.map((p) => ({ kind: "place" as const, ...toPlaceCompact(p) })),
-  ].slice(0, 15);
+  // Interleave so places aren't starved by an events-first concat + slice(15).
+  const outsideTheCity: HomeFeedResponse["outsideTheCity"] = interleave(
+    outsideEventsPersonalized.map((e) => ({ kind: "event" as const, ...toEventCompact(e) })),
+    outsidePlacesPersonalized.map((p) => ({ kind: "place" as const, ...toPlaceCompact(p) })),
+  ).slice(0, 15);
 
   // PRD 2 §5.4: hide Worth-a-weekend when <3 high-signal events.
   const worthAWeekendOut =

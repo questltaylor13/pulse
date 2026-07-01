@@ -32,6 +32,21 @@ export async function GET(request: NextRequest) {
       data: { isLocalFavorite: true },
     });
 
+    // Wave 2 — recompute Place.isNew from openedDate (it was a stale, hand-set
+    // seed flag that never updated). 45-day window matches the browse "new"
+    // filter. Promote recently-opened places; demote ones whose openedDate has
+    // aged out. Leave isNew flags on places WITHOUT an openedDate untouched —
+    // those are editorial/seed decisions we can't date-reason about.
+    const newCutoff = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+    await prisma.place.updateMany({
+      where: { isNew: false, openedDate: { gte: newCutoff } },
+      data: { isNew: true },
+    });
+    await prisma.place.updateMany({
+      where: { isNew: true, openedDate: { not: null, lt: newCutoff } },
+      data: { isNew: false },
+    });
+
     // Wave 2 — link freshly-scraped events to their venue Place so the
     // place-detail "Upcoming Events" block + "Live tonight" badge populate.
     // Best-effort: a match failure must not fail the scrape.

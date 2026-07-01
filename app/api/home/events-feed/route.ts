@@ -14,6 +14,7 @@ import {
   upcomingWeekendRange,
 } from "@/lib/queries/events";
 import { sortByEditorialRank } from "@/lib/ranking";
+import { interleave } from "@/lib/home/interleave";
 import { SEED_GUIDES } from "@/lib/home/seed-guides";
 import type {
   EventCompact,
@@ -204,10 +205,11 @@ export async function GET(req: NextRequest) {
     { now }
   ).slice(0, 20);
 
-  const outsideTheCity: HomeFeedResponse["outsideTheCity"] = [
-    ...outsideEvents.map((e) => ({ kind: "event" as const, ...toEventCompact(e) })),
-    ...outsidePlaces.map((p) => ({ kind: "place" as const, ...toPlaceCompact(p) })),
-  ].slice(0, 15);
+  // Interleave so places aren't starved by an events-first concat + slice(15).
+  const outsideTheCity: HomeFeedResponse["outsideTheCity"] = interleave(
+    outsideEvents.map((e) => ({ kind: "event" as const, ...toEventCompact(e) })),
+    outsidePlaces.map((p) => ({ kind: "place" as const, ...toPlaceCompact(p) })),
+  ).slice(0, 15);
 
   // Simpler API surface — Worth-a-weekend / scope filter lives in the
   // server component path; this unauthenticated JSON endpoint keeps the
