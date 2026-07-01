@@ -85,6 +85,11 @@ export function denverDateKey(date: Date): string {
   return dateKeyFormatter.format(date);
 }
 
+/** Hour-of-day (0–23) in Denver wall-clock time, regardless of server TZ. */
+export function denverHour(date: Date): number {
+  return getDenverParts(date).hour;
+}
+
 export function endOfTodayDenver(now: Date = new Date()): Date {
   const { year, month, day } = getDenverParts(now);
   return denverWallClockToUtc(year, month, day, 23, 59, 59, 999);

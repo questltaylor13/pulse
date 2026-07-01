@@ -1,5 +1,7 @@
 import prisma from "@/lib/prisma";
 import { activeEventsWhere, upcomingWeekendRange, endOfTodayLocal, outsideDenverWhere, OUTSIDE_DENVER_REGIONS } from "@/lib/queries/events";
+import { addDaysDenver, denverHour } from "@/lib/time/denver";
+import { matchesTimeOfDay } from "./filter-logic";
 import { localFavoritesWhere, groupFriendlyPlacesWhere, workFriendlyPlacesWhere, dateNightPlacesWhere } from "@/lib/home/places-section-filters";
 import type { BrowseConfig } from "./browse-configs";
 import type { BrowseFilters } from "./filters";
@@ -31,11 +33,17 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
   if (config.source === "events" || config.source === "mixed") {
     const where: any = { ...activeEventsWhere(now) };
 
-    if (config.defaults.when === "today") {
+    // The user's When filter overrides the config default (both were dead for
+    // filters.when before Wave 2 — only config.defaults.when was ever read).
+    const effectiveWhen = filters.when ?? config.defaults.when ?? null;
+    const isWeekendView = effectiveWhen === "weekend" || effectiveWhen === "this-weekend";
+    if (effectiveWhen === "today") {
       where.startTime = { gte: now, lte: endOfTodayLocal(now) };
-    } else if (config.defaults.when === "weekend") {
+    } else if (isWeekendView) {
       const { start, end } = upcomingWeekendRange(now);
       where.startTime = { gte: start, lte: end };
+    } else if (effectiveWhen === "next-7") {
+      where.startTime = { gte: now, lte: endOfTodayLocal(addDaysDenver(now, 6)) };
     }
     if (config.defaults.location === "outside") {
       Object.assign(where, outsideDenverWhere());
@@ -47,23 +55,33 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
     if (filters.price === "free") {
       where.priceRange = { in: ["Free", "$0", "Free entry"] };
     }
-    if (filters.day) {
-      // Apply day filter for weekend view
-      if (filters.day !== "all") {
-        const { start } = upcomingWeekendRange(now);
-        const dayOffset = { fri: 0, sat: 1, sun: 2 }[filters.day] ?? 0;
-        const dayStart = new Date(start);
-        dayStart.setDate(start.getDate() + dayOffset);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(dayStart);
-        dayEnd.setHours(23, 59, 59, 999);
-        where.startTime = { gte: dayStart, lte: dayEnd };
-      }
+    if (filters.vibes.length) {
+      // Vibe can live in either the vibe-specific or general tag array.
+      where.OR = [
+        { vibeTags: { hasSome: filters.vibes } },
+        { tags: { hasSome: filters.vibes } },
+      ];
+    }
+    // Day-of-weekend narrowing applies ONLY to a weekend view. Previously it
+    // ran unconditionally, so a stray ?day= overwrote today's/next-7's window
+    // (the DayPills bug on /browse/today).
+    if (isWeekendView && filters.day && filters.day !== "all") {
+      const { start } = upcomingWeekendRange(now);
+      const dayOffset = { fri: 0, sat: 1, sun: 2 }[filters.day] ?? 0;
+      const dayStart = new Date(start);
+      dayStart.setDate(start.getDate() + dayOffset);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setHours(23, 59, 59, 999);
+      where.startTime = { gte: dayStart, lte: dayEnd };
     }
 
     let orderBy: any = { startTime: "asc" };
-    if (filters.sort === "price-low") orderBy = { priceRange: "asc" };
+    if (filters.sort === "price-low" || filters.sort === "price") orderBy = { priceRange: "asc" };
 
+    // When a time-of-day filter is active we over-fetch and filter by the
+    // Denver-local hour in memory (Prisma can't extract hour-of-day).
+    const timeFiltered = filters.timeOfDay.length > 0;
     const events = await prisma.event.findMany({
       where,
       select: {
@@ -72,10 +90,16 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
         place: { select: { lat: true, lng: true } },
       },
       orderBy,
-      take: 50,
+      take: timeFiltered ? 150 : 50,
     });
 
-    const items: BrowseItem[] = events.map((e) => ({
+    const windowed = timeFiltered
+      ? events
+          .filter((e) => matchesTimeOfDay(denverHour(e.startTime), filters.timeOfDay))
+          .slice(0, 50)
+      : events;
+
+    const items: BrowseItem[] = windowed.map((e) => ({
       id: e.id,
       kind: "event" as const,
       title: e.title,
@@ -107,6 +131,7 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
     }
 
     if (filters.categories.length) where.category = { in: filters.categories };
+    if (filters.vibes.length) where.vibeTags = { hasSome: filters.vibes };
 
     const places = await prisma.place.findMany({
       where,

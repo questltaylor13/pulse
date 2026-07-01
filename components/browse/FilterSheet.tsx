@@ -25,6 +25,13 @@ const TIME_OPTIONS = [
   { label: "Late night", value: "late-night" },
 ] as const;
 
+const WHEN_OPTIONS = [
+  { label: "Anytime", value: "" },
+  { label: "Today", value: "today" },
+  { label: "This weekend", value: "this-weekend" },
+  { label: "Next 7 days", value: "next-7" },
+] as const;
+
 const SORT_OPTIONS = [
   { label: "Top picks", value: "top" },
   { label: "Soonest first", value: "soonest" },
@@ -46,17 +53,21 @@ export default function FilterSheet({ onClose }: Props) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Initialize local state from URL
+  // Initialize local state from URL. NB: param names must match what
+  // lib/browse/filters.ts:filtersFromParams reads (categories/vibes/time/when)
+  // — they previously used category/vibe (singular), so those filters silently
+  // never reached the query.
   const [categories, setCategories] = useState<Set<string>>(
-    () => new Set(searchParams?.get("category")?.split(",").filter(Boolean) ?? []),
+    () => new Set(searchParams?.get("categories")?.split(",").filter(Boolean) ?? []),
   );
   const [price, setPrice] = useState(searchParams?.get("price") ?? "");
   const [vibes, setVibes] = useState<Set<string>>(
-    () => new Set(searchParams?.get("vibe")?.split(",").filter(Boolean) ?? []),
+    () => new Set(searchParams?.get("vibes")?.split(",").filter(Boolean) ?? []),
   );
   const [times, setTimes] = useState<Set<string>>(
     () => new Set(searchParams?.get("time")?.split(",").filter(Boolean) ?? []),
   );
+  const [when, setWhen] = useState(searchParams?.get("when") ?? "");
   const [sort, setSort] = useState(searchParams?.get("sort") ?? "top");
 
   const handleApply = useCallback(() => {
@@ -68,22 +79,24 @@ export default function FilterSheet({ onClose }: Props) {
       if (v) params.set(k, v);
     });
 
-    if (categories.size > 0) params.set("category", [...categories].join(","));
+    if (categories.size > 0) params.set("categories", [...categories].join(","));
     if (price) params.set("price", price);
-    if (vibes.size > 0) params.set("vibe", [...vibes].join(","));
+    if (vibes.size > 0) params.set("vibes", [...vibes].join(","));
     if (times.size > 0) params.set("time", [...times].join(","));
+    if (when) params.set("when", when);
     if (sort && sort !== "top") params.set("sort", sort);
 
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     onClose();
-  }, [categories, price, vibes, times, sort, searchParams, router, pathname, onClose]);
+  }, [categories, price, vibes, times, when, sort, searchParams, router, pathname, onClose]);
 
   const handleClear = useCallback(() => {
     setCategories(new Set());
     setPrice("");
     setVibes(new Set());
     setTimes(new Set());
+    setWhen("");
     setSort("top");
   }, []);
 
@@ -114,6 +127,29 @@ export default function FilterSheet({ onClose }: Props) {
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto px-5 py-4">
+        {/* When */}
+        <section className="mb-6">
+          <h3 className="mb-3 text-body font-semibold text-ink">When</h3>
+          <div className="flex flex-wrap gap-2">
+            {WHEN_OPTIONS.map((opt) => {
+              const active = when === opt.value;
+              return (
+                <button
+                  key={opt.value || "any"}
+                  onClick={() => setWhen(opt.value)}
+                  className={`rounded-pill px-3 py-1.5 text-body transition-colors ${
+                    active
+                      ? "bg-brand-gradient-strong text-white shadow-pill"
+                      : "border border-mute-divider bg-surface text-ink"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
         {/* Categories */}
         <section className="mb-6">
           <h3 className="mb-3 text-body font-semibold text-ink">Categories</h3>
