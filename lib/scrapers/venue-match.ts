@@ -16,6 +16,7 @@
  */
 
 import type { PrismaClient } from "@prisma/client";
+import { haversineDistance } from "@/lib/geo";
 
 /**
  * Normalize a venue/place name for matching. Unlike the dedup normalizer in
@@ -90,6 +91,96 @@ export function resolvePlaceId(
       (evTown && normalizeVenueName(p.townName) === evTown),
   );
   return disambiguated.length === 1 ? disambiguated[0].id : null;
+}
+
+export interface EventWithGeo extends EventVenue {
+  lat?: number | null;
+  lng?: number | null;
+}
+
+export interface VenueCandidateGeo extends VenueCandidate {
+  lat?: number | null;
+  lng?: number | null;
+}
+
+const GEO_TIEBREAK_MILES = 0.5; // ambiguous same-name resolution radius
+const GEO_MATCH_MILES = 80 / 1609.344; // ~0.0497mi tight radius for name-less geo-linking
+
+/** Nearest place (by id) among `ids`, within `maxMiles`, requiring a unique closest. */
+function nearestWithin(
+  ids: Set<string>,
+  coords: Map<string, { lat: number; lng: number }>,
+  origin: { lat: number; lng: number },
+  maxMiles: number,
+): string | null {
+  const ranked = [...ids]
+    .map((id) => {
+      const c = coords.get(id);
+      return c ? { id, d: haversineDistance(origin, c) } : null;
+    })
+    .filter((x): x is { id: string; d: number } => x !== null && x.d <= maxMiles)
+    .sort((a, b) => a.d - b.d);
+  if (ranked.length === 0) return null;
+  if (ranked.length > 1 && ranked[0].d === ranked[1].d) return null; // exact tie — don't guess
+  return ranked[0].id;
+}
+
+/**
+ * Precision-first resolution with an optional geo path. Name-match is primary
+ * and is NEVER overridden by geo. Adds: (a) nearest-within-0.5mi tie-break for
+ * same-name ambiguity, and (b) a single-nearest-within-80m link for events with
+ * NO name match. The geo path is gated by `geoConfident` (false for APPROXIMATE
+ * / partial_match geocodes) AND requires event coords.
+ */
+export function resolvePlaceIdWithGeo(
+  event: EventWithGeo,
+  index: Map<string, VenueCandidate[]>,
+  placesWithCoords: VenueCandidateGeo[],
+  opts: { geoConfident?: boolean } = {},
+): string | null {
+  const useGeo =
+    opts.geoConfident !== false &&
+    typeof event.lat === "number" &&
+    typeof event.lng === "number";
+  const origin = useGeo ? { lat: event.lat as number, lng: event.lng as number } : null;
+
+  const coords = new Map<string, { lat: number; lng: number }>();
+  for (const p of placesWithCoords) {
+    if (typeof p.lat === "number" && typeof p.lng === "number") coords.set(p.id, { lat: p.lat, lng: p.lng });
+  }
+
+  const key = normalizeVenueName(event.venueName);
+  if (key) {
+    const matches = index.get(key);
+    if (matches && matches.length === 1) return matches[0].id; // name precedence
+    if (matches && matches.length > 1) {
+      // Neighborhood/town disambiguation first (same rule as resolvePlaceId).
+      const evNbhd = normalizeVenueName(event.neighborhood);
+      const evTown = normalizeVenueName(event.townName);
+      if (evNbhd || evTown) {
+        const disambiguated = matches.filter(
+          (p) =>
+            (evNbhd && normalizeVenueName(p.neighborhood) === evNbhd) ||
+            (evTown && normalizeVenueName(p.townName) === evTown),
+        );
+        if (disambiguated.length === 1) return disambiguated[0].id;
+      }
+      // Then geo tie-break among the same-name candidates.
+      if (origin) {
+        const ids = new Set(matches.map((m) => m.id));
+        const near = nearestWithin(ids, coords, origin, GEO_TIEBREAK_MILES);
+        if (near) return near;
+      }
+      return null;
+    }
+  }
+
+  // No name match — geo-only path: exactly one place within a tight radius.
+  if (origin) {
+    const allIds = new Set(coords.keys());
+    return nearestWithin(allIds, coords, origin, GEO_MATCH_MILES);
+  }
+  return null;
 }
 
 /**
