@@ -5,7 +5,7 @@ import VibeTagPill from "./VibeTagPill";
 import CardMoreMenu from "@/components/feedback/CardMoreMenu";
 import NotForMeButton from "@/components/feedback/NotForMeButton";
 import FeedbackTag from "@/components/feedback/FeedbackTag";
-import { JustOpenedBadge } from "./Badges";
+import { JustOpenedBadge, LiveTonightBadge } from "./Badges";
 import { categoryLabel, daysSince, placeSecondaryMeta } from "@/lib/home/event-view";
 import type { PlaceCompact } from "@/lib/home/types";
 
@@ -47,7 +47,12 @@ export default function PlaceCardCompact({
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/20 via-transparent to-transparent" />
-          {showJustOpened && <JustOpenedBadge />}
+          {/* Live-tonight is timelier than just-opened; show at most one (same corner). */}
+          {place.liveTonight ? (
+            <LiveTonightBadge />
+          ) : showJustOpened ? (
+            <JustOpenedBadge />
+          ) : null}
           <SaveButton
             itemId={place.id}
             itemType="place"

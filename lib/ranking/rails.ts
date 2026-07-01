@@ -16,6 +16,8 @@ import "server-only";
 import prisma from "@/lib/prisma";
 import { readCache } from "./cache";
 import { rerankUserBaseline } from "./rerank-trigger";
+import { livePlaceIdSet } from "@/lib/scrapers/venue-match";
+import { endOfTodayLocal } from "@/lib/queries/events";
 import type { RankedItemType, ScoreReason } from "./types";
 import type { EventCompact, PlaceCompact } from "@/lib/home/types";
 
@@ -178,6 +180,12 @@ export async function getRankedFeedHydrated(
   const eventMap = new Map(events.map((e) => [e.id, e]));
   const placeMap = new Map(places.map((p) => [p.id, p]));
 
+  // Wave 2 — which hydrated places have an event tonight (for the badge).
+  const now = new Date();
+  const liveSet = places.length
+    ? await livePlaceIdSet(prisma, places.map((p) => p.id), now, endOfTodayLocal(now))
+    : new Set<string>();
+
   // Walk the cache order so the output is ranked, not DB-ordered.
   const out: RankedFeedItem[] = [];
   for (const pick of picks) {
@@ -186,7 +194,7 @@ export async function getRankedFeedHydrated(
       if (e) out.push({ kind: "event", score: pick.score, reasons: pick.reasons, ...rowToEventCompact(e) });
     } else if (pick.itemType === "place") {
       const p = placeMap.get(pick.itemId);
-      if (p) out.push({ kind: "place", score: pick.score, reasons: pick.reasons, ...rowToPlaceCompact(p) });
+      if (p) out.push({ kind: "place", score: pick.score, reasons: pick.reasons, ...rowToPlaceCompact(p), liveTonight: liveSet.has(p.id) });
     }
   }
   return out;

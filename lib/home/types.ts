@@ -77,6 +77,10 @@ export interface PlaceCompact {
   openedDate: string | null; // ISO
   isNew: boolean;
   isFeatured: boolean;
+  // Wave 2 — true when this place has an event tonight (Event.placeId + a
+  // startTime in today's window). Optional so mappers that don't compute it
+  // simply omit it. Drives the "Live tonight" card badge.
+  liveTonight?: boolean;
   // PRD 2 Phase 0: regional metadata
   region: EventRegion;
   townName: string | null;

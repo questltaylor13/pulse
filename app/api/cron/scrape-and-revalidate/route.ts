@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { runAllScrapers } from "@/lib/scrapers";
+import { backfillEventPlaces } from "@/lib/scrapers/venue-match";
 import { prisma } from "@/lib/prisma";
 
 export const maxDuration = 300;
@@ -31,8 +32,18 @@ export async function GET(request: NextRequest) {
       data: { isLocalFavorite: true },
     });
 
+    // Wave 2 — link freshly-scraped events to their venue Place so the
+    // place-detail "Upcoming Events" block + "Live tonight" badge populate.
+    // Best-effort: a match failure must not fail the scrape.
+    let venueMatch: Awaited<ReturnType<typeof backfillEventPlaces>> | null = null;
+    try {
+      venueMatch = await backfillEventPlaces(prisma);
+    } catch (err) {
+      console.error("[scrape-and-revalidate] venue-match failed:", err);
+    }
+
     revalidateTag("home-feed");
-    return NextResponse.json({ ...result, revalidated: true });
+    return NextResponse.json({ ...result, venueMatch, revalidated: true });
   } catch (error) {
     console.error("[scrape-and-revalidate] error:", error);
     return NextResponse.json(

@@ -23,6 +23,7 @@ import { sortByEditorialRank } from "@/lib/ranking";
 import { buildCacheLookup, readCache, sortByCacheScore } from "@/lib/ranking/cache";
 import { isOutsideUsualEnabled, isRankingV2Enabled } from "@/lib/ranking/flags";
 import { fetchOutsideUsual } from "@/lib/ranking/outside-usual";
+import { livePlaceIdSet } from "@/lib/scrapers/venue-match";
 import { prisma as prismaDb } from "@/lib/prisma";
 import { SEED_GUIDES } from "@/lib/home/seed-guides";
 import {
@@ -67,6 +68,12 @@ function toEventCompact(e: any): EventCompact {
     driveNote: e.driveNote,
     worthTheDriveScore: e.worthTheDriveScore,
   };
+}
+
+/** Flag places that have an event tonight (Wave 2 "Live tonight" badge). */
+function markLive(cards: PlaceCompact[], live: Set<string>): PlaceCompact[] {
+  if (live.size === 0) return cards;
+  return cards.map((c) => (live.has(c.id) ? { ...c, liveTonight: true } : c));
 }
 
 function toPlaceCompact(p: any): PlaceCompact {
@@ -215,13 +222,24 @@ export async function fetchPlacesFeed(
       }),
     ]);
 
+  // Wave 2 — which of these places have an event tonight? One query across
+  // all place rails, then flag the cards for the "Live tonight" badge.
+  const liveIds = Array.from(
+    new Set(
+      [newInDenver, localFavorites, dateNight, goodForGroups, workFriendly]
+        .flat()
+        .map((p) => p.id),
+    ),
+  );
+  const liveSet = await livePlaceIdSet(prisma, liveIds, now, endOfTodayLocal(now));
+
   return {
-    newInDenver: sortByCacheScore(newInDenver, "place", cacheLookup).map(toPlaceCompact),
+    newInDenver: markLive(sortByCacheScore(newInDenver, "place", cacheLookup).map(toPlaceCompact), liveSet),
     neighborhoods,
-    localFavorites: sortByCacheScore(localFavorites, "place", cacheLookup).map(toPlaceCompact),
-    dateNight: sortByCacheScore(dateNight, "place", cacheLookup).map(toPlaceCompact),
-    goodForGroups: sortByCacheScore(goodForGroups, "place", cacheLookup).map(toPlaceCompact),
-    workFriendly: sortByCacheScore(workFriendly, "place", cacheLookup).map(toPlaceCompact),
+    localFavorites: markLive(sortByCacheScore(localFavorites, "place", cacheLookup).map(toPlaceCompact), liveSet),
+    dateNight: markLive(sortByCacheScore(dateNight, "place", cacheLookup).map(toPlaceCompact), liveSet),
+    goodForGroups: markLive(sortByCacheScore(goodForGroups, "place", cacheLookup).map(toPlaceCompact), liveSet),
+    workFriendly: markLive(sortByCacheScore(workFriendly, "place", cacheLookup).map(toPlaceCompact), liveSet),
     lastUpdatedAt: now.toISOString(),
   };
 }
