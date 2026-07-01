@@ -108,17 +108,20 @@ export default function DiscoveryCalendar({ todayKey }: Props) {
           const count = counts[key] ?? 0;
           const isToday = key === todayKey;
           const isPast = key < todayKey;
+          // Only future/today days with events are tappable — parseDateFilter
+          // rejects past dates, so a past day would dead-end to today's feed.
+          const actionable = count > 0 && (!isPast || isToday);
           return (
             <button
               key={key}
               type="button"
-              disabled={count === 0}
+              disabled={!actionable}
               onClick={() => router.push(`/?date=${key}`)}
               aria-label={`${count} event${count === 1 ? "" : "s"} on ${key}`}
               className={[
                 "flex aspect-square flex-col items-center justify-center gap-1 rounded-lg text-[13px] transition-colors",
                 isToday ? "ring-1 ring-coral" : "",
-                count > 0 ? "text-ink hover:bg-mute-hush" : "text-mute-divider",
+                actionable ? "text-ink hover:bg-mute-hush" : "text-mute-divider",
                 isPast && !isToday ? "opacity-40" : "",
               ].join(" ")}
             >
