@@ -54,7 +54,7 @@ function getDenverParts(date: Date): {
 }
 
 // Given a wall-clock date in America/Denver, return the UTC Date that represents it.
-function denverWallClockToUtc(
+export function denverWallClockToUtc(
   year: number,
   month: number,
   day: number,

@@ -13,6 +13,7 @@ import { scrapePikesPeakCenter } from "./regional/pikes-peak-center";
 import { scrapeVisitEstesPark } from "./regional/visit-estes-park";
 import { scrapeVisitGolden } from "./regional/visit-golden";
 import { scrapeVisitSteamboatChamber } from "./regional/visit-steamboat-chamber";
+import { makeIcsScraper, type IcsScraperConfig } from "./ics";
 import { enrichEvent } from "@/lib/enrich-event";
 import { deriveRegionalFields } from "@/lib/regional/metadata";
 import { denverDateKey } from "@/lib/time/denver";
@@ -50,6 +51,20 @@ if (process.env.TICKETMASTER_API_KEY) {
 }
 if (process.env.EVENTBRITE_TOKEN) {
   scrapers.push({ name: "eventbrite", fn: scrapeEventbrite });
+}
+
+// Wave 2 — free, license-clean civic/ICS feeds (Denver Arts & Venues,
+// libraries, universities, rec centers…). Drop a VERIFIED .ics URL in as a
+// config row and it becomes a scraper automatically (also add its `source` to
+// SOURCE_PRIORITY in ./source-priority.ts, near the bottom since these are
+// supplementary). Left empty deliberately: an unverified/404 URL would show as
+// a zero-count source and trip the coverage-anomaly alert. Example row:
+//   { source: "denver-arts-venues", url: "https://…/events.ics",
+//     venueName: "Denver Performing Arts Complex", address: "Denver, CO",
+//     category: Category.ARTS, tags: ["civic"] }
+const CIVIC_ICS_FEEDS: IcsScraperConfig[] = [];
+for (const feed of CIVIC_ICS_FEEDS) {
+  scrapers.push({ name: feed.source, fn: makeIcsScraper(feed) });
 }
 
 const PER_SCRAPER_TIMEOUT = 10_000;
