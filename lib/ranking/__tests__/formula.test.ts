@@ -325,4 +325,20 @@ describe("formula.score — 10 locked-decision fixtures", () => {
     const { score: midScore } = score(ctx, midItem);
     expect(freeScore).toBeGreaterThan(midScore);
   });
+
+  // Wave 3: injected nowMs makes recency deterministic (no reliance on Date.now()).
+  it("recency_boost is deterministic when nowMs is injected", () => {
+    const ctx = makeCtx();
+    const injectedNow = new Date("2026-06-01T12:00:00Z").getTime();
+    const freshItem = makeItem({ createdAt: new Date(injectedNow - 60 * 60 * 1000) }); // 1h before
+    const staleItem = makeItem({
+      createdAt: new Date(injectedNow - 100 * 24 * 60 * 60 * 1000), // 100d before
+    });
+
+    const fresh = score(ctx, freshItem, undefined, injectedNow);
+    const stale = score(ctx, staleItem, undefined, injectedNow);
+
+    expect(fresh.reasons.some((r) => r.factor === "recency")).toBe(true);
+    expect(stale.reasons.some((r) => r.factor === "recency")).toBe(false);
+  });
 });

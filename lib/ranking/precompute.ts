@@ -73,7 +73,7 @@ export async function precomputeUser(
     const pool = await buildCandidatePool(ctx, { scope });
     const scored: RankedItem[] = pool
       .map((item) => {
-        const { score: s, reasons } = score(ctx, item);
+        const { score: s, reasons } = score(ctx, item, undefined, startedAt);
         return { itemType: item.itemType, itemId: item.itemId, score: s, reasons };
       })
       .filter((r) => r.score >= 0.5) // signal-map: ranking floor

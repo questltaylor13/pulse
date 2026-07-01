@@ -41,6 +41,7 @@ export function score(
   ctx: RankingContext,
   item: RankableItem,
   configOverride?: RankingConfig,
+  nowMs: number = Date.now(),
 ): ScoreResult {
   // PRD 6 Phase 6 — variant overrides are merged onto the base config
   // based on ctx.variant. Unknown variants fall back to control silently.
@@ -93,7 +94,7 @@ export function score(
   if (budgetPenalty.contribution !== 0) reasons.push(budgetPenalty.reason);
 
   // ---- Recency boost (48h window) ----------------------------------------
-  const recencyBoost = computeRecencyBoost(item, config);
+  const recencyBoost = computeRecencyBoost(item, config, nowMs);
   if (recencyBoost.contribution !== 0) reasons.push(recencyBoost.reason);
 
   // ---- Cold-start badge (shown in reasons but doesn't change math) ------
@@ -298,8 +299,9 @@ function computeBudgetPenalty(
 function computeRecencyBoost(
   item: RankableItem,
   config: RankingConfig,
+  nowMs: number,
 ): { contribution: number; reason: ScoreReason } {
-  const ageMs = Date.now() - item.createdAt.getTime();
+  const ageMs = nowMs - item.createdAt.getTime();
   const fortyEightHoursMs = 48 * 60 * 60 * 1000;
   const contribution = ageMs < fortyEightHoursMs ? config.weights.recencyBoost : 0;
   const reason = renderReason("recency", contribution);
