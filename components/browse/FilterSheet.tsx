@@ -5,6 +5,8 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Category } from "@prisma/client";
 import { CATEGORY_LABELS } from "@/lib/constants/categories";
 import { VIBE_TAGS } from "@/lib/constants/vibe-tags";
+import { RADIUS_OPTIONS } from "@/lib/geo";
+import { requestOrigin } from "./geo-origin";
 
 interface Props {
   onClose: () => void;
@@ -39,6 +41,11 @@ const SORT_OPTIONS = [
   { label: "Distance", value: "distance" },
 ] as const;
 
+const DISTANCE_OPTIONS = [
+  { label: "Any distance", value: "" },
+  ...RADIUS_OPTIONS.map((r) => ({ label: r.label, value: String(r.value) })),
+] as const;
+
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS) as Category[];
 
 function toggleSet<T>(set: Set<T>, item: T): Set<T> {
@@ -69,15 +76,12 @@ export default function FilterSheet({ onClose }: Props) {
   );
   const [when, setWhen] = useState(searchParams?.get("when") ?? "");
   const [sort, setSort] = useState(searchParams?.get("sort") ?? "top");
+  const [distance, setDistance] = useState(searchParams?.get("distance") ?? "");
 
-  const handleApply = useCallback(() => {
+  const handleApply = useCallback(async () => {
     const params = new URLSearchParams();
-    // Preserve non-filter params
-    const preserve = ["day"];
-    preserve.forEach((k) => {
-      const v = searchParams?.get(k);
-      if (v) params.set(k, v);
-    });
+    const day = searchParams?.get("day");
+    if (day) params.set("day", day);
 
     if (categories.size > 0) params.set("categories", [...categories].join(","));
     if (price) params.set("price", price);
@@ -85,11 +89,20 @@ export default function FilterSheet({ onClose }: Props) {
     if (times.size > 0) params.set("time", [...times].join(","));
     if (when) params.set("when", when);
     if (sort && sort !== "top") params.set("sort", sort);
+    if (distance) params.set("distance", distance);
+
+    // A radius or the distance sort needs an origin — ask geolocation, fall
+    // back to Denver center, and write rounded lat/lng so the server re-renders.
+    if (distance || sort === "distance") {
+      const o = await requestOrigin();
+      params.set("lat", String(o.lat));
+      params.set("lng", String(o.lng));
+    }
 
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     onClose();
-  }, [categories, price, vibes, times, when, sort, searchParams, router, pathname, onClose]);
+  }, [categories, price, vibes, times, when, sort, distance, searchParams, router, pathname, onClose]);
 
   const handleClear = useCallback(() => {
     setCategories(new Set());
@@ -98,6 +111,7 @@ export default function FilterSheet({ onClose }: Props) {
     setTimes(new Set());
     setWhen("");
     setSort("top");
+    setDistance("");
   }, []);
 
   return (
@@ -183,6 +197,29 @@ export default function FilterSheet({ onClose }: Props) {
                 <button
                   key={opt.value}
                   onClick={() => setPrice(opt.value)}
+                  className={`rounded-pill px-3 py-1.5 text-body transition-colors ${
+                    active
+                      ? "bg-brand-gradient-strong text-white shadow-pill"
+                      : "border border-mute-divider bg-surface text-ink"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Distance */}
+        <section className="mb-6">
+          <h3 className="mb-3 text-body font-semibold text-ink">Distance</h3>
+          <div className="flex flex-wrap gap-2">
+            {DISTANCE_OPTIONS.map((opt) => {
+              const active = distance === opt.value;
+              return (
+                <button
+                  key={opt.value || "any"}
+                  onClick={() => setDistance(opt.value)}
                   className={`rounded-pill px-3 py-1.5 text-body transition-colors ${
                     active
                       ? "bg-brand-gradient-strong text-white shadow-pill"
