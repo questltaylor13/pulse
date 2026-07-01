@@ -224,9 +224,17 @@ export async function backfillEventPlaces(
   opts: { includeLinked?: boolean; limit?: number } = {},
 ): Promise<BackfillResult> {
   const places = await db.place.findMany({
-    select: { id: true, name: true, neighborhood: true, townName: true },
+    select: { id: true, name: true, neighborhood: true, townName: true, lat: true, lng: true },
   });
   const index = buildPlaceIndex(places);
+  const placesWithCoords: VenueCandidateGeo[] = places.map((p) => ({
+    id: p.id,
+    name: p.name,
+    neighborhood: p.neighborhood,
+    townName: p.townName,
+    lat: p.lat,
+    lng: p.lng,
+  }));
 
   const events = await db.event.findMany({
     where: {
@@ -240,14 +248,29 @@ export async function backfillEventPlaces(
       neighborhood: true,
       townName: true,
       placeId: true,
+      lat: true,
+      lng: true,
     },
     ...(opts.limit ? { take: opts.limit } : {}),
   });
 
+  // Link-confidence per venue name from the geocode cache. APPROXIMATE /
+  // partial_match geocodes (downgraded to "APPROXIMATE" at write time) are NOT
+  // confident enough to drive a geo-link — precision over recall.
+  const geoRows = await db.geocodeCache.findMany({
+    where: { status: "ok" },
+    select: { normalizedName: true, locationType: true },
+  });
+  const confident = new Set<string>();
+  for (const g of geoRows) {
+    if (g.locationType && g.locationType !== "APPROXIMATE") confident.add(g.normalizedName);
+  }
+
   let matched = 0;
   let updated = 0;
   for (const ev of events) {
-    const placeId = resolvePlaceId(ev, index);
+    const geoConfident = confident.has(normalizeVenueName(ev.venueName));
+    const placeId = resolvePlaceIdWithGeo(ev, index, placesWithCoords, { geoConfident });
     if (!placeId) continue;
     matched += 1;
     if (ev.placeId !== placeId) {
