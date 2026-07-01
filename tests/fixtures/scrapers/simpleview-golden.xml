@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Visit Golden Events</title>
+    <item>
+      <title>Summer Concert Series</title>
+      <link>https://www.visitgolden.com/event/summer-concert-series/101/</link>
+      <pubDate>Mon, 01 Jun 2026 00:00:00 -0600</pubDate>
+      <category>Music</category>
+      <category>Concerts</category>
+      <description><![CDATA[07/15/2026 - Live music in downtown Golden every Friday night.]]></description>
+    </item>
+    <item>
+      <title>Clear Creek Rafting Weekend</title>
+      <link>https://www.visitgolden.com/event/clear-creek-rafting/102/</link>
+      <pubDate>Mon, 01 Jun 2026 00:00:00 -0600</pubDate>
+      <category>Outdoor Recreation</category>
+      <description><![CDATA[07/18/2026 to 07/20/2026 - Guided rafting trips down Clear Creek.]]></description>
+    </item>
+    <item>
+      <title>Spring Art Exhibit</title>
+      <link>https://www.visitgolden.com/event/spring-art-exhibit/103/</link>
+      <pubDate>Mon, 01 Jun 2026 00:00:00 -0600</pubDate>
+      <category>Art</category>
+      <description><![CDATA[06/01/2026 to 08/30/2026 - A season-long gallery exhibit.]]></description>
+    </item>
+    <item>
+      <title>Craft Beer Festival</title>
+      <link>https://www.visitgolden.com/event/craft-beer-festival/104/</link>
+      <pubDate>Mon, 01 Jun 2026 00:00:00 -0600</pubDate>
+      <category>Food &amp; Drink</category>
+      <description><![CDATA[07/22/2026 - Local breweries pour their best.]]></description>
+    </item>
+    <item>
+      <title>Annual Business Convention</title>
+      <link>https://www.visitgolden.com/event/business-convention/105/</link>
+      <pubDate>Mon, 01 Jun 2026 00:00:00 -0600</pubDate>
+      <category>Business</category>
+      <description><![CDATA[07/25/2026 - A regional trade convention.]]></description>
+    </item>
+    <item>
+      <title>Rotary Gala</title>
+      <link>https://www.visitgolden.com/event/conventions_555/</link>
+      <pubDate>Mon, 01 Jun 2026 00:00:00 -0600</pubDate>
+      <category>Community</category>
+      <description><![CDATA[07/26/2026 - Annual fundraiser gala.]]></description>
+    </item>
+    <item>
+      <title>Winter Snowshoe Outing</title>
+      <link>https://www.visitgolden.com/event/winter-snowshoe/106/</link>
+      <pubDate>Mon, 01 Jan 2026 00:00:00 -0700</pubDate>
+      <category>Community</category>
+      <description><![CDATA[01/10/2026 - A past winter outing.]]></description>
+    </item>
+  </channel>
+</rss>

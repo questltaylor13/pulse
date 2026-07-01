@@ -33,6 +33,7 @@ const RENDERERS: Record<string, Renderer> = {
       : "Similar to something you marked Interested",
   pass_similarity: () => "Similar to things you've passed on",
   recency: () => "Just added — fresh this week",
+  starts_soon: () => "Happening soon",
   budget_penalty: () => "A little above your usual budget",
   novelty: () => "Different from your usual",
   serendipity: () => "Outside your usual — curious?",
@@ -71,6 +72,31 @@ export function topPositiveReasons(reasons: ScoreReason[], n = 4): ScoreReason[]
 /** Negative contributions (if any) — rendered as "what held it back" when we surface them. */
 export function topNegativeReasons(reasons: ScoreReason[], n = 2): ScoreReason[] {
   return reasons.filter((r) => r.contribution < 0).sort((a, b) => a.contribution - b.contribution).slice(0, n);
+}
+
+/**
+ * Wave 3 — the generic factors we de-prioritize when choosing a single
+ * "why you're seeing this" card line. They're true but say nothing about
+ * the user's taste, so a real match (vibe/aspiration/want/etc.) beats them.
+ */
+const GENERIC_CARD_FACTORS = new Set(["base_quality", "unprofiled", "recency", "starts_soon"]);
+
+/**
+ * Pick one card-level "why you're seeing this" line from a reasons array.
+ * Returns the highest-contribution POSITIVE reason's human_readable,
+ * pushing generic factors to the back so a taste match wins. Returns null
+ * when there are no positive reasons (e.g. fallback/unpersonalized items).
+ */
+export function pickCardReason(reasons: ScoreReason[]): string | null {
+  const positives = reasons.filter((r) => r.contribution > 0);
+  if (positives.length === 0) return null;
+  const ranked = [...positives].sort((a, b) => {
+    const aGeneric = GENERIC_CARD_FACTORS.has(a.factor) ? 1 : 0;
+    const bGeneric = GENERIC_CARD_FACTORS.has(b.factor) ? 1 : 0;
+    if (aGeneric !== bGeneric) return aGeneric - bGeneric; // taste factors first
+    return b.contribution - a.contribution; // then highest contribution
+  });
+  return ranked[0].human_readable;
 }
 
 // ---------------------------------------------------------------------------

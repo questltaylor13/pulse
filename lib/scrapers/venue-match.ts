@@ -16,6 +16,7 @@
  */
 
 import type { PrismaClient } from "@prisma/client";
+import { haversineDistance } from "@/lib/geo";
 
 /**
  * Normalize a venue/place name for matching. Unlike the dedup normalizer in
@@ -92,6 +93,96 @@ export function resolvePlaceId(
   return disambiguated.length === 1 ? disambiguated[0].id : null;
 }
 
+export interface EventWithGeo extends EventVenue {
+  lat?: number | null;
+  lng?: number | null;
+}
+
+export interface VenueCandidateGeo extends VenueCandidate {
+  lat?: number | null;
+  lng?: number | null;
+}
+
+const GEO_TIEBREAK_MILES = 0.5; // ambiguous same-name resolution radius
+const GEO_MATCH_MILES = 80 / 1609.344; // ~0.0497mi tight radius for name-less geo-linking
+
+/** Nearest place (by id) among `ids`, within `maxMiles`, requiring a unique closest. */
+function nearestWithin(
+  ids: Set<string>,
+  coords: Map<string, { lat: number; lng: number }>,
+  origin: { lat: number; lng: number },
+  maxMiles: number,
+): string | null {
+  const ranked = [...ids]
+    .map((id) => {
+      const c = coords.get(id);
+      return c ? { id, d: haversineDistance(origin, c) } : null;
+    })
+    .filter((x): x is { id: string; d: number } => x !== null && x.d <= maxMiles)
+    .sort((a, b) => a.d - b.d);
+  if (ranked.length === 0) return null;
+  if (ranked.length > 1 && ranked[0].d === ranked[1].d) return null; // exact tie — don't guess
+  return ranked[0].id;
+}
+
+/**
+ * Precision-first resolution with an optional geo path. Name-match is primary
+ * and is NEVER overridden by geo. Adds: (a) nearest-within-0.5mi tie-break for
+ * same-name ambiguity, and (b) a single-nearest-within-80m link for events with
+ * NO name match. The geo path is gated by `geoConfident` (false for APPROXIMATE
+ * / partial_match geocodes) AND requires event coords.
+ */
+export function resolvePlaceIdWithGeo(
+  event: EventWithGeo,
+  index: Map<string, VenueCandidate[]>,
+  placesWithCoords: VenueCandidateGeo[],
+  opts: { geoConfident?: boolean } = {},
+): string | null {
+  const useGeo =
+    opts.geoConfident !== false &&
+    typeof event.lat === "number" &&
+    typeof event.lng === "number";
+  const origin = useGeo ? { lat: event.lat as number, lng: event.lng as number } : null;
+
+  const coords = new Map<string, { lat: number; lng: number }>();
+  for (const p of placesWithCoords) {
+    if (typeof p.lat === "number" && typeof p.lng === "number") coords.set(p.id, { lat: p.lat, lng: p.lng });
+  }
+
+  const key = normalizeVenueName(event.venueName);
+  if (key) {
+    const matches = index.get(key);
+    if (matches && matches.length === 1) return matches[0].id; // name precedence
+    if (matches && matches.length > 1) {
+      // Neighborhood/town disambiguation first (same rule as resolvePlaceId).
+      const evNbhd = normalizeVenueName(event.neighborhood);
+      const evTown = normalizeVenueName(event.townName);
+      if (evNbhd || evTown) {
+        const disambiguated = matches.filter(
+          (p) =>
+            (evNbhd && normalizeVenueName(p.neighborhood) === evNbhd) ||
+            (evTown && normalizeVenueName(p.townName) === evTown),
+        );
+        if (disambiguated.length === 1) return disambiguated[0].id;
+      }
+      // Then geo tie-break among the same-name candidates.
+      if (origin) {
+        const ids = new Set(matches.map((m) => m.id));
+        const near = nearestWithin(ids, coords, origin, GEO_TIEBREAK_MILES);
+        if (near) return near;
+      }
+      return null;
+    }
+  }
+
+  // No name match — geo-only path: exactly one place within a tight radius.
+  if (origin) {
+    const allIds = new Set(coords.keys());
+    return nearestWithin(allIds, coords, origin, GEO_MATCH_MILES);
+  }
+  return null;
+}
+
 /**
  * Given a set of place ids, return those that have at least one non-archived
  * event in the [from, to] window (i.e. "live tonight"). Powers the place-card
@@ -133,9 +224,17 @@ export async function backfillEventPlaces(
   opts: { includeLinked?: boolean; limit?: number } = {},
 ): Promise<BackfillResult> {
   const places = await db.place.findMany({
-    select: { id: true, name: true, neighborhood: true, townName: true },
+    select: { id: true, name: true, neighborhood: true, townName: true, lat: true, lng: true },
   });
   const index = buildPlaceIndex(places);
+  const placesWithCoords: VenueCandidateGeo[] = places.map((p) => ({
+    id: p.id,
+    name: p.name,
+    neighborhood: p.neighborhood,
+    townName: p.townName,
+    lat: p.lat,
+    lng: p.lng,
+  }));
 
   const events = await db.event.findMany({
     where: {
@@ -149,14 +248,29 @@ export async function backfillEventPlaces(
       neighborhood: true,
       townName: true,
       placeId: true,
+      lat: true,
+      lng: true,
     },
     ...(opts.limit ? { take: opts.limit } : {}),
   });
 
+  // Link-confidence per venue name from the geocode cache. APPROXIMATE /
+  // partial_match geocodes (downgraded to "APPROXIMATE" at write time) are NOT
+  // confident enough to drive a geo-link — precision over recall.
+  const geoRows = await db.geocodeCache.findMany({
+    where: { status: "ok" },
+    select: { normalizedName: true, locationType: true },
+  });
+  const confident = new Set<string>();
+  for (const g of geoRows) {
+    if (g.locationType && g.locationType !== "APPROXIMATE") confident.add(g.normalizedName);
+  }
+
   let matched = 0;
   let updated = 0;
   for (const ev of events) {
-    const placeId = resolvePlaceId(ev, index);
+    const geoConfident = confident.has(normalizeVenueName(ev.venueName));
+    const placeId = resolvePlaceIdWithGeo(ev, index, placesWithCoords, { geoConfident });
     if (!placeId) continue;
     matched += 1;
     if (ev.placeId !== placeId) {

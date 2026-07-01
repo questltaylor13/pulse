@@ -22,6 +22,7 @@ export const SOURCE_PRIORITY: readonly string[] = [
   "pikes-peak-center",
   "visit-estes-park",
   "visit-steamboat-chamber",
+  "fort-collins",
   "ticketmaster",
   "eventbrite",
 ];

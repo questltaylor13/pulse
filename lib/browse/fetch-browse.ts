@@ -1,6 +1,8 @@
 import prisma from "@/lib/prisma";
 import { activeEventsWhere, upcomingWeekendRange, endOfTodayLocal, outsideDenverWhere, OUTSIDE_DENVER_REGIONS } from "@/lib/queries/events";
 import { addDaysDenver, denverHour, startOfTodayDenver, endOfTodayDenver } from "@/lib/time/denver";
+import { boundingBox } from "@/lib/geo";
+import { filterAndSortByDistance } from "./distance";
 import { matchesTimeOfDay } from "./filter-logic";
 import { localFavoritesWhere, groupFriendlyPlacesWhere, workFriendlyPlacesWhere, dateNightPlacesWhere } from "@/lib/home/places-section-filters";
 import type { BrowseConfig } from "./browse-configs";
@@ -29,6 +31,13 @@ export interface BrowseResult {
 
 export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters): Promise<BrowseResult> {
   const now = new Date();
+
+  const origin =
+    filters.lat != null && filters.lng != null ? { lat: filters.lat, lng: filters.lng } : null;
+  const radiusMiles =
+    filters.distance && Number.isFinite(Number(filters.distance)) ? Number(filters.distance) : null;
+  const distanceActive = !!origin && radiusMiles != null;
+  const sortByDistance = filters.sort === "distance" && !!origin;
 
   if (config.source === "events" || config.source === "mixed") {
     // Build the where as an AND array so each concern is an independent clause.
@@ -68,14 +77,30 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
       and.push({ OR: [{ vibeTags: { hasSome: filters.vibes } }, { tags: { hasSome: filters.vibes } }] });
     }
 
+    if (distanceActive) {
+      const bb = boundingBox(origin!, radiusMiles!);
+      // Event may carry its own coords OR inherit its place's — accept either.
+      and.push({
+        OR: [
+          { lat: { gte: bb.minLat, lte: bb.maxLat }, lng: { gte: bb.minLng, lte: bb.maxLng } },
+          { place: { lat: { gte: bb.minLat, lte: bb.maxLat }, lng: { gte: bb.minLng, lte: bb.maxLng } } },
+        ],
+      });
+    }
+
     const where: any = { AND: and };
 
     let orderBy: any = { startTime: "asc" };
-    if (filters.sort === "price-low" || filters.sort === "price") orderBy = { priceRange: "asc" };
+    // Canonical sort value is "price" (Task 8); tolerate the legacy "price-low".
+    // Distance sort can't be expressed in SQL — post-sort by haversine instead.
+    if ((filters.sort === "price" || filters.sort === "price-low") && !sortByDistance) {
+      orderBy = { priceRange: "asc" };
+    }
 
-    // When a time-of-day filter is active we over-fetch and filter by the
-    // Denver-local hour in memory (Prisma can't extract hour-of-day).
+    // Over-fetch when we post-filter in memory (time-of-day or distance) so the
+    // final slice(0,50) isn't starved.
     const timeFiltered = filters.timeOfDay.length > 0;
+    const overFetch = timeFiltered || distanceActive || sortByDistance;
     const events = await prisma.event.findMany({
       where,
       select: {
@@ -84,16 +109,14 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
         place: { select: { lat: true, lng: true } },
       },
       orderBy,
-      take: timeFiltered ? 150 : 50,
+      take: overFetch ? 200 : 50,
     });
 
     const windowed = timeFiltered
-      ? events
-          .filter((e) => matchesTimeOfDay(denverHour(e.startTime), filters.timeOfDay))
-          .slice(0, 50)
+      ? events.filter((e) => matchesTimeOfDay(denverHour(e.startTime), filters.timeOfDay))
       : events;
 
-    const items: BrowseItem[] = windowed.map((e) => ({
+    let items: BrowseItem[] = windowed.map((e) => ({
       id: e.id,
       kind: "event" as const,
       title: e.title,
@@ -108,6 +131,11 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
       priceRange: e.priceRange,
       tags: e.tags,
     }));
+
+    if (origin && (distanceActive || sortByDistance)) {
+      items = filterAndSortByDistance(items, origin, distanceActive ? radiusMiles : null, sortByDistance);
+    }
+    items = items.slice(0, 50);
 
     return { items, total: items.length };
   }
@@ -127,6 +155,12 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
     if (filters.categories.length) where.category = { in: filters.categories };
     if (filters.vibes.length) where.vibeTags = { hasSome: filters.vibes };
 
+    if (distanceActive) {
+      const bb = boundingBox(origin!, radiusMiles!);
+      where.lat = { gte: bb.minLat, lte: bb.maxLat };
+      where.lng = { gte: bb.minLng, lte: bb.maxLng };
+    }
+
     const places = await prisma.place.findMany({
       where,
       select: {
@@ -134,7 +168,7 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
         address: true, priceLevel: true, vibeTags: true, tags: true, lat: true, lng: true,
       },
       orderBy: { updatedAt: "desc" },
-      take: 50,
+      take: distanceActive || sortByDistance ? 200 : 50,
     });
 
     const items: BrowseItem[] = places.map((p) => ({
@@ -153,7 +187,10 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
       tags: [...p.vibeTags, ...p.tags],
     }));
 
-    return { items, total: items.length };
+    const ranked = origin && (distanceActive || sortByDistance)
+      ? filterAndSortByDistance(items, origin, distanceActive ? radiusMiles : null, sortByDistance).slice(0, 50)
+      : items;
+    return { items: ranked, total: ranked.length };
   }
 
   // Guides source

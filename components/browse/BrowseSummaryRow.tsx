@@ -1,6 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { requestOrigin } from "./geo-origin";
 
 const SORT_OPTIONS = [
   { label: "Top picks", value: "top" },
@@ -27,17 +28,18 @@ export default function BrowseSummaryRow({ total, label = "picks" }: Props) {
       </span>
       <select
         value={currentSort}
-        onChange={(e) => {
+        onChange={async (e) => {
+          const val = e.target.value;
           const params = new URLSearchParams(searchParams?.toString() ?? "");
-          if (e.target.value === "top") {
-            params.delete("sort");
-          } else {
-            params.set("sort", e.target.value);
+          if (val === "top") params.delete("sort");
+          else params.set("sort", val);
+          if (val === "distance") {
+            const o = await requestOrigin();
+            params.set("lat", String(o.lat));
+            params.set("lng", String(o.lng));
           }
           const qs = params.toString();
-          router.replace(qs ? `${pathname}?${qs}` : pathname, {
-            scroll: false,
-          });
+          router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
         }}
         className="rounded-pill border border-mute-divider bg-surface px-3 py-1 text-body text-ink"
       >

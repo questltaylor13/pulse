@@ -75,3 +75,6 @@ export const RADIUS_OPTIONS = [
 ] as const;
 
 export const DEFAULT_RADIUS_MILES = 3;
+
+// Denver city center — the geolocation-denied fallback origin for browse distance.
+export const DENVER_CENTER: LatLng = { lat: 39.7392, lng: -104.9903 };

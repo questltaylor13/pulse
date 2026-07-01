@@ -26,10 +26,23 @@ export const RANKING_CONFIG = {
     budgetPenalty: 0.25,
     /** Boost for items created in the last 48h. */
     recencyBoost: 0.05,
+    /** Wave 3 — max additive boost for events starting soon (folded into inner). */
+    startsSoonBoost: 0.08,
     /** Max boost from WANT tag similarity — capped at +0.40. */
     interestedSimilarity: 0.4,
     /** Max penalty from PASS tag similarity — capped at -0.50. */
     notInterestedSimilarity: 0.5,
+  },
+
+  /**
+   * Wave 3 — "starts soon" event-timing boost. Full boost within
+   * fullWithinHours; linear taper to 0 at windowHours; 0 for past/beyond
+   * events and for items with no startsAt (places/discoveries). Kept small
+   * because the Hobby daily cron means precomputed scores can be stale.
+   */
+  startsSoon: {
+    fullWithinHours: 24,
+    windowHours: 72,
   },
 
   /**

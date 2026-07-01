@@ -41,6 +41,7 @@ export function score(
   ctx: RankingContext,
   item: RankableItem,
   configOverride?: RankingConfig,
+  nowMs: number = Date.now(),
 ): ScoreResult {
   // PRD 6 Phase 6 — variant overrides are merged onto the base config
   // based on ctx.variant. Unknown variants fall back to control silently.
@@ -93,8 +94,12 @@ export function score(
   if (budgetPenalty.contribution !== 0) reasons.push(budgetPenalty.reason);
 
   // ---- Recency boost (48h window) ----------------------------------------
-  const recencyBoost = computeRecencyBoost(item, config);
+  const recencyBoost = computeRecencyBoost(item, config, nowMs);
   if (recencyBoost.contribution !== 0) reasons.push(recencyBoost.reason);
+
+  // ---- Starts-soon boost (Wave 3, additive; events only) -----------------
+  const startsSoonBoost = computeStartsSoonBoost(item, config, nowMs);
+  if (startsSoonBoost.contribution !== 0) reasons.push(startsSoonBoost.reason);
 
   // ---- Cold-start badge (shown in reasons but doesn't change math) ------
   if (coldStart) reasons.push(renderReason("cold_start", 0));
@@ -107,7 +112,8 @@ export function score(
     wantBoost.contribution +
     passPenalty.contribution + // already signed negative when present
     budgetPenalty.contribution +
-    recencyBoost.contribution;
+    recencyBoost.contribution +
+    startsSoonBoost.contribution;
 
   // ---- Novelty adjustment (multiplier on entire sum, locked decision §C) -
   const novelty = computeNoveltyAdjustment(ctx, item, preset.novelty);
@@ -298,11 +304,37 @@ function computeBudgetPenalty(
 function computeRecencyBoost(
   item: RankableItem,
   config: RankingConfig,
+  nowMs: number,
 ): { contribution: number; reason: ScoreReason } {
-  const ageMs = Date.now() - item.createdAt.getTime();
+  const ageMs = nowMs - item.createdAt.getTime();
   const fortyEightHoursMs = 48 * 60 * 60 * 1000;
   const contribution = ageMs < fortyEightHoursMs ? config.weights.recencyBoost : 0;
   const reason = renderReason("recency", contribution);
+  return { contribution, reason };
+}
+
+function computeStartsSoonBoost(
+  item: RankableItem,
+  config: RankingConfig,
+  nowMs: number,
+): { contribution: number; reason: ScoreReason } {
+  if (item.startsAt == null) {
+    return { contribution: 0, reason: renderReason("starts_soon", 0) };
+  }
+  const { fullWithinHours, windowHours } = config.startsSoon;
+  const hoursUntil = (item.startsAt.getTime() - nowMs) / (60 * 60 * 1000);
+  const max = config.weights.startsSoonBoost;
+
+  let contribution: number;
+  if (hoursUntil < 0 || hoursUntil >= windowHours) {
+    contribution = 0; // past, or at/beyond the window edge
+  } else if (hoursUntil <= fullWithinHours) {
+    contribution = max; // full boost inside the "very soon" band
+  } else {
+    // linear taper: full at fullWithinHours → 0 at windowHours
+    contribution = max * ((windowHours - hoursUntil) / (windowHours - fullWithinHours));
+  }
+  const reason = renderReason("starts_soon", contribution);
   return { contribution, reason };
 }
 

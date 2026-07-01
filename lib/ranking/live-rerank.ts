@@ -20,11 +20,12 @@ export function reorderByFreshScore(
   ctx: RankingContext,
   rankables: Map<string, RankableItem>,
   baseline: RankedItem[],
+  nowMs: number = Date.now(),
 ): RankedItem[] {
   const rescored = baseline.map((it) => {
     const rankable = rankables.get(`${it.itemType}:${it.itemId}`);
     if (!rankable) return it;
-    const { score: s, reasons } = score(ctx, rankable);
+    const { score: s, reasons } = score(ctx, rankable, undefined, nowMs);
     return { ...it, score: s, reasons };
   });
 

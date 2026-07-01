@@ -10,11 +10,10 @@ import { scrapeRedRocks } from "./red-rocks";
 import { scrapeVisitDenver } from "./visit-denver";
 import { scrapeChautauqua } from "./regional/chautauqua";
 import { scrapePikesPeakCenter } from "./regional/pikes-peak-center";
-import { scrapeVisitEstesPark } from "./regional/visit-estes-park";
-import { scrapeVisitGolden } from "./regional/visit-golden";
-import { scrapeVisitSteamboatChamber } from "./regional/visit-steamboat-chamber";
+import { makeSimpleviewScraper, SIMPLEVIEW_FEEDS } from "./regional/simpleview";
 import { makeIcsScraper, type IcsScraperConfig } from "./ics";
 import { enrichEvent } from "@/lib/enrich-event";
+import { geocodeEvents } from "@/lib/geocode";
 import { deriveRegionalFields } from "@/lib/regional/metadata";
 import { denverDateKey } from "@/lib/time/denver";
 import { prioritize } from "./source-priority";
@@ -35,14 +34,6 @@ const scrapers: { name: string; fn: Scraper }[] = [
   // Regional — PRD 2 Phase 1
   { name: "chautauqua", fn: scrapeChautauqua },
   { name: "pikes-peak-center", fn: scrapePikesPeakCenter },
-  // Regional — PRD 2 Phase 2 (Simpleview RSS feeds)
-  { name: "visit-estes-park", fn: scrapeVisitEstesPark },
-  { name: "visit-golden", fn: scrapeVisitGolden },
-  // Regional — PRD 2 Phase 3 (Mountain destinations, Simpleview RSS).
-  // Crested Butte / Vail / Aspen / Telluride are handled by the LLM research
-  // pipeline (scripts/research-mountain-events.ts) since their event feeds
-  // are unstructured or bot-protected.
-  { name: "visit-steamboat-chamber", fn: scrapeVisitSteamboatChamber },
 ];
 
 // Conditionally include API scrapers when credentials are configured
@@ -51,6 +42,16 @@ if (process.env.TICKETMASTER_API_KEY) {
 }
 if (process.env.EVENTBRITE_TOKEN) {
   scrapers.push({ name: "eventbrite", fn: scrapeEventbrite });
+}
+
+// Wave 3 — the Simpleview /event/rss/ feeds (Estes Park, Golden, Steamboat)
+// collapsed into one factory (lib/scrapers/regional/simpleview.ts). Drop a
+// VERIFIED /event/rss/ feed in as a SIMPLEVIEW_FEEDS config row (and add its
+// `source` to SOURCE_PRIORITY) and it becomes a scraper automatically — same
+// doctrine as CIVIC_ICS_FEEDS below. Mountain towns (Vail/Aspen/Breck) stay on
+// the LLM research pipeline; their feeds are bot-protected/unstructured.
+for (const feed of SIMPLEVIEW_FEEDS) {
+  scrapers.push({ name: feed.source, fn: makeSimpleviewScraper(feed) });
 }
 
 // Wave 2 — free, license-clean civic/ICS feeds (Denver Arts & Venues,
@@ -140,6 +141,7 @@ function deduplicateEvents(events: ScrapedEvent[]): ScrapedEvent[] {
 // still get their scores persisted inline. Match the scrape-and-revalidate
 // cron's maxDuration=300 with a safety margin.
 const ENRICHMENT_TIME_BUDGET = 15;
+const GEOCODE_TIME_BUDGET = 45; // matches geocodeEvents timeBudgetMs: 45_000
 const FUNCTION_TIME_LIMIT = 270;
 
 // Events below this quality score get archived at enrichment time (they
@@ -318,6 +320,26 @@ export async function runAllScrapers(): Promise<{
       });
       newEventIds.push(created.id);
       inserted++;
+    }
+  }
+
+  // Wave 3 — geocode the newly-inserted events' venue names so Event.lat/lng
+  // exists for the map + the venue-match geo path. Cache-first + time-budgeted,
+  // and best-effort: a geocode failure must never break the scrape. Runs before
+  // the cron's backfillEventPlaces (called after runAllScrapers returns), so
+  // coords are present when venue-match runs.
+  // Gated by GEOCODE_TIME_BUDGET (same pattern as enrichment below) so a slow
+  // scrape cannot push the function past maxDuration and kill the post-return
+  // venue-match + revalidation. Skipped events geocode next cron (idempotent).
+  if (newEventIds.length > 0 && (Date.now() - startTime) / 1000 < FUNCTION_TIME_LIMIT - GEOCODE_TIME_BUDGET) {
+    try {
+      const geo = await geocodeEvents(prisma, newEventIds, { timeBudgetMs: 45_000 });
+      console.log(
+        `[runAllScrapers] geocoded ${geo.geocoded}/${geo.scanned} new events ` +
+          `(${geo.distinctNames} distinct venues, ${geo.failed} failed)`,
+      );
+    } catch (err) {
+      console.error("[runAllScrapers] geocode failed:", err);
     }
   }
 

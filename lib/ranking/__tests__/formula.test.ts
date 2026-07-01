@@ -325,4 +325,59 @@ describe("formula.score — 10 locked-decision fixtures", () => {
     const { score: midScore } = score(ctx, midItem);
     expect(freeScore).toBeGreaterThan(midScore);
   });
+
+  // Wave 3: injected nowMs makes recency deterministic (no reliance on Date.now()).
+  it("recency_boost is deterministic when nowMs is injected", () => {
+    const ctx = makeCtx();
+    const injectedNow = new Date("2026-06-01T12:00:00Z").getTime();
+    const freshItem = makeItem({ createdAt: new Date(injectedNow - 60 * 60 * 1000) }); // 1h before
+    const staleItem = makeItem({
+      createdAt: new Date(injectedNow - 100 * 24 * 60 * 60 * 1000), // 100d before
+    });
+
+    const fresh = score(ctx, freshItem, undefined, injectedNow);
+    const stale = score(ctx, staleItem, undefined, injectedNow);
+
+    expect(fresh.reasons.some((r) => r.factor === "recency")).toBe(true);
+    expect(stale.reasons.some((r) => r.factor === "recency")).toBe(false);
+  });
+});
+
+describe("formula.score — starts-soon boost (Wave 3)", () => {
+  const NOW = new Date("2026-06-01T12:00:00Z").getTime();
+  const HOUR = 60 * 60 * 1000;
+  const soonReason = (item: ReturnType<typeof makeItem>) =>
+    score(makeCtx(), item, undefined, NOW).reasons.find((r) => r.factor === "starts_soon");
+
+  it("gives full boost for an event within 24h", () => {
+    const r = soonReason(makeItem({ startsAt: new Date(NOW + 2 * HOUR) }));
+    expect(r?.contribution).toBeCloseTo(RANKING_CONFIG.weights.startsSoonBoost);
+  });
+
+  it("gives a partial boost at 48h (halfway through the 24–72h taper)", () => {
+    const r = soonReason(makeItem({ startsAt: new Date(NOW + 48 * HOUR) }));
+    // taper fraction = (72 - 48) / (72 - 24) = 0.5
+    expect(r?.contribution).toBeCloseTo(RANKING_CONFIG.weights.startsSoonBoost * 0.5);
+  });
+
+  it("gives no boost beyond 72h and none when startsAt is null", () => {
+    const far = makeItem({ startsAt: new Date(NOW + 10 * 24 * HOUR) });
+    const place = makeItem({ startsAt: null });
+    expect(score(makeCtx(), far, undefined, NOW).reasons.some((r) => r.factor === "starts_soon")).toBe(false);
+    expect(score(makeCtx(), place, undefined, NOW).reasons.some((r) => r.factor === "starts_soon")).toBe(false);
+  });
+
+  it("decays monotonically across the taper window", () => {
+    const c = (h: number) => soonReason(makeItem({ startsAt: new Date(NOW + h * HOUR) }))?.contribution ?? 0;
+    expect(c(30)).toBeGreaterThan(c(48));
+    expect(c(48)).toBeGreaterThan(c(60));
+  });
+
+  it("boosts the total score of a soon event over an identical far event", () => {
+    const soon = makeItem({ startsAt: new Date(NOW + 2 * HOUR) });
+    const far = makeItem({ startsAt: new Date(NOW + 10 * 24 * HOUR) });
+    expect(score(makeCtx(), soon, undefined, NOW).score).toBeGreaterThan(
+      score(makeCtx(), far, undefined, NOW).score,
+    );
+  });
 });

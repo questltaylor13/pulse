@@ -13,6 +13,8 @@ interface Props {
   place: PlaceCompact;
   variant?: "standard" | "wide";
   feedbackStatus?: ItemStatus | null;
+  /** Wave 3 — one-line "why you're seeing this" (personalized For-You only). */
+  reasonLine?: string | null;
 }
 
 const FALLBACK_IMG =
@@ -22,6 +24,7 @@ export default function PlaceCardCompact({
   place,
   variant = "standard",
   feedbackStatus = null,
+  reasonLine = null,
 }: Props) {
   const isWide = variant === "wide";
   const href = `/places/${place.id}`;
@@ -79,6 +82,12 @@ export default function PlaceCardCompact({
             </p>
           )}
           <VibeTagPill tags={place.vibeTags} />
+          {reasonLine && (
+            <p className="mt-1 line-clamp-1 text-[12px] text-mute">
+              <span aria-hidden>✨ </span>
+              {reasonLine}
+            </p>
+          )}
           {feedbackStatus === "WANT" && (
             <div className="mt-2">
               <FeedbackTag status={feedbackStatus} />
