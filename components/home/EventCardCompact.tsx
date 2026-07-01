@@ -18,6 +18,8 @@ interface Props {
   variant?: "standard" | "wide";
   showTodayBadge?: boolean;
   feedbackStatus?: ItemStatus | null;
+  /** Wave 3 — one-line "why you're seeing this" (personalized For-You only). */
+  reasonLine?: string | null;
 }
 
 const FALLBACK_IMG =
@@ -28,6 +30,7 @@ export default function EventCardCompact({
   variant = "standard",
   showTodayBadge = false,
   feedbackStatus = null,
+  reasonLine = null,
 }: Props) {
   const isWide = variant === "wide";
   const href = `/events/${event.id}`;
@@ -84,6 +87,12 @@ export default function EventCardCompact({
           </p>
           {eventSecondaryMeta(event) && (
             <p className="truncate text-[12px] text-mute">{eventSecondaryMeta(event)}</p>
+          )}
+          {reasonLine && (
+            <p className="mt-1 line-clamp-1 text-[12px] text-mute">
+              <span aria-hidden>✨ </span>
+              {reasonLine}
+            </p>
           )}
           {feedbackStatus === "WANT" && (
             <div className="mt-2">

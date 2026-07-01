@@ -1,5 +1,6 @@
 import type { Category, EventRegion } from "@prisma/client";
 import type { SeedGuide } from "./seed-guides";
+import type { ScoreReason } from "@/lib/ranking/types";
 
 export interface GuideCompact {
   id: string;
@@ -161,8 +162,8 @@ export interface ForYouSection {
   title: string;
   subtitle?: string;
   items: Array<
-    | ({ kind: "event" } & EventCompact)
-    | ({ kind: "place" } & PlaceCompact)
+    | ({ kind: "event"; reasons?: ScoreReason[] } & EventCompact)
+    | ({ kind: "place"; reasons?: ScoreReason[] } & PlaceCompact)
   >;
 }
 

@@ -5,6 +5,7 @@ import PlaceCardCompact from "./PlaceCardCompact";
 import LastUpdatedIndicator from "./LastUpdatedIndicator";
 import type { ForYouFeedResponse } from "@/lib/home/types";
 import { type FeedbackMaps, isFilteredFromFeed } from "@/lib/feedback/server";
+import { pickCardReason } from "@/lib/ranking/explanation";
 
 interface Props {
   data: ForYouFeedResponse;
@@ -47,13 +48,16 @@ export default function ForYouTabBody({ data, feedbackMaps }: Props) {
         <div key={section.id}>
           {idx > 0 && idx % 2 === 0 && <SectionDivider />}
           <ScrollSection title={section.title} subtitle={section.subtitle}>
-            {section.items.map((item) =>
-              item.kind === "event" ? (
+            {section.items.map((item) => {
+              const reasonLine =
+                data.personalized && item.reasons ? pickCardReason(item.reasons) : null;
+              return item.kind === "event" ? (
                 <EventCardCompact
                   key={`e-${item.id}`}
                   event={item}
                   variant="standard"
                   feedbackStatus={eventStatus(item.id)}
+                  reasonLine={reasonLine}
                 />
               ) : (
                 <PlaceCardCompact
@@ -61,9 +65,10 @@ export default function ForYouTabBody({ data, feedbackMaps }: Props) {
                   place={item}
                   variant="standard"
                   feedbackStatus={placeStatus(item.id)}
+                  reasonLine={reasonLine}
                 />
-              ),
-            )}
+              );
+            })}
           </ScrollSection>
         </div>
       ))}
