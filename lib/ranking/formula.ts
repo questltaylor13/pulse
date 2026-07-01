@@ -25,7 +25,7 @@ import {
   CHIP_TO_CATEGORY,
   HIDDEN_GEMS_SENTINEL,
 } from "./mappings";
-import { tagOverlap, clamp } from "./normalizers";
+import { tagOverlap, overlapWeight, clamp } from "./normalizers";
 import { renderReason } from "./explanation";
 
 export interface ScoreResult {
@@ -237,9 +237,8 @@ function computeWantSimilarity(
 
   for (const want of ctx.wantItems) {
     if (want.itemId === item.itemId) continue; // don't boost the item from itself
-    if (tagOverlap(want.tags, item.tags) >= 2) {
-      total += perMatchBoost;
-    }
+    // Graduated (Wave 2): 1 shared tag = half credit, 2+ = full.
+    total += perMatchBoost * overlapWeight(tagOverlap(want.tags, item.tags));
   }
 
   const contribution = clamp(total, 0, cap);
@@ -258,9 +257,8 @@ function computePassSimilarity(
 
   for (const pass of ctx.passItems) {
     if (pass.itemId === item.itemId) continue;
-    if (tagOverlap(pass.tags, item.tags) >= 2) {
-      total += perMatchPenalty;
-    }
+    // Graduated (Wave 2): 1 shared tag = half penalty, 2+ = full.
+    total += perMatchPenalty * overlapWeight(tagOverlap(pass.tags, item.tags));
   }
 
   const magnitude = clamp(total, 0, cap);

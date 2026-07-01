@@ -54,9 +54,15 @@ export const RANKING_CONFIG = {
    */
   coldStart: {
     softRankDays: 7,
-    softRankFeedbackThreshold: 15,
-    /** Profile-derived boosts multiplied by this in cold-start mode. */
-    softRankMultiplier: 0.6,
+    // Wave 2 cold-start softening: exit cold-start sooner (was 15) so a
+    // moderately-active new user reaches full personalization faster.
+    softRankFeedbackThreshold: 10,
+    /**
+     * Profile-derived boosts multiplied by this in cold-start mode. Wave 2
+     * raised this from 0.6 → 0.75 so a new user's onboarding vibe/aspiration/
+     * social signals count more while their behavioral history is still thin.
+     */
+    softRankMultiplier: 0.75,
   },
 
   /** Serendipity injection (Phase 3). */

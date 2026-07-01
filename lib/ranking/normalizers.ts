@@ -102,6 +102,20 @@ export function sharesTags(a: string[], b: string[], threshold: number): boolean
   return tagOverlap(a, b) >= threshold;
 }
 
+/**
+ * Graduated weight for behavioral tag similarity (Wave 2 cold-start softening).
+ * The prior binary "≥2 shared tags = full, else nothing" cliff starved
+ * sparse-signal (new) users, whose few WANT/PASS items rarely clear 2 shared
+ * tags with a candidate. Now a single shared tag earns half credit; 2+ earns
+ * full. Bounded to [0,1] so the per-item contribution and its cap are
+ * unchanged for the 2+ case that existing fixtures lock in.
+ */
+export function overlapWeight(overlap: number): number {
+  if (overlap <= 0) return 0;
+  if (overlap === 1) return 0.5;
+  return 1;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

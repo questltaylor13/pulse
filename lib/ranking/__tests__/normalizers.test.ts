@@ -4,6 +4,7 @@ import {
   normalizePriceTier,
   tagOverlap,
   sharesTags,
+  overlapWeight,
   clamp,
 } from "@/lib/ranking/normalizers";
 
@@ -75,6 +76,16 @@ describe("tagOverlap", () => {
   it("returns 0 on empty input", () => {
     expect(tagOverlap([], ["jazz"])).toBe(0);
     expect(tagOverlap(["jazz"], [])).toBe(0);
+  });
+});
+
+describe("overlapWeight", () => {
+  it("0 shared tags → 0, exactly 1 → half, 2+ → full (Wave 2 graduated)", () => {
+    expect(overlapWeight(0)).toBe(0);
+    expect(overlapWeight(-1)).toBe(0);
+    expect(overlapWeight(1)).toBe(0.5);
+    expect(overlapWeight(2)).toBe(1);
+    expect(overlapWeight(5)).toBe(1);
   });
 });
 

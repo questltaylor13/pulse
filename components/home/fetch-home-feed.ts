@@ -389,11 +389,16 @@ export async function fetchHomeFeed(
   };
 
   const [today, todayCount, weekend, newPlaces, outsideEvents, outsidePlaces, worthAWeekend, selectedDateEvents, comingUpEvents] = await Promise.all([
+    // Wave 2 — true candidate SELECTION for Today: fetch a wide candidate
+    // window (all filters preserved) so a high-ranked late-evening event can
+    // beat a low-interest early one, then rank-select the top 25 below. This
+    // mirrors the Weekend rail (fetch 60 → slice 20). When there's no cache,
+    // sortByCacheScore is a no-op and slice keeps the earliest 25 (unchanged).
     prisma.event.findMany({
       where: todayWhere,
       select: EVENT_SELECT,
       orderBy: { startTime: "asc" },
-      take: 25,
+      take: 120,
     }),
     prisma.event.count({ where: todayWhere }),
     prisma.event.findMany({
@@ -541,7 +546,7 @@ export async function fetchHomeFeed(
   return {
     // Suppress Today + This-weekend + Worth-a-weekend when a date filter is
     // active — they're replaced by the single "On [date]" rail.
-    today: dateFilter ? [] : sortByCacheScore(today, "event", cacheLookup).map(toEventCompact),
+    today: dateFilter ? [] : sortByCacheScore(today, "event", cacheLookup).slice(0, 25).map(toEventCompact),
     todayCount: dateFilter ? 0 : todayCount,
     weekendPicks: dateFilter ? [] : weekendRanked.map(toEventCompact),
     newInDenver: sortByCacheScore(newPlaces, "place", cacheLookup).map(toPlaceCompact),

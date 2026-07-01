@@ -186,6 +186,20 @@ describe("formula.score — 10 locked-decision fixtures", () => {
     expect(want?.contribution).toBeCloseTo(0.4);
   });
 
+  // 5b. Graduated WANT similarity — a single shared tag now counts partially
+  //     (Wave 2 cold-start softening), where before it was worth nothing.
+  it("WANT similarity gives partial credit for exactly one shared tag", () => {
+    const ctxOne = makeCtx({ wantItems: [{ itemId: "w1", tags: ["jazz", "mellow"] }] });
+    const itemOne = makeItem({ tags: ["jazz", "loud"] }); // overlap 1 → half
+    const wantOne = score(ctxOne, itemOne).reasons.find((r) => r.factor === "want_similarity");
+    expect(wantOne?.contribution).toBeCloseTo(0.125); // 0.25 × 0.5
+
+    const ctxTwo = makeCtx({ wantItems: [{ itemId: "w2", tags: ["jazz", "mellow"] }] });
+    const itemTwo = makeItem({ tags: ["jazz", "mellow"] }); // overlap 2 → full
+    const wantTwo = score(ctxTwo, itemTwo).reasons.find((r) => r.factor === "want_similarity");
+    expect(wantTwo?.contribution).toBeCloseTo(0.25);
+  });
+
   // 6. PASS similarity cap -0.50
   it("PASS similarity penalty caps at -0.50", () => {
     const passItems = Array.from({ length: 5 }, (_, i) => ({
@@ -200,10 +214,11 @@ describe("formula.score — 10 locked-decision fixtures", () => {
     expect(pass?.contribution).toBeCloseTo(-0.5);
   });
 
-  // 7. Soft-rank toggle at 15 feedback items
-  it("exiting cold-start when feedbackCount crosses 15 removes soft-rank dampening", () => {
+  // 7. Soft-rank toggle at the feedback threshold (threshold-agnostic — reads
+  //    the configured value so Wave 2's softening didn't hardcode-break it).
+  it("exiting cold-start when feedbackCount crosses the threshold removes soft-rank dampening", () => {
     const baseCtx = makeCtx({
-      accountAgeDays: 10, // age gate is cleared
+      accountAgeDays: 10, // age gate is cleared (>= softRankDays)
       profile: {
         contextSegment: "LOCAL_EXPLORER",
         socialStyle: "SOCIAL_CONNECTOR",
@@ -214,11 +229,12 @@ describe("formula.score — 10 locked-decision fixtures", () => {
       },
     });
     const item = makeItem({ tags: ["group-friendly", "polished"] });
+    const threshold = RANKING_CONFIG.coldStart.softRankFeedbackThreshold;
 
-    const { score: softScore } = score({ ...baseCtx, totalFeedbackCount: 14 }, item);
-    const { score: normalScore } = score({ ...baseCtx, totalFeedbackCount: 16 }, item);
+    const { score: softScore } = score({ ...baseCtx, totalFeedbackCount: threshold - 2 }, item);
+    const { score: normalScore } = score({ ...baseCtx, totalFeedbackCount: threshold + 2 }, item);
 
-    // Crossing 15 removes 0.6x dampening → score goes up
+    // Crossing the threshold removes soft-rank dampening → score goes up
     expect(normalScore).toBeGreaterThan(softScore);
   });
 
