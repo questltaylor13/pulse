@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type { Category, EventRegion, ItemStatus } from "@prisma/client";
 import {
@@ -48,13 +48,26 @@ export default function TasteSwiper() {
   });
   const [finished, setFinished] = useState(false);
 
+  // Wave 2 — the swiper fires up to 12 POST /api/feedback writes; those skip
+  // the per-write live re-rank (source=PROFILE_SWIPER) and are coalesced into
+  // ONE forced recompute flushed here when the swiper completes or closes.
+  const hasSubmittedRef = useRef(false);
+  const flushedRef = useRef(false);
+  const flushRerank = useCallback(() => {
+    if (flushedRef.current || !hasSubmittedRef.current) return;
+    flushedRef.current = true;
+    // keepalive lets the request survive the navigation close() triggers.
+    fetch("/api/ranking/recompute", { method: "POST", keepalive: true }).catch(() => {});
+  }, []);
+
   const close = useCallback(() => {
+    flushRerank();
     const sp = new URLSearchParams(searchParams?.toString() ?? "");
     sp.delete("swiper");
     const qs = sp.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
     router.refresh();
-  }, [router, pathname, searchParams]);
+  }, [router, pathname, searchParams, flushRerank]);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +113,7 @@ export default function TasteSwiper() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ref, status: action, source: "PROFILE_SWIPER" }),
         });
+        hasSubmittedRef.current = true;
       }
 
       setCounts((c) => ({
@@ -110,6 +124,7 @@ export default function TasteSwiper() {
       }));
 
       if (index + 1 >= total) {
+        flushRerank();
         setFinished(true);
       } else {
         setIndex((i) => i + 1);

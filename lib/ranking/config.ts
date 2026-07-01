@@ -89,6 +89,14 @@ export const RANKING_CONFIG = {
     skipIfFresherThanMinutes: 30,
     /** Total elapsed budget per cron run. Bail with a partial-completion warning after this. */
     runBudgetMs: 45_000,
+    /**
+     * Wave 2 live re-rank: after a feedback write we force an on-demand
+     * recompute (the Hobby daily cron is too slow to feel responsive). To
+     * absorb rapid bursts, skip the forced recompute if the cache was already
+     * recomputed within this many seconds — the write still flags the cache
+     * dirty, so nothing is lost.
+     */
+    coalesceSeconds: 45,
   },
 
   /** Fallback behavior. */

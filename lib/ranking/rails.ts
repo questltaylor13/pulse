@@ -15,6 +15,7 @@
 import "server-only";
 import prisma from "@/lib/prisma";
 import { readCache } from "./cache";
+import { rerankUserBaseline } from "./rerank-trigger";
 import type { RankedItemType, ScoreReason } from "./types";
 import type { EventCompact, PlaceCompact } from "@/lib/home/types";
 
@@ -139,10 +140,19 @@ export async function getRankedFeedHydrated(
   const cache = await readCache(userId);
   if (!cache) return null;
 
-  const picks = cache.rankedItems
+  let picks = cache.rankedItems
     .filter((it) => types.includes(it.itemType))
     .slice(0, limit);
   if (picks.length === 0) return [];
+
+  // Wave 2 live re-rank: if feedback landed since the last precompute (cache
+  // dirty), re-score these picks against the freshest signal so the effect is
+  // visible on the very next load — the background forced precompute + daily
+  // cron handle candidate widening and clearing the dirty flag. Best-effort:
+  // any failure falls back to the stored cache order.
+  if (cache.isDirty) {
+    picks = await rerankUserBaseline(userId, picks).catch(() => picks);
+  }
 
   const eventIds = picks.filter((p) => p.itemType === "event").map((p) => p.itemId);
   const placeIds = picks.filter((p) => p.itemType === "place").map((p) => p.itemId);

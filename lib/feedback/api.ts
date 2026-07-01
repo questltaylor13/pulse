@@ -19,6 +19,7 @@ import type {
   UserItemStatus,
 } from "@prisma/client";
 import { markDirty } from "@/lib/ranking/cache";
+import { triggerUserRerank } from "@/lib/ranking/rerank-trigger";
 import type { FeedbackRef } from "./types";
 import {
   isDiscoveryRef,
@@ -112,6 +113,24 @@ function markDirtyAfter<T>(userId: string, p: Promise<T>): Promise<T> {
   });
 }
 
+/**
+ * markDirtyAfter + Wave 2 live re-rank. After the write lands, flag the cache
+ * dirty AND schedule a coalesced forced recompute so feedback feels responsive
+ * despite the daily precompute cron. PROFILE_SWIPER writes are excluded: the
+ * swiper fires a burst of up to 12 writes, coalesced into a single recompute
+ * when it closes (see components/feedback/TasteSwiper.tsx).
+ */
+function afterWrite<T>(
+  userId: string,
+  source: FeedbackSource,
+  p: Promise<T>,
+): Promise<T> {
+  return markDirtyAfter(userId, p).then((result) => {
+    if (source !== "PROFILE_SWIPER") triggerUserRerank(userId);
+    return result;
+  });
+}
+
 export async function upsertFeedback(params: {
   userId: string;
   ref: FeedbackRef;
@@ -123,7 +142,7 @@ export async function upsertFeedback(params: {
 
   if (isItemRef(ref)) {
     const snap = await loadItemSnapshot(ref.itemId);
-    return markDirtyAfter(userId, prisma.userItemStatus.upsert({
+    return afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_itemId: { userId, itemId: ref.itemId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
       create: { userId, itemId: ref.itemId, ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
@@ -131,7 +150,7 @@ export async function upsertFeedback(params: {
   }
   if (isEventRef(ref)) {
     const snap = await loadEventSnapshot(ref.eventId);
-    return markDirtyAfter(userId, prisma.userItemStatus.upsert({
+    return afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_eventId: { userId, eventId: ref.eventId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
       create: { userId, eventId: ref.eventId, ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
@@ -139,7 +158,7 @@ export async function upsertFeedback(params: {
   }
   if (isPlaceRef(ref)) {
     const snap = await loadPlaceSnapshot(ref.placeId);
-    return markDirtyAfter(userId, prisma.userItemStatus.upsert({
+    return afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_placeId: { userId, placeId: ref.placeId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
       create: { userId, placeId: ref.placeId, ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
@@ -147,7 +166,7 @@ export async function upsertFeedback(params: {
   }
   if (isDiscoveryRef(ref)) {
     const snap = await loadDiscoverySnapshot(ref.discoveryId);
-    return markDirtyAfter(userId, prisma.userItemStatus.upsert({
+    return afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_discoveryId: { userId, discoveryId: ref.discoveryId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
       create: { userId, discoveryId: ref.discoveryId, ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
@@ -164,6 +183,8 @@ export async function deleteFeedback(params: {
   const runDelete = async (where: Prisma.UserItemStatusWhereInput): Promise<number> => {
     const count = (await prisma.userItemStatus.deleteMany({ where })).count;
     try { await markDirty(userId); } catch (err) { console.warn("[feedback.markDirty] failed:", err); }
+    // Retracting a WANT (heart unsave / undo) changes the taste signal too.
+    triggerUserRerank(userId);
     return count;
   };
   if (isItemRef(ref)) return runDelete({ userId, itemId: ref.itemId });

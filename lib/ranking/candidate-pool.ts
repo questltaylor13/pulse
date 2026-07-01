@@ -12,7 +12,7 @@
 
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
-import type { RankableItem, RankingContext } from "./types";
+import type { RankableItem, RankingContext, RankedItemType } from "./types";
 import { normalizeQuality, normalizePriceTier } from "./normalizers";
 import { RANKING_CONFIG } from "./config";
 
@@ -81,8 +81,12 @@ export async function buildCandidatePool(
     where: {
       openingStatus: "OPEN",
       ...(regionFilter ? { region: regionFilter } : {}),
+      // NB: Place's UserItemStatus reverse relation is `userItemStatuses`
+      // (there is no `userStatuses` on Place). Using the wrong name threw a
+      // runtime "Unknown field" error whenever the user had DONE'd a place,
+      // silently failing that user's entire precompute. (Wave 2 fix.)
       ...(doneIds.length
-        ? { userStatuses: { none: { userId: ctx.userId, status: "DONE" } } }
+        ? { userItemStatuses: { none: { userId: ctx.userId, status: "DONE" } } }
         : {}),
     },
     select: {
@@ -245,4 +249,82 @@ function computeVisitingWindowEnd(ctx: RankingContext): Date | null {
   const msInDay = 24 * 60 * 60 * 1000;
   const accountCreatedMs = Date.now() - ctx.accountAgeDays * msInDay;
   return new Date(accountCreatedMs + 5 * msInDay);
+}
+
+// ===========================================================================
+// Wave 2 — hydrate specific items (by id) into the RankableItem shape.
+//
+// Used by the live re-rank path (lib/ranking/rerank-trigger.ts) to re-score an
+// already-ranked baseline against fresh feedback WITHOUT rebuilding the whole
+// pool. Reuses the exact selects + adapters above so the RankableItem mapping
+// stays single-sourced with buildCandidatePool.
+// ===========================================================================
+
+export async function hydrateRankables(
+  refs: { itemType: RankedItemType; itemId: string }[],
+): Promise<Map<string, RankableItem>> {
+  const eventIds = refs.filter((r) => r.itemType === "event").map((r) => r.itemId);
+  const placeIds = refs.filter((r) => r.itemType === "place").map((r) => r.itemId);
+  const discoveryIds = refs.filter((r) => r.itemType === "discovery").map((r) => r.itemId);
+
+  const [events, places, discoveries] = await Promise.all([
+    eventIds.length
+      ? prisma.event.findMany({
+          where: { id: { in: eventIds } },
+          select: {
+            id: true,
+            title: true,
+            category: true,
+            tags: true,
+            vibeTags: true,
+            companionTags: true,
+            occasionTags: true,
+            priceRange: true,
+            qualityScore: true,
+            region: true,
+            startTime: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
+    placeIds.length
+      ? prisma.place.findMany({
+          where: { id: { in: placeIds } },
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            tags: true,
+            vibeTags: true,
+            companionTags: true,
+            goodForTags: true,
+            priceLevel: true,
+            combinedScore: true,
+            region: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
+    discoveryIds.length
+      ? prisma.discovery.findMany({
+          where: { id: { in: discoveryIds } },
+          select: {
+            id: true,
+            title: true,
+            category: true,
+            tags: true,
+            subtype: true,
+            qualityScore: true,
+            region: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const map = new Map<string, RankableItem>();
+  for (const e of events) map.set(`event:${e.id}`, eventToRankable(e));
+  for (const p of places) map.set(`place:${p.id}`, placeToRankable(p));
+  for (const d of discoveries) map.set(`discovery:${d.id}`, discoveryToRankable(d));
+  return map;
 }

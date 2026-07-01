@@ -43,13 +43,18 @@ export async function getRankedFeed(_userId: string): Promise<RankedItem[]> {
 
 /**
  * Applies real-time adjustments on top of a baseline precomputed ranking.
- * Used for "just-given-feedback" tweaks without waiting for the next cron.
+ * Used for "just-given-feedback" tweaks without waiting for the next cron:
+ * re-scores the baseline against the user's freshest WANT/PASS signal and
+ * re-sorts. Bounded to the baseline (no candidate widening) — that's the job
+ * of the forced precompute. The server-only implementation is imported lazily
+ * so this public module stays safe to import from anywhere.
  */
 export async function rerankLive(
-  _userId: string,
-  _baseline: RankedItem[],
+  userId: string,
+  baseline: RankedItem[],
 ): Promise<RankedItem[]> {
-  throw new NotImplementedError("rerankLive");
+  const { rerankUserBaseline } = await import("./rerank-trigger");
+  return rerankUserBaseline(userId, baseline);
 }
 
 /**
