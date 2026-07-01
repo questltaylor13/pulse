@@ -141,6 +141,7 @@ function deduplicateEvents(events: ScrapedEvent[]): ScrapedEvent[] {
 // still get their scores persisted inline. Match the scrape-and-revalidate
 // cron's maxDuration=300 with a safety margin.
 const ENRICHMENT_TIME_BUDGET = 15;
+const GEOCODE_TIME_BUDGET = 45; // matches geocodeEvents timeBudgetMs: 45_000
 const FUNCTION_TIME_LIMIT = 270;
 
 // Events below this quality score get archived at enrichment time (they
@@ -327,7 +328,10 @@ export async function runAllScrapers(): Promise<{
   // and best-effort: a geocode failure must never break the scrape. Runs before
   // the cron's backfillEventPlaces (called after runAllScrapers returns), so
   // coords are present when venue-match runs.
-  if (newEventIds.length > 0) {
+  // Gated by GEOCODE_TIME_BUDGET (same pattern as enrichment below) so a slow
+  // scrape cannot push the function past maxDuration and kill the post-return
+  // venue-match + revalidation. Skipped events geocode next cron (idempotent).
+  if (newEventIds.length > 0 && (Date.now() - startTime) / 1000 < FUNCTION_TIME_LIMIT - GEOCODE_TIME_BUDGET) {
     try {
       const geo = await geocodeEvents(prisma, newEventIds, { timeBudgetMs: 45_000 });
       console.log(
