@@ -105,3 +105,61 @@ export async function geocodeVenue(
 
   return { lat, lng, formattedAddress: r.formatted_address ?? null, locationType, partialMatch };
 }
+
+export interface GeocodeEventsResult {
+  scanned: number;
+  distinctNames: number;
+  geocoded: number;
+  failed: number;
+}
+
+/**
+ * Batch-geocode events missing coordinates. Dedups by distinct normalized
+ * venue name (one geocodeVenue call per name — which itself caches), then
+ * writes lat/lng to every event sharing that name. Best-effort + time-budgeted
+ * so it never breaks the scrape. `eventIds` scopes to a fresh batch; omit it to
+ * sweep all upcoming un-geocoded events (backfill).
+ */
+export async function geocodeEvents(
+  db: PrismaClient,
+  eventIds?: string[],
+  opts: { limit?: number; timeBudgetMs?: number; timeoutMs?: number } = {},
+): Promise<GeocodeEventsResult> {
+  const start = Date.now();
+  const budget = opts.timeBudgetMs ?? 60_000;
+
+  const events = await db.event.findMany({
+    where: {
+      isArchived: false,
+      lat: null,
+      ...(eventIds ? { id: { in: eventIds } } : { startTime: { gte: new Date() } }),
+    },
+    select: { id: true, venueName: true, address: true, neighborhood: true, townName: true },
+    ...(opts.limit ? { take: opts.limit } : {}),
+  });
+
+  // Group event ids by distinct normalized venue name.
+  const byName = new Map<string, { input: GeocodeInput; ids: string[] }>();
+  for (const ev of events) {
+    const key = normalizeVenueName(ev.venueName);
+    if (!key) continue;
+    const bucket = byName.get(key);
+    if (bucket) bucket.ids.push(ev.id);
+    else byName.set(key, { input: ev, ids: [ev.id] });
+  }
+
+  let geocoded = 0;
+  let failed = 0;
+  for (const { input, ids } of byName.values()) {
+    if (Date.now() - start > budget) break; // time budget — leave the rest for next run
+    const res = await geocodeVenue(input, db, { timeoutMs: opts.timeoutMs });
+    if (!res) {
+      failed += 1;
+      continue;
+    }
+    await db.event.updateMany({ where: { id: { in: ids } }, data: { lat: res.lat, lng: res.lng } });
+    geocoded += ids.length;
+  }
+
+  return { scanned: events.length, distinctNames: byName.size, geocoded, failed };
+}
