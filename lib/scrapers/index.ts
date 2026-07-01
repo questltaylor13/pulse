@@ -13,6 +13,7 @@ import { scrapePikesPeakCenter } from "./regional/pikes-peak-center";
 import { makeSimpleviewScraper, SIMPLEVIEW_FEEDS } from "./regional/simpleview";
 import { makeIcsScraper, type IcsScraperConfig } from "./ics";
 import { enrichEvent } from "@/lib/enrich-event";
+import { geocodeEvents } from "@/lib/geocode";
 import { deriveRegionalFields } from "@/lib/regional/metadata";
 import { denverDateKey } from "@/lib/time/denver";
 import { prioritize } from "./source-priority";
@@ -318,6 +319,23 @@ export async function runAllScrapers(): Promise<{
       });
       newEventIds.push(created.id);
       inserted++;
+    }
+  }
+
+  // Wave 3 — geocode the newly-inserted events' venue names so Event.lat/lng
+  // exists for the map + the venue-match geo path. Cache-first + time-budgeted,
+  // and best-effort: a geocode failure must never break the scrape. Runs before
+  // the cron's backfillEventPlaces (called after runAllScrapers returns), so
+  // coords are present when venue-match runs.
+  if (newEventIds.length > 0) {
+    try {
+      const geo = await geocodeEvents(prisma, newEventIds, { timeBudgetMs: 45_000 });
+      console.log(
+        `[runAllScrapers] geocoded ${geo.geocoded}/${geo.scanned} new events ` +
+          `(${geo.distinctNames} distinct venues, ${geo.failed} failed)`,
+      );
+    } catch (err) {
+      console.error("[runAllScrapers] geocode failed:", err);
     }
   }
 

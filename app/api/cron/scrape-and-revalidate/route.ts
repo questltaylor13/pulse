@@ -50,6 +50,8 @@ export async function GET(request: NextRequest) {
     // Wave 2 — link freshly-scraped events to their venue Place so the
     // place-detail "Upcoming Events" block + "Live tonight" badge populate.
     // Best-effort: a match failure must not fail the scrape.
+    // Wave 3 — runAllScrapers already geocoded the new events (Event.lat/lng),
+    // so this venue-match pass can use the geo path. No new cron slot.
     let venueMatch: Awaited<ReturnType<typeof backfillEventPlaces>> | null = null;
     try {
       venueMatch = await backfillEventPlaces(prisma);
