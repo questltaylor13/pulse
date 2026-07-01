@@ -29,6 +29,8 @@ const postSchema = z.object({
   ref: refSchema,
   status: z.enum(["WANT", "PASS", "DONE"]),
   source: z.enum(["FEED_CARD", "PROFILE_SWIPER", "DETAIL_PAGE"]),
+  // Wave 2 Beli: optional 1–5 rating, sent with DONE from the place rating UI.
+  rating: z.number().int().min(1).max(5).optional(),
 });
 
 const deleteSchema = z.object({
@@ -67,6 +69,7 @@ export async function POST(request: NextRequest) {
       ref: parsed.data.ref,
       status: parsed.data.status,
       source: parsed.data.source,
+      rating: parsed.data.rating,
     });
     const profileCompletion = await getProfileCompletion(auth.userId);
     return NextResponse.json({ feedback: row, profileCompletion });

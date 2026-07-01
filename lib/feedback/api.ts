@@ -131,14 +131,42 @@ function afterWrite<T>(
   });
 }
 
+/**
+ * Recompute a place's Pulse rating aggregate from its UserItemStatus rows.
+ * Recomputed from source (not incremented) so it never drifts across rating
+ * changes/removals. Best-effort — a failure must not fail the feedback write.
+ */
+async function recomputePlaceRating(placeId: string): Promise<void> {
+  try {
+    const agg = await prisma.userItemStatus.aggregate({
+      where: { placeId, rating: { not: null } },
+      _sum: { rating: true },
+      _count: { rating: true },
+    });
+    await prisma.place.update({
+      where: { id: placeId },
+      data: {
+        pulseRatingSum: agg._sum.rating ?? 0,
+        pulseRatingCount: agg._count.rating ?? 0,
+      },
+    });
+  } catch (err) {
+    console.warn("[feedback.recomputePlaceRating] failed:", err);
+  }
+}
+
 export async function upsertFeedback(params: {
   userId: string;
   ref: FeedbackRef;
   status: ItemStatus;
   source: FeedbackSource;
+  /** Wave 2 Beli: optional 1–5 rating (typically written with DONE). */
+  rating?: number;
 }): Promise<UserItemStatus> {
-  const { userId, ref, status, source } = params;
-  const common = { status, source };
+  const { userId, ref, status, source, rating } = params;
+  // Only include `rating` in the write when the caller passed one, so a plain
+  // WANT/PASS/DONE toggle never clobbers an existing rating.
+  const common = { status, source, ...(rating !== undefined ? { rating } : {}) };
 
   if (isItemRef(ref)) {
     const snap = await loadItemSnapshot(ref.itemId);
@@ -158,11 +186,14 @@ export async function upsertFeedback(params: {
   }
   if (isPlaceRef(ref)) {
     const snap = await loadPlaceSnapshot(ref.placeId);
-    return afterWrite(userId, source, prisma.userItemStatus.upsert({
+    const row = await afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_placeId: { userId, placeId: ref.placeId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
       create: { userId, placeId: ref.placeId, ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
     }));
+    // Keep the place's rating aggregate in sync with this write.
+    await recomputePlaceRating(ref.placeId);
+    return row;
   }
   if (isDiscoveryRef(ref)) {
     const snap = await loadDiscoverySnapshot(ref.discoveryId);
@@ -189,7 +220,11 @@ export async function deleteFeedback(params: {
   };
   if (isItemRef(ref)) return runDelete({ userId, itemId: ref.itemId });
   if (isEventRef(ref)) return runDelete({ userId, eventId: ref.eventId });
-  if (isPlaceRef(ref)) return runDelete({ userId, placeId: ref.placeId });
+  if (isPlaceRef(ref)) {
+    const count = await runDelete({ userId, placeId: ref.placeId });
+    await recomputePlaceRating(ref.placeId); // removing DONE may drop a rating
+    return count;
+  }
   if (isDiscoveryRef(ref)) return runDelete({ userId, discoveryId: ref.discoveryId });
   throw new Error("deleteFeedback: ref missing valid id");
 }

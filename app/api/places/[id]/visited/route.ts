@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { ItemStatus, FeedbackSource } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { upsertFeedback } from "@/lib/feedback/api";
 
 interface RouteParams {
   params: { id: string };
 }
 
 /**
- * POST /api/places/[id]/visited - Mark a place as visited (especially for soft opens)
- * Body: { rating?: number (1-5), notes?: string }
+ * POST /api/places/[id]/visited - Mark a place as visited ("been there"),
+ * optionally with a 1–5 rating.
+ *
+ * Wave 2: replaced the dead write-only UserActivity JSON blob with a real
+ * UserItemStatus DONE (+ rating) via the feedback layer — so it trains the
+ * ranker (markDirty + live re-rank) and updates the place's rating aggregate,
+ * exactly like the place-detail rating UI. Soft-open buzzScore bump preserved.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -20,7 +27,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const { id: placeId } = params;
     const body = await request.json().catch(() => ({}));
-    const { rating, notes } = body;
+    const rating = typeof body.rating === "number" ? body.rating : undefined;
+    if (rating !== undefined && (!Number.isInteger(rating) || rating < 1 || rating > 5)) {
+      return NextResponse.json({ error: "rating must be an integer 1–5" }, { status: 400 });
+    }
 
     // Verify place exists
     const place = await prisma.place.findUnique({
@@ -36,22 +46,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Place not found" }, { status: 404 });
     }
 
-    // Find any Item associated with this place to create a rating
-    // For now, we'll record as a user activity
-    await prisma.userActivity.create({
-      data: {
-        userId: session.user.id,
-        type: "RATED_PLACE",
-        metadata: JSON.stringify({
-          placeId,
-          placeName: place.name,
-          rating,
-          notes,
-          openingStatus: place.openingStatus,
-          visitedDuringSoftOpen: place.openingStatus === "SOFT_OPEN",
-          visitedAt: new Date().toISOString(),
-        }),
-      },
+    await upsertFeedback({
+      userId: session.user.id,
+      ref: { placeId },
+      status: ItemStatus.DONE,
+      source: FeedbackSource.DETAIL_PAGE,
+      rating,
     });
 
     // If it was a soft open, increment buzz score

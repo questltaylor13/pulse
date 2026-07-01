@@ -97,24 +97,24 @@ enum EventRegion {
 // coverage-health view (/admin/scrapers) and powers stale-source alerts.
 // 30-day retention enforced by a daily cleanup cron.
 model ScraperRun {
-  id            String      @id @default(cuid())
-  source        String
-  region        EventRegion @default(DENVER_METRO)
-  startedAt     DateTime    @default(now())
-  durationMs    Int
-  rawCount      Int         @default(0)
-  insertedCount Int         @default(0)
-  updatedCount  Int         @default(0)
-  enrichedCount Int         @default(0)
-  droppedCount  Int         @default(0)
-  errorCount    Int         @default(0)
-  errors        String[]    @default([])
-  succeeded     Boolean     @default(true)
+  id              String      @id @default(cuid())
+  source          String
+  region          EventRegion @default(DENVER_METRO)
+  startedAt       DateTime    @default(now())
+  durationMs      Int
+  rawCount        Int         @default(0)
+  insertedCount   Int         @default(0)
+  updatedCount    Int         @default(0)
+  enrichedCount   Int         @default(0)
+  droppedCount    Int         @default(0)
+  errorCount      Int         @default(0)
+  errors          String[]    @default([])
+  succeeded       Boolean     @default(true)
   // True when this run's rawCount is < 50% of the source's 14-day rolling
   // median AND ≥7 succeeded runs exist in the window AND median ≥5. The
   // cold-start guard prevents false positives during low-data periods and
   // immediately after a coverage-fix volume jump retrains the median.
-  coverageAnomaly Boolean   @default(false)
+  coverageAnomaly Boolean     @default(false)
 
   @@index([source, startedAt])
   @@index([startedAt])
@@ -563,6 +563,10 @@ model UserItemStatus {
 
   status ItemStatus
   source FeedbackSource @default(LEGACY)
+
+  // Wave 2 Beli: optional 1–5 rating captured alongside DONE ("been there").
+  // Null = marked done without a rating.
+  rating Int?
 
   // Denormalized snapshot — survives item/discovery/event/place deletion
   itemTitleSnapshot    String?
@@ -1355,6 +1359,12 @@ model Place {
   // Hype/buzz signals
   buzzScore       Int @default(0) // Social media mentions, saves, etc.
   preOpeningSaves Int @default(0) // How many users saved before opening
+
+  // Wave 2 Beli — Pulse community rating, aggregated from UserItemStatus.rating
+  // on this place. Recomputed transactionally on each rating write; the average
+  // is pulseRatingSum / pulseRatingCount (guard count > 0).
+  pulseRatingSum   Int @default(0)
+  pulseRatingCount Int @default(0)
 
   // Additional info for upcoming places
   sneakPeekInfo      String? // "From the team behind XYZ..."

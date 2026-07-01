@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { similarPlaces } from "@/lib/detail/similar";
 import PlaceDetailPage from "@/components/detail/PlaceDetailPage";
 import DetailFeedback from "@/components/feedback/DetailFeedback";
+import PlaceRating from "@/components/feedback/PlaceRating";
 import { getFeedbackMaps } from "@/lib/feedback/server";
 
 interface PageProps {
@@ -55,6 +56,16 @@ export default async function PlacePage({ params }: PageProps) {
   });
   const feedbackStatus = byPlaceId.get(place.id) ?? null;
 
+  // Wave 2 Beli — this user's own rating + the place's aggregate.
+  const myStatus = session?.user?.id
+    ? await prisma.userItemStatus.findUnique({
+        where: { userId_placeId: { userId: session.user.id, placeId: place.id } },
+        select: { rating: true },
+      })
+    : null;
+  const ratingAvg =
+    place.pulseRatingCount > 0 ? place.pulseRatingSum / place.pulseRatingCount : null;
+
   return (
     <>
       <div className="mx-auto flex max-w-3xl justify-end px-5 pt-3">
@@ -63,6 +74,14 @@ export default async function PlacePage({ params }: PageProps) {
           itemTitle={place.name}
           shareUrl={`/places/${place.id}`}
           initialStatus={feedbackStatus}
+        />
+      </div>
+      <div className="mx-auto max-w-3xl px-5 pt-3">
+        <PlaceRating
+          placeId={place.id}
+          initialRating={myStatus?.rating ?? null}
+          ratingCount={place.pulseRatingCount}
+          ratingAvg={ratingAvg}
         />
       </div>
       <PlaceDetailPage

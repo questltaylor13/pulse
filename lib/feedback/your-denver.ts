@@ -17,6 +17,7 @@ export interface DoneItem {
   town: string | null;
   neighborhood: string | null;
   imageUrl: string | null;
+  rating: number | null;   // Wave 2 Beli — 1–5 rating if given
   doneAt: Date;             // UserItemStatus.createdAt
 }
 
@@ -30,6 +31,7 @@ export async function fetchDoneItems(userId: string): Promise<DoneItem[]> {
       eventId: true,
       placeId: true,
       discoveryId: true,
+      rating: true,
       itemTitleSnapshot: true,
       itemCategorySnapshot: true,
       itemTownSnapshot: true,
@@ -58,6 +60,7 @@ export async function fetchDoneItems(userId: string): Promise<DoneItem[]> {
           category: true,
           neighborhood: true,
           townName: true,
+          primaryImageUrl: true,
         },
       },
       discovery: {
@@ -83,6 +86,7 @@ export async function fetchDoneItems(userId: string): Promise<DoneItem[]> {
         town: row.event.townName ?? null,
         neighborhood: row.event.neighborhood ?? null,
         imageUrl: row.event.imageUrl ?? null,
+        rating: row.rating,
         doneAt: row.createdAt,
       });
     } else if (row.place) {
@@ -94,7 +98,8 @@ export async function fetchDoneItems(userId: string): Promise<DoneItem[]> {
         category: row.place.category,
         town: row.place.townName ?? null,
         neighborhood: row.place.neighborhood ?? null,
-        imageUrl: null,
+        imageUrl: row.place.primaryImageUrl ?? null,
+        rating: row.rating,
         doneAt: row.createdAt,
       });
     } else if (row.discovery) {
@@ -107,6 +112,7 @@ export async function fetchDoneItems(userId: string): Promise<DoneItem[]> {
         town: row.discovery.townName ?? null,
         neighborhood: row.discovery.neighborhood ?? null,
         imageUrl: null,
+        rating: row.rating,
         doneAt: row.createdAt,
       });
     } else if (row.item) {
@@ -120,6 +126,7 @@ export async function fetchDoneItems(userId: string): Promise<DoneItem[]> {
         town: null,
         neighborhood: row.item.neighborhood ?? null,
         imageUrl: row.item.imageUrl ?? null,
+        rating: row.rating,
         doneAt: row.createdAt,
       });
     } else {
@@ -133,6 +140,7 @@ export async function fetchDoneItems(userId: string): Promise<DoneItem[]> {
         town: row.itemTownSnapshot ?? null,
         neighborhood: null,
         imageUrl: null,
+        rating: row.rating,
         doneAt: row.createdAt,
       });
     }

@@ -140,6 +140,12 @@ function DoneCard({ item }: { item: DoneItem }) {
         {locationLine && (
           <p className="truncate text-xs text-slate-500">{locationLine}</p>
         )}
+        {item.rating != null && (
+          <p className="text-xs text-amber-500" aria-label={`Rated ${item.rating} out of 5`}>
+            {"★".repeat(item.rating)}
+            <span className="text-slate-300">{"★".repeat(5 - item.rating)}</span>
+          </p>
+        )}
         <p className="mt-auto text-[11px] text-slate-400">
           Been since {formatDoneAt(item.doneAt)}
         </p>
