@@ -226,6 +226,8 @@ function iconFor(factor: string): string {
       return "✨";
     case "unprofiled":
       return "⭐";
+    case "starts_soon":
+      return "⏰";
     default:
       return "•";
   }

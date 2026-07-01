@@ -33,6 +33,7 @@ const RENDERERS: Record<string, Renderer> = {
       : "Similar to something you marked Interested",
   pass_similarity: () => "Similar to things you've passed on",
   recency: () => "Just added — fresh this week",
+  starts_soon: () => "Happening soon",
   budget_penalty: () => "A little above your usual budget",
   novelty: () => "Different from your usual",
   serendipity: () => "Outside your usual — curious?",
