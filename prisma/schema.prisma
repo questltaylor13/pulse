@@ -743,6 +743,21 @@ model GooglePlacesCache {
   @@index([expiresAt])
 }
 
+// Wave 3 — durable geocode cache keyed by normalizeVenueName(venueName).
+// No expiry (venue coords are stable) and NEGATIVE caching (status="failed")
+// so un-geocodable names are never retried. The cleanup-cache cron must NOT
+// touch this table — it only prunes GooglePlacesCache by expiresAt.
+model GeocodeCache {
+  id               String   @id @default(cuid())
+  normalizedName   String   @unique // normalizeVenueName(event.venueName)
+  lat              Float?
+  lng              Float?
+  formattedAddress String?
+  locationType     String? // ROOFTOP|RANGE_INTERPOLATED|GEOMETRIC_CENTER|APPROXIMATE (partial_match downgraded to APPROXIMATE)
+  status           String // "ok" | "failed"
+  createdAt        DateTime @default(now())
+}
+
 // Legacy: Want to do / Done status per user per event
 model EventUserStatus {
   id        String          @id @default(cuid())
