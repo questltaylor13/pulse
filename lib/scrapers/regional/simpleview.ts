@@ -240,6 +240,34 @@ export const SIMPLEVIEW_FEEDS: SimpleviewScraperConfig[] = [
       OUTDOORS: ["bike", "ski", "snowboard", "race", "rodeo", "hot spring"],
     },
   },
+  // Wave 3 — Front Range expansion. Uncomment ONLY after curl-verifying that
+  // the /event/rss/ endpoint returns future-dated <item>s (an unverified feed
+  // registers a zero-count source and trips the coverage-anomaly alert).
+  {
+    source: "fort-collins",
+    feedUrl: "https://www.visitftcollins.com/event/rss/",
+    town: "Fort Collins",
+    venueName: "See Visit Fort Collins listing",
+    descriptionFallback: "Featured via Visit Fort Collins.",
+    priceRange: "$$",
+    extraCategoryKeywords: {
+      FOOD: ["brewery", "beer"],
+      OUTDOORS: ["recreation", "poudre", "horsetooth"],
+    },
+  },
+  // Colorado Springs: curl 2026-07-01 returned HTML (https://www.visitcos.com/event/rss/
+  // redirects to the site homepage, not an RSS feed). Left commented — unverified.
+  // {
+  //   source: "colorado-springs",
+  //   feedUrl: "https://www.visitcos.com/event/rss/",
+  //   town: "Colorado Springs",
+  //   venueName: "See Visit Colorado Springs listing",
+  //   descriptionFallback: "Featured via Visit Colorado Springs.",
+  //   priceRange: "$$",
+  //   extraCategoryKeywords: {
+  //     OUTDOORS: ["recreation", "garden of the gods", "pikes peak", "hike"],
+  //   },
+  // },
 ];
 
 export const _internals = {
