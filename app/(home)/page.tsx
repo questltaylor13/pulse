@@ -11,6 +11,7 @@ import GuidesTabBody from "@/components/home/GuidesTabBody";
 import EventsTabSkeleton from "@/components/home/EventsTabSkeleton";
 import NoticeToast from "@/components/home/NoticeToast";
 import ProfileCompletionStrip from "@/components/feedback/ProfileCompletionStrip";
+import NewUserSwiperNudge from "@/components/feedback/NewUserSwiperNudge";
 import TasteSwiper from "@/components/feedback/TasteSwiper";
 import { fetchHomeFeed, fetchPlacesFeed, fetchGuidesFeed } from "@/components/home/fetch-home-feed";
 import { fetchForYouFeed } from "@/components/home/fetch-for-you-feed";
@@ -171,6 +172,9 @@ async function HomeBody({
   // so SSR doesn't ship DOM when it shouldn't show (clean no-flash render).
   let showCompletionStrip = false;
   let completionPct = 0;
+  // Wave 2 — auto-open the taste swiper once for a brand-new user (onboarding
+  // done, no feedback yet) to seed cold-start personalization.
+  let autoOpenSwiper = false;
   if (userId) {
     const [userRow, feedbackCount] = await Promise.all([
       prisma.user.findUnique({
@@ -179,6 +183,7 @@ async function HomeBody({
       }),
       prisma.userItemStatus.count({ where: { userId } }),
     ]);
+    autoOpenSwiper = Boolean(userRow?.onboardingComplete) && feedbackCount === 0;
     completionPct = calculateCompletion({
       onboardingComplete: Boolean(userRow?.onboardingComplete),
       feedbackCount,
@@ -242,6 +247,7 @@ async function HomeBody({
       {showCompletionStrip && (
         <ProfileCompletionStrip completion={completionPct} />
       )}
+      <NewUserSwiperNudge eligible={autoOpenSwiper} />
       <div className="flex-1" id={`panel-${tab}`} role="tabpanel">
         {tab === "foryou" && forYouData && (
           <ForYouTabBody data={forYouData} feedbackMaps={feedbackMaps} />
