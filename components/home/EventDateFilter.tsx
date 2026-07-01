@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 interface Props {
@@ -104,6 +105,13 @@ export default function EventDateFilter({ value, minDate }: Props) {
         aria-hidden="true"
         tabIndex={-1}
       />
+      <Link
+        href="/events/calendar"
+        className="shrink-0 rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] font-medium text-mute transition-colors hover:text-ink"
+        aria-label="Browse the month calendar"
+      >
+        📅 Calendar
+      </Link>
     </div>
   );
 }
