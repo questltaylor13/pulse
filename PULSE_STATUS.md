@@ -15,9 +15,7 @@ Living doc for session handoff. Last rebuilt 2026-04-19 after PRD 2 Phase 7 veri
 **Regional** (same daily cron as core; the per-tier cadence in PRD 2 §1.5 is a future refinement):
 - `chautauqua` — regional/chautauqua.ts (Tribe DOM, Boulder)
 - `pikes-peak-center` — regional/pikes-peak-center.ts (RSS with `<ev:startdate>`, Colorado Springs)
-- `visit-estes-park` — regional/visit-estes-park.ts (Simpleview RSS)
-- `visit-golden` — regional/visit-golden.ts (Simpleview RSS)
-- `visit-steamboat-chamber` — regional/visit-steamboat-chamber.ts (Simpleview RSS)
+- `visit-estes-park` / `visit-golden` / `visit-steamboat-chamber` / `fort-collins` — regional/simpleview.ts (Wave 3 Simpleview RSS factory: `makeSimpleviewScraper` + `SIMPLEVIEW_FEEDS`; Colorado Springs staged but commented — its feed returns HTML, not RSS)
 
 **API-gated** (not configured):
 - `ticketmaster` — requires `TICKETMASTER_API_KEY`

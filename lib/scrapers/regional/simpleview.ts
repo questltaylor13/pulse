@@ -240,9 +240,11 @@ export const SIMPLEVIEW_FEEDS: SimpleviewScraperConfig[] = [
       OUTDOORS: ["bike", "ski", "snowboard", "race", "rodeo", "hot spring"],
     },
   },
-  // Wave 3 — Front Range expansion. Uncomment ONLY after curl-verifying that
-  // the /event/rss/ endpoint returns future-dated <item>s (an unverified feed
-  // registers a zero-count source and trips the coverage-anomaly alert).
+  // Wave 3 — Front Range expansion. Fort Collins is verified & active (curl
+  // 2026-07-01 returned future-dated <item>s). Add further Front Range towns
+  // ONLY after curl-verifying their /event/rss/ returns future-dated <item>s —
+  // an unverified feed registers a zero-count source and trips the coverage
+  // anomaly alert (see the commented Colorado Springs example below).
   {
     source: "fort-collins",
     feedUrl: "https://www.visitftcollins.com/event/rss/",
