@@ -10,27 +10,16 @@ import {
 import { isForYouEnabled } from "@/lib/ranking/flags";
 import {
   activeEventsWhere,
-  endOfTodayLocal,
   regionalScopeWhere,
   regionalScopePlaceWhere,
-  upcomingWeekendRange,
   type RegionalScope,
 } from "@/lib/queries/events";
 import { addDaysDenver } from "@/lib/time/denver";
+import { bucketByHorizon, type ForYouMixedItem } from "@/lib/home/for-you-buckets";
 import type {
-  EventCompact,
-  PlaceCompact,
   ForYouFeedResponse,
   ForYouSection,
 } from "@/lib/home/types";
-
-type MixedItem =
-  | ({ kind: "event" } & EventCompact)
-  | ({ kind: "place" } & PlaceCompact);
-
-function startMs(item: MixedItem): number | null {
-  return item.kind === "event" ? new Date(item.startTime).getTime() : null;
-}
 
 /**
  * The personalized "For You" landing feed: a blended, ranked feed of
@@ -47,24 +36,18 @@ export async function fetchForYouFeed(
   userId?: string | null,
 ): Promise<ForYouFeedResponse> {
   const now = new Date();
-  const nowMs = now.getTime();
-  const eodMs = endOfTodayLocal(now).getTime();
-  const { start: wkStart, end: wkEnd } = upcomingWeekendRange(now);
-  const wkStartMs = wkStart.getTime();
-  const wkEndMs = wkEnd.getTime();
-  const twoWeeksOut = addDaysDenver(now, 14);
-  const twoWeeksMs = twoWeeksOut.getTime();
+  const horizonEnd = addDaysDenver(now, 21);
 
   const ranked =
     userId && isForYouEnabled()
       ? await getRankedFeedHydrated(userId, { scope, limit: 200 }).catch(() => null)
       : null;
 
-  let allItems: MixedItem[];
+  let allItems: ForYouMixedItem[];
   let personalized: boolean;
 
   if (ranked && ranked.length > 0) {
-    // RankedFeedItem carries extra score/reasons but is structurally a MixedItem.
+    // RankedFeedItem carries extra score/reasons but is structurally a ForYouMixedItem.
     personalized = true;
     allItems = ranked;
   } else {
@@ -75,7 +58,7 @@ export async function fetchForYouFeed(
           AND: [
             activeEventsWhere(now),
             regionalScopeWhere(scope),
-            { startTime: { gte: now, lte: twoWeeksOut } },
+            { startTime: { gte: now, lte: horizonEnd } },
           ],
         },
         select: EVENT_SELECT,
@@ -101,17 +84,8 @@ export async function fetchForYouFeed(
     ];
   }
 
-  const events = allItems.filter((i) => i.kind === "event");
+  const { tonight, weekend, nextWeek, comingUp } = bucketByHorizon(allItems, now);
   const places = allItems.filter((i) => i.kind === "place");
-
-  const inWindow = (i: MixedItem, lo: number, hi: number) => {
-    const t = startMs(i);
-    return t !== null && t >= lo && t <= hi;
-  };
-
-  const tonight = events.filter((e) => inWindow(e, nowMs, eodMs));
-  const weekend = events.filter((e) => inWindow(e, Math.max(eodMs, wkStartMs), wkEndMs));
-  const comingUp = events.filter((e) => inWindow(e, wkEndMs, twoWeeksMs));
 
   const sections: ForYouSection[] = [];
 
@@ -138,6 +112,14 @@ export async function fetchForYouFeed(
       title: "This weekend",
       subtitle: "Plans worth blocking off",
       items: weekend.slice(0, 12),
+    });
+  }
+  if (nextWeek.length > 0) {
+    sections.push({
+      id: "next-week",
+      title: "Next week",
+      subtitle: "Get a head start",
+      items: nextWeek.slice(0, 12),
     });
   }
   if (comingUp.length > 0) {
