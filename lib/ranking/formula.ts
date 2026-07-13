@@ -89,6 +89,18 @@ export function score(
   const passPenalty = computePassSimilarity(ctx, item, config);
   if (passPenalty.contribution !== 0) reasons.push(passPenalty.reason);
 
+  // ---- Wave 4: LIKED ranked-entry similarity (additive, cap 0.60) --------
+  const lovedBoost = computeLovedSimilarity(ctx, item, config);
+  if (lovedBoost.contribution !== 0) reasons.push(lovedBoost.reason);
+
+  // ---- Wave 4: DISLIKED ranked-entry similarity (penalty, cap 0.60) ------
+  const dislikedPenalty = computeDislikedSimilarity(ctx, item, config);
+  if (dislikedPenalty.contribution !== 0) reasons.push(dislikedPenalty.reason);
+
+  // ---- Wave 4: rated category affinity (signed, ±0.25) -------------------
+  const affinityBoost = computeCategoryAffinityBoost(ctx, item, config);
+  if (affinityBoost.contribution !== 0) reasons.push(affinityBoost.reason);
+
   // ---- Q4 budget penalty (additive penalty) ------------------------------
   const budgetPenalty = computeBudgetPenalty(profile.budgetTier, item.priceTier, config);
   if (budgetPenalty.contribution !== 0) reasons.push(budgetPenalty.reason);
@@ -111,6 +123,9 @@ export function score(
       (vibeBoost.contribution + aspirationBoost.contribution + socialBoost.contribution) +
     wantBoost.contribution +
     passPenalty.contribution + // already signed negative when present
+    lovedBoost.contribution +
+    dislikedPenalty.contribution + // signed negative when present
+    affinityBoost.contribution + // signed either way
     budgetPenalty.contribution +
     recencyBoost.contribution +
     startsSoonBoost.contribution;
@@ -270,6 +285,88 @@ function computePassSimilarity(
   const magnitude = clamp(total, 0, cap);
   const contribution = -magnitude;
   const reason = renderReason("pass_similarity", contribution);
+  return { contribution, reason };
+}
+
+// ---------------------------------------------------------------------------
+// Wave 4 Rate & Rank — rated-entry signals (plan decision D8)
+//
+// Loved/disliked come from CONFIRMED visits (DONE + sentiment), so their
+// caps deliberately exceed wantSim (+0.40) / passSim (−0.50). Each match is
+// weighted by how strongly the user rated it: a 9.4 spot pulls harder than
+// a 6.8. Weight = 0.4 + 0.6 × score/10 (inverse for dislikes) so even a
+// low-scored LIKED still contributes ≥40% of a full match.
+// ---------------------------------------------------------------------------
+
+const RATED_PER_MATCH = 0.35;
+
+function ratedScoreWeight(score010: number): number {
+  return 0.4 + 0.6 * clamp(score010 / 10, 0, 1);
+}
+
+function computeLovedSimilarity(
+  ctx: RankingContext,
+  item: RankableItem,
+  config: RankingConfig,
+): { contribution: number; reason: ScoreReason } {
+  const cap = config.weights.lovedSimilarity;
+  let total = 0;
+  let bestTitle: string | null = null;
+  let bestMatch = 0;
+
+  for (const loved of ctx.lovedItems ?? []) {
+    if (loved.itemId === item.itemId) continue;
+    const match =
+      RATED_PER_MATCH *
+      overlapWeight(tagOverlap(loved.tags, item.tags)) *
+      ratedScoreWeight(loved.score);
+    total += match;
+    if (match > bestMatch) {
+      bestMatch = match;
+      bestTitle = loved.title;
+    }
+  }
+
+  const contribution = clamp(total, 0, cap);
+  const reason = renderReason(
+    "loved_similarity",
+    contribution,
+    bestTitle ? [bestTitle] : undefined,
+  );
+  return { contribution, reason };
+}
+
+function computeDislikedSimilarity(
+  ctx: RankingContext,
+  item: RankableItem,
+  config: RankingConfig,
+): { contribution: number; reason: ScoreReason } {
+  const cap = config.weights.dislikedSimilarity;
+  let total = 0;
+
+  for (const disliked of ctx.dislikedItems ?? []) {
+    if (disliked.itemId === item.itemId) continue;
+    total +=
+      RATED_PER_MATCH *
+      overlapWeight(tagOverlap(disliked.tags, item.tags)) *
+      ratedScoreWeight(10 - disliked.score); // worse rating → stronger signal
+  }
+
+  const contribution = -clamp(total, 0, cap);
+  const reason = renderReason("disliked_similarity", contribution);
+  return { contribution, reason };
+}
+
+function computeCategoryAffinityBoost(
+  ctx: RankingContext,
+  item: RankableItem,
+  config: RankingConfig,
+): { contribution: number; reason: ScoreReason } {
+  const affinity = item.category
+    ? (ctx.ratedCategoryAffinity?.[item.category] ?? 0)
+    : 0;
+  const contribution = clamp(affinity, -1, 1) * config.weights.categoryAffinity;
+  const reason = renderReason("category_affinity", contribution);
   return { contribution, reason };
 }
 

@@ -104,6 +104,28 @@ export interface RankingContext {
   familiarity: Record<string, number>;
   /** Ranking variant — used by variants.ts to pick config overrides. */
   variant: RankingVariantKey;
+  // -- Wave 4 Rate & Rank signals (optional: absent/empty when
+  //    RATE_RANK_ENABLED is off ⇒ scores are provably unchanged) ------------
+  /** LIKED ranked entries with tags + derived 0–10 score + display title. */
+  lovedItems?: RatedItemSignal[];
+  /** DISLIKED ranked entries — the ground-truth negative signal. */
+  dislikedItems?: RatedItemSignal[];
+  /**
+   * Per CONTENT category (the enum on RankableItem.category):
+   * clamp((liked − disliked) / max(rated, 3), −1, 1). FINE counts only in
+   * the denominator.
+   */
+  ratedCategoryAffinity?: Record<string, number>;
+}
+
+/** One rated item's contribution shape (Wave 4). */
+export interface RatedItemSignal {
+  itemId: string;
+  tags: string[];
+  /** Derived rank-engine score, 0–10. */
+  score: number;
+  /** Display title for "Because you loved {title}" why-lines. */
+  title: string | null;
 }
 
 /** Q3 vibe pair selections. Shape matches UserProfile.vibePreferences Json. */

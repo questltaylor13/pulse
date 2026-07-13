@@ -7,7 +7,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import type { RankingContext, RankingVariantKey, VibePair } from "./types";
+import type { RankingContext, RankingVariantKey, RatedItemSignal, VibePair } from "./types";
+import { isRateRankEnabled } from "./flags";
 
 /**
  * Fetches the user + profile + feedback summary and assembles a
@@ -95,6 +96,66 @@ export async function buildRankingContext(userId: string): Promise<RankingContex
     }
   }
 
+  // Wave 4 Rate & Rank — rated-entry signals (decision D8). Gated on the
+  // flag so flag-off yields empty signals and provably unchanged scores.
+  // Loved/disliked come from DONE rows, so they never double-count with
+  // wantItems (WANT only). Recomputed per build; per-user entry counts are
+  // tiny (hundreds max), so this is one cheap indexed query.
+  const lovedItems: RatedItemSignal[] = [];
+  const dislikedItems: RatedItemSignal[] = [];
+  const ratedCategoryAffinity: Record<string, number> = {};
+  if (isRateRankEnabled()) {
+    const entries = await prisma.userRankedEntry.findMany({
+      where: { userId },
+      select: {
+        sentiment: true,
+        score: true,
+        titleSnapshot: true,
+        categorySnapshot: true,
+        eventId: true,
+        placeId: true,
+        discoveryId: true,
+        event: { select: { category: true, tags: true, vibeTags: true, companionTags: true, occasionTags: true } },
+        place: { select: { category: true, tags: true, vibeTags: true, companionTags: true, goodForTags: true } },
+        discovery: { select: { category: true, tags: true } },
+      },
+    });
+
+    const perCategory = new Map<string, { liked: number; disliked: number; rated: number }>();
+    for (const entry of entries) {
+      const itemId = entry.eventId ?? entry.placeId ?? entry.discoveryId;
+      const tags = extractTags(entry);
+      const signal: RatedItemSignal = {
+        itemId: itemId ?? "",
+        tags,
+        score: entry.score,
+        title: entry.titleSnapshot,
+      };
+      if (itemId) {
+        if (entry.sentiment === "LIKED") lovedItems.push(signal);
+        else if (entry.sentiment === "DISLIKED") dislikedItems.push(signal);
+      }
+
+      const category =
+        entry.event?.category ??
+        entry.place?.category ??
+        entry.discovery?.category ??
+        entry.categorySnapshot ??
+        null;
+      if (category) {
+        const counts = perCategory.get(category) ?? { liked: 0, disliked: 0, rated: 0 };
+        counts.rated += 1; // FINE counts in the denominator only
+        if (entry.sentiment === "LIKED") counts.liked += 1;
+        else if (entry.sentiment === "DISLIKED") counts.disliked += 1;
+        perCategory.set(category, counts);
+      }
+    }
+    for (const [category, counts] of perCategory) {
+      const raw = (counts.liked - counts.disliked) / Math.max(counts.rated, 3);
+      ratedCategoryAffinity[category] = Math.max(-1, Math.min(1, raw));
+    }
+  }
+
   const msInDay = 24 * 60 * 60 * 1000;
   const accountAgeDays = Math.max(
     0,
@@ -120,6 +181,9 @@ export async function buildRankingContext(userId: string): Promise<RankingContex
     doneItemIds,
     familiarity,
     variant: (user.rankingVariant ?? "control") as RankingVariantKey,
+    lovedItems,
+    dislikedItems,
+    ratedCategoryAffinity,
   };
 }
 

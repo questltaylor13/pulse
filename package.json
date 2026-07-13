@@ -19,6 +19,8 @@
     "places:backfill-regions": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/backfill-place-regions.ts",
     "events:backfill-places": "npx ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"CommonJS\"}' scripts/backfill-event-places.ts",
     "events:backfill-geocodes": "npx ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"CommonJS\"}' scripts/backfill-event-geocodes.ts",
+    "rank:backfill": "npx ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"CommonJS\"}' scripts/backfill-ranked-entries.ts",
+    "rank:repair": "npx ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"CommonJS\"}' scripts/recompute-rank-scores.ts",
     "events:enrich": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/enrich-events.ts",
     "discoveries:seed": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/seed-discoveries.ts",
     "discoveries:research": "npx ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"CommonJS\"}' scripts/run-discovery-research.ts",

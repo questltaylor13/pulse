@@ -3,9 +3,9 @@
 import { useState } from "react";
 import type { ItemStatus } from "@prisma/client";
 import type { FeedbackRef } from "@/lib/feedback/types";
-import { isEventRef, isPlaceRef, isDiscoveryRef } from "@/lib/feedback/types";
+import { resolveContentRef, resolveItemTarget } from "@/lib/feedback/types";
 import { useFeedback } from "@/lib/feedback/hooks";
-import type { RankedItemType } from "@/lib/ranking/types";
+import { useRankFlow } from "@/components/rank/RankFlowProvider";
 import ActionSheet from "./ActionSheet";
 import WhyThisSheet from "./WhyThisSheet";
 
@@ -33,18 +33,37 @@ export default function CardMoreMenu({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [whyOpen, setWhyOpen] = useState(false);
-  const { status, submitting, errorMessage, upsert } = useFeedback({
-    ref: ref_,
-    initialStatus,
-  });
+  const { status, submitting, errorMessage, upsert, setStatusLocal } =
+    useFeedback({
+      ref: ref_,
+      initialStatus,
+    });
+  const rankFlow = useRankFlow();
 
   // PRD 6 Phase 4 — derive itemType + itemId from the FeedbackRef for the
   // "Why am I seeing this?" path. Legacy itemRef (Item bridge) has no
   // ranking cache entry so we hide the Why row for those.
-  const whyTarget = resolveWhyTarget(ref_);
+  const whyTarget = resolveItemTarget(ref_);
 
   const handleSelect = async (next: ItemStatus) => {
     const prev = status;
+    // Wave 4 Rate & Rank — "I've been there" routes through the sentiment/
+    // duel flow when the flag is on. Legacy Item-bridge refs fall through to
+    // the plain DONE write (the rank engine is content-native only).
+    const rankRef = resolveContentRef(ref_);
+    if (next === "DONE" && rankFlow.enabled && rankRef) {
+      setOpen(false);
+      rankFlow.openRankFlow({
+        ref: rankRef,
+        itemTitle,
+        source: "FEED_CARD",
+        onCompleted: () => {
+          setStatusLocal("DONE");
+          if (prev !== "DONE") onRemove?.();
+        },
+      });
+      return;
+    }
     const result = await upsert(next, "FEED_CARD");
     if (!result.ok) return; // Error surfaced in-sheet by the hook
     setOpen(false);
@@ -122,9 +141,3 @@ export default function CardMoreMenu({
   );
 }
 
-function resolveWhyTarget(ref: FeedbackRef): { itemType: RankedItemType; itemId: string } | null {
-  if (isEventRef(ref)) return { itemType: "event", itemId: ref.eventId };
-  if (isPlaceRef(ref)) return { itemType: "place", itemId: ref.placeId };
-  if (isDiscoveryRef(ref)) return { itemType: "discovery", itemId: ref.discoveryId };
-  return null;
-}

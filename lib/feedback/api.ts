@@ -20,6 +20,8 @@ import type {
 } from "@prisma/client";
 import { markDirty } from "@/lib/ranking/cache";
 import { triggerUserRerank } from "@/lib/ranking/rerank-trigger";
+// ordering.ts only (never service.ts, which imports this module) — no cycle.
+import { removeRankedEntryForRef, type RankRef } from "@/lib/rank-engine/ordering";
 import type { FeedbackRef } from "./types";
 import {
   isDiscoveryRef,
@@ -135,8 +137,10 @@ function afterWrite<T>(
  * Recompute a place's Pulse rating aggregate from its UserItemStatus rows.
  * Recomputed from source (not incremented) so it never drifts across rating
  * changes/removals. Best-effort — a failure must not fail the feedback write.
+ * Exported for lib/rank-engine/service.ts, which refines the bridge star
+ * after a placement lands.
  */
-async function recomputePlaceRating(placeId: string): Promise<void> {
+export async function recomputePlaceRating(placeId: string): Promise<void> {
   try {
     const agg = await prisma.userItemStatus.aggregate({
       where: { placeId, rating: { not: null } },
@@ -211,6 +215,16 @@ export async function deleteFeedback(params: {
   ref: FeedbackRef;
 }): Promise<number> {
   const { userId, ref } = params;
+  // Wave 4 — retracting a DONE must also retract its ranked entry, or the
+  // item lingers in /rankings after the visit itself was undone. Best-effort:
+  // the status delete is the primary operation.
+  const retractRankedEntry = async (rankRef: RankRef): Promise<void> => {
+    try {
+      await removeRankedEntryForRef(userId, rankRef);
+    } catch (err) {
+      console.warn("[feedback.retractRankedEntry] failed:", err);
+    }
+  };
   const runDelete = async (where: Prisma.UserItemStatusWhereInput): Promise<number> => {
     const count = (await prisma.userItemStatus.deleteMany({ where })).count;
     try { await markDirty(userId); } catch (err) { console.warn("[feedback.markDirty] failed:", err); }
@@ -219,12 +233,21 @@ export async function deleteFeedback(params: {
     return count;
   };
   if (isItemRef(ref)) return runDelete({ userId, itemId: ref.itemId });
-  if (isEventRef(ref)) return runDelete({ userId, eventId: ref.eventId });
+  if (isEventRef(ref)) {
+    const count = await runDelete({ userId, eventId: ref.eventId });
+    await retractRankedEntry({ eventId: ref.eventId });
+    return count;
+  }
   if (isPlaceRef(ref)) {
     const count = await runDelete({ userId, placeId: ref.placeId });
+    await retractRankedEntry({ placeId: ref.placeId });
     await recomputePlaceRating(ref.placeId); // removing DONE may drop a rating
     return count;
   }
-  if (isDiscoveryRef(ref)) return runDelete({ userId, discoveryId: ref.discoveryId });
+  if (isDiscoveryRef(ref)) {
+    const count = await runDelete({ userId, discoveryId: ref.discoveryId });
+    await retractRankedEntry({ discoveryId: ref.discoveryId });
+    return count;
+  }
   throw new Error("deleteFeedback: ref missing valid id");
 }

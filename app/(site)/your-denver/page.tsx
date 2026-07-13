@@ -8,6 +8,13 @@ import {
   CATEGORY_COLORS,
 } from "@/lib/constants/categories";
 import { fetchDoneItems, type DoneItem } from "@/lib/feedback/your-denver";
+import { fetchRatePrompts } from "@/lib/rank-engine/prompts";
+import { isRateRankEnabled } from "@/lib/ranking/flags";
+import { prisma } from "@/lib/prisma";
+import type { RankSentiment } from "@prisma/client";
+import RatePromptCard from "@/components/rank/RatePromptCard";
+import RankItButton from "@/components/rank/RankItButton";
+import { SENTIMENT_SCORE_CLASSES } from "@/components/rank/types";
 import YourDenverFilters from "./YourDenverFilters";
 
 // PRD 5 §4 — Your Denver history view.
@@ -51,6 +58,35 @@ export default async function YourDenverPage({ searchParams }: PageProps) {
   const kindFilter = params.kind ?? "all";
 
   const allDone = await fetchDoneItems(session.user.id);
+
+  // Wave 4 Rate & Rank — rate-your-recent prompts + ranked-entry chips.
+  const rateRankOn = isRateRankEnabled();
+  const [prompts, rankedEntries] = rateRankOn
+    ? await Promise.all([
+        fetchRatePrompts(session.user.id),
+        prisma.userRankedEntry.findMany({
+          where: { userId: session.user.id },
+          select: {
+            eventId: true,
+            placeId: true,
+            discoveryId: true,
+            score: true,
+            sentiment: true,
+          },
+        }),
+      ])
+    : [[], []];
+  const rankedByRef = new Map<string, { score: number; sentiment: RankSentiment }>();
+  for (const e of rankedEntries) {
+    const key = e.eventId
+      ? `event:${e.eventId}`
+      : e.placeId
+        ? `place:${e.placeId}`
+        : e.discoveryId
+          ? `discovery:${e.discoveryId}`
+          : null;
+    if (key) rankedByRef.set(key, { score: e.score, sentiment: e.sentiment });
+  }
   const counts = {
     all: allDone.length,
     event: allDone.filter((i) => i.kind === "event").length,
@@ -78,7 +114,23 @@ export default async function YourDenverPage({ searchParams }: PageProps) {
             ? "Mark things you've been to — we'll keep track here."
             : `${counts.place} places · ${counts.event} events · ${counts.discovery} hidden gems`}
         </p>
+        {rateRankOn && (
+          <Link
+            href="/rankings"
+            className="inline-block text-sm font-medium text-coral underline-offset-2 hover:underline"
+          >
+            Your rankings →
+          </Link>
+        )}
       </header>
+
+      {prompts.length > 0 && (
+        <div className="space-y-2">
+          {prompts.map((p) => (
+            <RatePromptCard key={p.statusId} prompt={p} />
+          ))}
+        </div>
+      )}
 
       {counts.all === 0 ? (
         <EmptyState />
@@ -87,7 +139,16 @@ export default async function YourDenverPage({ searchParams }: PageProps) {
           <YourDenverFilters counts={counts} />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {visible.map((item) => (
-              <DoneCard key={item.statusId} item={item} />
+              <DoneCard
+                key={item.statusId}
+                item={item}
+                ranked={
+                  item.sourceId
+                    ? (rankedByRef.get(`${item.kind}:${item.sourceId}`) ?? null)
+                    : null
+                }
+                rateRankOn={rateRankOn}
+              />
             ))}
           </div>
           {visible.length === 0 && (
@@ -101,8 +162,23 @@ export default async function YourDenverPage({ searchParams }: PageProps) {
   );
 }
 
-function DoneCard({ item }: { item: DoneItem }) {
+function DoneCard({
+  item,
+  ranked,
+  rateRankOn,
+}: {
+  item: DoneItem;
+  ranked: { score: number; sentiment: RankSentiment } | null;
+  rateRankOn: boolean;
+}) {
   const href = hrefForItem(item);
+  const rankRef = item.sourceId
+    ? item.kind === "event"
+      ? { eventId: item.sourceId }
+      : item.kind === "place"
+        ? { placeId: item.sourceId }
+        : { discoveryId: item.sourceId }
+    : null;
   const locationLine = [item.neighborhood, item.town].filter(Boolean).join(" · ");
   const body = (
     <article className="flex h-full flex-col gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-purple-300 hover:shadow-md">
@@ -140,11 +216,33 @@ function DoneCard({ item }: { item: DoneItem }) {
         {locationLine && (
           <p className="truncate text-xs text-slate-500">{locationLine}</p>
         )}
-        {item.rating != null && (
-          <p className="text-xs text-amber-500" aria-label={`Rated ${item.rating} out of 5`}>
-            {"★".repeat(item.rating)}
-            <span className="text-slate-300">{"★".repeat(5 - item.rating)}</span>
+        {/* Wave 4 — ranked score chip replaces stars once an entry exists;
+            unranked DONEs keep their legacy stars (history never looks
+            lost) AND get a "Rank it" CTA behind the flag. */}
+        {ranked ? (
+          <p>
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${SENTIMENT_SCORE_CLASSES[ranked.sentiment]}`}
+            >
+              {ranked.score.toFixed(1)}
+            </span>
           </p>
+        ) : (
+          <>
+            {item.rating != null && (
+              <p className="text-xs text-amber-500" aria-label={`Rated ${item.rating} out of 5`}>
+                {"★".repeat(item.rating)}
+                <span className="text-slate-300">{"★".repeat(5 - item.rating)}</span>
+              </p>
+            )}
+            {rateRankOn && rankRef && (
+              <RankItButton
+                refObj={rankRef}
+                itemTitle={item.title}
+                itemImageUrl={item.imageUrl}
+              />
+            )}
+          </>
         )}
         <p className="mt-auto text-[11px] text-slate-400">
           Been since {formatDoneAt(item.doneAt)}

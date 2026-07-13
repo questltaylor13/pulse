@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Space_Grotesk, Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
+import RankFlowProvider from "@/components/rank/RankFlowProvider";
+import { isRateRankEnabled } from "@/lib/ranking/flags";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -39,7 +41,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         className={`${spaceGrotesk.variable} ${inter.variable} font-body min-h-screen bg-surface text-ink`}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          <RankFlowProvider enabled={isRateRankEnabled()}>
+            {children}
+          </RankFlowProvider>
+        </Providers>
       </body>
     </html>
   );

@@ -32,6 +32,15 @@ const RENDERERS: Record<string, Renderer> = {
       ? "Like a bunch of things you're into"
       : "Similar to something you marked Interested",
   pass_similarity: () => "Similar to things you've passed on",
+  loved_similarity: ({ tagsMatched }) =>
+    tagsMatched?.length
+      ? `Because you loved ${tagsMatched[0]}`
+      : "Like spots you've rated highly",
+  disliked_similarity: () => "Similar to spots that missed for you",
+  category_affinity: ({ contribution }) =>
+    contribution >= 0
+      ? "You rate this kind of spot highly"
+      : "A category that hasn't landed for you",
   recency: () => "Just added — fresh this week",
   starts_soon: () => "Happening soon",
   budget_penalty: () => "A little above your usual budget",

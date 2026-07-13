@@ -5,7 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { similarEvents } from "@/lib/detail/similar";
 import EventDetailPage from "@/components/detail/EventDetailPage";
 import DetailFeedback from "@/components/feedback/DetailFeedback";
+import RateBlock from "@/components/rank/RateBlock";
 import { getFeedbackMaps } from "@/lib/feedback/server";
+import { fetchEntryForRef } from "@/lib/rank-engine/service";
+import { isRateRankEnabled } from "@/lib/ranking/flags";
 
 interface PageProps {
   params: { eventId: string };
@@ -56,6 +59,17 @@ export default async function EventPage({ params }: PageProps) {
   });
   const feedbackStatus = byEventId.get(eventId) ?? null;
 
+  // Wave 4 Rate & Rank — post-visit rating for past events (the first
+  // event-rating surface; stars were Place-only). Shown once the event has
+  // started, for signed-in users, behind the flag.
+  const rateRankOn = isRateRankEnabled();
+  const eventHasPassed = event.startTime < new Date();
+  const rankEntry =
+    rateRankOn && session?.user?.id && eventHasPassed
+      ? await fetchEntryForRef(session.user.id, { eventId })
+      : null;
+  const showRateBlock = rateRankOn && !!session?.user?.id && eventHasPassed;
+
   return (
     <>
       <div className="mx-auto flex max-w-3xl justify-end px-5 pt-3">
@@ -66,6 +80,17 @@ export default async function EventPage({ params }: PageProps) {
           initialStatus={feedbackStatus}
         />
       </div>
+      {showRateBlock && (
+        <div className="mx-auto max-w-3xl px-5 pt-3">
+          <RateBlock
+            refObj={{ eventId }}
+            itemTitle={event.title}
+            itemImageUrl={event.imageUrl}
+            prompt="Did you go? Rate it"
+            entry={rankEntry}
+          />
+        </div>
+      )}
       <EventDetailPage
       event={{
         id: event.id,
