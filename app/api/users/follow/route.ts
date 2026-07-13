@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { markDirty } from "@/lib/ranking/cache";
 
 // Toggle follow status for a user
 export async function POST(request: NextRequest) {
@@ -46,6 +47,7 @@ export async function POST(request: NextRequest) {
     await prisma.userFollow.delete({
       where: { id: existing.id },
     });
+    await invalidateOwnFeed(session.user.id);
     return NextResponse.json({ following: false });
   } else {
     // Follow
@@ -65,7 +67,24 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    await invalidateOwnFeed(session.user.id);
     return NextResponse.json({ following: true });
+  }
+}
+
+/**
+ * Wave 5 — following someone changes what YOUR feed should contain (the social
+ * sub-factor reads the people you follow), but nothing in maybeSkip() gates on
+ * the follow graph, so without this the new signal would silently never apply.
+ * Before Wave 5 this route fired no ranking invalidation whatsoever.
+ *
+ * Best-effort: a stale cache is a worse feed, not a failed follow.
+ */
+async function invalidateOwnFeed(userId: string): Promise<void> {
+  try {
+    await markDirty(userId);
+  } catch (err) {
+    console.warn("[users.follow] markDirty failed:", err);
   }
 }
 

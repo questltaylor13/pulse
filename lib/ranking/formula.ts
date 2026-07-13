@@ -101,6 +101,10 @@ export function score(
   const affinityBoost = computeCategoryAffinityBoost(ctx, item, config);
   if (affinityBoost.contribution !== 0) reasons.push(affinityBoost.reason);
 
+  // ---- Wave 5: what people you follow loved (boost, cap 0.20) ------------
+  const socialLoved = computeFollowedLovedSimilarity(ctx, item, config);
+  if (socialLoved.reason) reasons.push(socialLoved.reason);
+
   // ---- Q4 budget penalty (additive penalty) ------------------------------
   const budgetPenalty = computeBudgetPenalty(profile.budgetTier, item.priceTier, config);
   if (budgetPenalty.contribution !== 0) reasons.push(budgetPenalty.reason);
@@ -126,6 +130,7 @@ export function score(
     lovedBoost.contribution +
     dislikedPenalty.contribution + // signed negative when present
     affinityBoost.contribution + // signed either way
+    socialLoved.contribution + // Wave 5, 0 when the user follows nobody
     budgetPenalty.contribution +
     recencyBoost.contribution +
     startsSoonBoost.contribution;
@@ -332,6 +337,69 @@ function computeLovedSimilarity(
     "loved_similarity",
     contribution,
     bestTitle ? [bestTitle] : undefined,
+  );
+  return { contribution, reason };
+}
+
+// ---------------------------------------------------------------------------
+// Wave 5 — social signal: what the people you FOLLOW loved.
+//
+// Two-tiered, and the tiering is the point. computeLovedSimilarity *skips*
+// exact self-matches (you've already been there, so it's a poor recommendation).
+// Here the exact match is the entire headline: "Alex loved this place" is the
+// strongest thing this signal can say. Tag overlap — Alex loved something
+// *like* this — is a real but much weaker inference, so it's the fallback.
+//
+// The two tiers get distinct factor keys because they license different claims.
+// Rendering "Alex loved this" for a tag-overlap match would be a false
+// statement about a real person, which is precisely the failure mode this wave
+// exists to prevent.
+// ---------------------------------------------------------------------------
+
+/** A followed user loved this exact item. Strong. */
+const SOCIAL_DIRECT_MATCH = 0.5;
+/** A followed user loved something tag-similar. Weak inference. */
+const SOCIAL_OVERLAP_MATCH = 0.15;
+
+function computeFollowedLovedSimilarity(
+  ctx: RankingContext,
+  item: RankableItem,
+  config: RankingConfig,
+): { contribution: number; reason: ScoreReason | null } {
+  const cap = config.weights.followedLovedSimilarity;
+  const signals = ctx.followedLovedItems ?? [];
+  if (signals.length === 0) return { contribution: 0, reason: null };
+
+  let total = 0;
+  let bestMatch = 0;
+  let bestName: string | null = null;
+  let bestIsDirect = false;
+
+  for (const s of signals) {
+    const isDirect = s.itemId === item.itemId;
+    const match = isDirect
+      ? SOCIAL_DIRECT_MATCH * ratedScoreWeight(s.score)
+      : SOCIAL_OVERLAP_MATCH *
+        overlapWeight(tagOverlap(s.tags, item.tags)) *
+        ratedScoreWeight(s.score);
+
+    total += match;
+    if (match > bestMatch) {
+      bestMatch = match;
+      bestName = s.followerName;
+      bestIsDirect = isDirect;
+    }
+  }
+
+  const contribution = clamp(total, 0, cap);
+  if (contribution === 0) return { contribution: 0, reason: null };
+
+  // The reason describes the strongest contributor while the contribution is
+  // the sum — same convention as loved_similarity's bestTitle.
+  const reason = renderReason(
+    bestIsDirect ? "followed_loved_direct" : "followed_loved_similarity",
+    contribution,
+    bestName ? [bestName] : undefined,
   );
   return { contribution, reason };
 }

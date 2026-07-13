@@ -116,6 +116,10 @@ export interface RankingContext {
    * the denominator.
    */
   ratedCategoryAffinity?: Record<string, number>;
+  // -- Wave 5 social signal (optional: absent/empty when SOCIAL_V1_ENABLED is
+  //    off or the user follows nobody ⇒ scores are provably unchanged) -------
+  /** LIKED ranked entries belonging to people this user follows. */
+  followedLovedItems?: SocialLovedSignal[];
 }
 
 /** One rated item's contribution shape (Wave 4). */
@@ -126,6 +130,22 @@ export interface RatedItemSignal {
   score: number;
   /** Display title for "Because you loved {title}" why-lines. */
   title: string | null;
+}
+
+/**
+ * One LIKED entry from someone the user follows (Wave 5).
+ *
+ * Unlike RatedItemSignal, the display string is the *follower's* name, not the
+ * item's title: the headline this signal produces is "Alex loved this", so the
+ * person is what the why-line needs to name.
+ */
+export interface SocialLovedSignal {
+  itemId: string;
+  tags: string[];
+  /** The follower's derived rank-engine score for it, 0–10. */
+  score: number;
+  /** Display name of the person the viewer follows. */
+  followerName: string | null;
 }
 
 /** Q3 vibe pair selections. Shape matches UserProfile.vibePreferences Json. */

@@ -73,6 +73,39 @@ export async function markDirty(userId: string): Promise<void> {
   });
 }
 
+/**
+ * Wave 5 — dirty everyone who follows `userId`.
+ *
+ * When you rate something, your followers' feeds are now stale: the social
+ * sub-factor reads *your* ranked entries. Nothing in maybeSkip() would ever
+ * notice on its own — it gates freshness on the viewer's own feedback count,
+ * profile version, and dirty flag, none of which change when someone *else*
+ * rates something. Without this call the social signal would silently never
+ * recompute.
+ *
+ * markDirty, deliberately NOT triggerUserRerank. triggerUserRerank runs a full
+ * precomputeUser (context build + candidate pool + ~500 scored items + cache
+ * write) per user, fire-and-forget, with no queue, backpressure, or dedupe.
+ * Fanning that out per rating per follower is an amplification bomb: one
+ * popular user rating one taco shop would kick off hundreds of full recomputes.
+ * The dirty flag is enough — maybeSkip() refuses to skip when isDirty is set,
+ * so each follower recomputes lazily on their next read, or on the daily cron.
+ *
+ * One findMany + one updateMany, regardless of follower count.
+ */
+export async function markFollowersDirty(userId: string): Promise<void> {
+  const followers = await prisma.userFollow.findMany({
+    where: { followingId: userId },
+    select: { followerId: true },
+  });
+  if (followers.length === 0) return;
+
+  await prisma.rankedFeedCache.updateMany({
+    where: { userId: { in: followers.map((f) => f.followerId) } },
+    data: { isDirty: true },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Fast per-item lookup for rail re-sorting
 // ---------------------------------------------------------------------------

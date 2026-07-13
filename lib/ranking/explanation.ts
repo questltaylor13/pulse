@@ -37,6 +37,16 @@ const RENDERERS: Record<string, Renderer> = {
       ? `Because you loved ${tagsMatched[0]}`
       : "Like spots you've rated highly",
   disliked_similarity: () => "Similar to spots that missed for you",
+  // Wave 5 — the two social tiers license different claims, so they are
+  // different factors. "loved this" is only ever said about the exact item.
+  followed_loved_direct: ({ tagsMatched }) =>
+    tagsMatched?.length
+      ? `${tagsMatched[0]} loved this`
+      : "Someone you follow loved this",
+  followed_loved_similarity: ({ tagsMatched }) =>
+    tagsMatched?.length
+      ? `Like spots ${tagsMatched[0]} loves`
+      : "Popular with people you follow",
   category_affinity: ({ contribution }) =>
     contribution >= 0
       ? "You rate this kind of spot highly"

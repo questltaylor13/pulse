@@ -21,7 +21,7 @@ import type {
   RankCategory,
   RankSentiment,
 } from "@prisma/client";
-import { markDirty } from "@/lib/ranking/cache";
+import { markDirty, markFollowersDirty } from "@/lib/ranking/cache";
 import { triggerUserRerank } from "@/lib/ranking/rerank-trigger";
 import { emitRankedItemActivity } from "@/lib/social/activity";
 import { recomputePlaceRating, upsertFeedback } from "@/lib/feedback/api";
@@ -389,6 +389,10 @@ export async function confirmPlacement(params: {
   // 45s rerank coalesce window absorbs the begin→place double-trigger.
   try {
     await markDirty(userId);
+    // Wave 5 — this rating also stales every follower's feed (the social
+    // sub-factor reads our entries). Dirty only: see markFollowersDirty on why
+    // fanning out triggerUserRerank here would be an amplification bomb.
+    await markFollowersDirty(userId);
   } catch (err) {
     console.warn("[rank-engine.markDirty] failed:", err);
   }
@@ -422,6 +426,9 @@ export async function removeEntry(params: {
   if (removed) {
     try {
       await markDirty(userId);
+      // Removing an entry retracts the social signal it was contributing, and
+      // cascades away its feed row — followers are stale either way.
+      await markFollowersDirty(userId);
     } catch (err) {
       console.warn("[rank-engine.markDirty] failed:", err);
     }

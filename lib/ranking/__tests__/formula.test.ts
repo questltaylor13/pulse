@@ -520,3 +520,155 @@ describe("formula.score — Wave 4 rank-engine signals", () => {
     expect(loved?.human_readable).toContain("Ratio Beerworks");
   });
 });
+
+describe("formula.score — Wave 5 social signal", () => {
+  // Neutralize novelty (familiarity 1.0 → multiplier 1.0) so deltas read raw.
+  const famCtx = { familiarity: { LIVE_MUSIC: 1 } };
+  const ITEM_TAGS = ["jazz", "cocktail-bar"];
+
+  it("regression guard: empty social signals leave scores byte-identical", () => {
+    // This is what enforces the SOCIAL_V1_ENABLED flag-off invariant: with no
+    // follows (or the flag off, which yields the same empty set), the formula
+    // must produce exactly the pre-Wave-5 score AND the pre-Wave-5 reasons.
+    const item = makeItem({ tags: ITEM_TAGS });
+    const without = score(makeCtx(famCtx), item);
+    const withEmpty = score(
+      makeCtx({ ...famCtx, followedLovedItems: [] }),
+      item,
+    );
+    expect(withEmpty.score).toBe(without.score);
+    expect(withEmpty.reasons).toEqual(without.reasons);
+  });
+
+  it("a direct hit — someone you follow loved THIS item — drives the boost", () => {
+    const item = makeItem({ itemId: "pl_tacos", tags: ITEM_TAGS });
+    const baseline = score(makeCtx(famCtx), item).score;
+
+    const direct = score(
+      makeCtx({
+        ...famCtx,
+        followedLovedItems: [
+          { itemId: "pl_tacos", tags: [], score: 9, followerName: "Alex" },
+        ],
+      }),
+      item,
+    );
+
+    // Direct match 0.5 × ratedScoreWeight(9) = 0.5 × 0.94, capped at 0.20.
+    expect(direct.score - baseline).toBeCloseTo(0.2, 5);
+    expect(
+      direct.reasons.some((r) => r.factor === "followed_loved_direct"),
+    ).toBe(true);
+  });
+
+  it("tag overlap is the weaker fallback, and a direct hit beats it", () => {
+    const item = makeItem({ itemId: "pl_target", tags: ITEM_TAGS });
+    const baseline = score(makeCtx(famCtx), item).score;
+
+    // Followed user loved a *different* item that shares tags.
+    const overlap = score(
+      makeCtx({
+        ...famCtx,
+        followedLovedItems: [
+          { itemId: "pl_other", tags: ITEM_TAGS, score: 9, followerName: "Alex" },
+        ],
+      }),
+      item,
+    );
+    const direct = score(
+      makeCtx({
+        ...famCtx,
+        followedLovedItems: [
+          { itemId: "pl_target", tags: [], score: 9, followerName: "Alex" },
+        ],
+      }),
+      item,
+    );
+
+    expect(overlap.score).toBeGreaterThan(baseline);
+    expect(direct.score).toBeGreaterThan(overlap.score);
+  });
+
+  it("caps at +0.20 — deliberately below wantSim's +0.40", () => {
+    // A friend's verdict is weaker evidence about YOUR taste than your own
+    // stated interest, so no number of follows can outweigh a WANT.
+    const item = makeItem({ tags: ITEM_TAGS });
+    const baseline = score(makeCtx(famCtx), item).score;
+
+    const many = score(
+      makeCtx({
+        ...famCtx,
+        followedLovedItems: Array.from({ length: 20 }, (_, i) => ({
+          itemId: `pl_${i}`,
+          tags: ITEM_TAGS,
+          score: 10,
+          followerName: `Friend ${i}`,
+        })),
+      }),
+      item,
+    );
+
+    expect(many.score - baseline).toBeCloseTo(RANKING_CONFIG.weights.followedLovedSimilarity, 5);
+    expect(many.score - baseline).toBeLessThan(RANKING_CONFIG.weights.interestedSimilarity);
+  });
+
+  it("weights a match by how strongly the follower rated it", () => {
+    const item = makeItem({ itemId: "pl_x", tags: ITEM_TAGS });
+    const strong = score(
+      makeCtx({
+        ...famCtx,
+        followedLovedItems: [
+          { itemId: "pl_other", tags: ITEM_TAGS, score: 10, followerName: "Alex" },
+        ],
+      }),
+      item,
+    ).score;
+    const weak = score(
+      makeCtx({
+        ...famCtx,
+        followedLovedItems: [
+          { itemId: "pl_other", tags: ITEM_TAGS, score: 5, followerName: "Alex" },
+        ],
+      }),
+      item,
+    ).score;
+
+    expect(strong).toBeGreaterThan(weak);
+  });
+
+  it("the why-line names the follower on a direct hit", () => {
+    const item = makeItem({ itemId: "pl_tacos", tags: ITEM_TAGS });
+    const result = score(
+      makeCtx({
+        ...famCtx,
+        followedLovedItems: [
+          { itemId: "pl_tacos", tags: [], score: 9.4, followerName: "Alex Rivera" },
+        ],
+      }),
+      item,
+    );
+    const social = result.reasons.find((r) => r.factor === "followed_loved_direct");
+    expect(social?.human_readable).toContain("Alex Rivera");
+    expect(social?.human_readable).toContain("loved this");
+  });
+
+  it("never claims a follower loved THIS item when they only loved a similar one", () => {
+    // The honesty constraint: "Alex loved this" on a tag-overlap match is a
+    // false claim, and this wave exists to stop the feed making those.
+    const item = makeItem({ itemId: "pl_target", tags: ITEM_TAGS });
+    const result = score(
+      makeCtx({
+        ...famCtx,
+        followedLovedItems: [
+          { itemId: "pl_other", tags: ITEM_TAGS, score: 9, followerName: "Alex" },
+        ],
+      }),
+      item,
+    );
+
+    expect(result.reasons.some((r) => r.factor === "followed_loved_direct")).toBe(false);
+    const social = result.reasons.find((r) => r.factor === "followed_loved_similarity");
+    expect(social).toBeDefined();
+    expect(social?.human_readable).not.toContain("loved this");
+  });
+});
