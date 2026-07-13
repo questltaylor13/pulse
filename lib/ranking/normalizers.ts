@@ -82,14 +82,30 @@ export function normalizePriceTier(input: {
 // ---------------------------------------------------------------------------
 
 /**
- * Count of tags present in both arrays. Case-insensitive. Order-independent.
+ * Wave 4 — canonical tag token. Place enrichment writes Title-case tags
+ * ("Date Night", "Work Remote") while event/scraper tags are kebab-case
+ * ("date-night"); lowering AND collapsing spaces/underscores to hyphens lets
+ * the two vocabularies finally match in similarity scoring.
+ */
+export function normalizeTagToken(tag: string): string {
+  return tag.toLowerCase().replace(/[\s_]+/g, "-");
+}
+
+/**
+ * Count of tags present in both arrays. Case/format-insensitive (see
+ * normalizeTagToken). Order-independent.
  */
 export function tagOverlap(a: string[], b: string[]): number {
   if (!a?.length || !b?.length) return 0;
-  const lowerA = new Set(a.map((t) => t.toLowerCase()));
+  const normA = new Set(a.map(normalizeTagToken));
+  const seen = new Set<string>();
   let count = 0;
   for (const tag of b) {
-    if (lowerA.has(tag.toLowerCase())) count += 1;
+    const norm = normalizeTagToken(tag);
+    if (normA.has(norm) && !seen.has(norm)) {
+      seen.add(norm);
+      count += 1;
+    }
   }
   return count;
 }

@@ -381,3 +381,142 @@ describe("formula.score — starts-soon boost (Wave 3)", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Wave 4 Rate & Rank — loved/disliked similarity + rated category affinity
+// ---------------------------------------------------------------------------
+
+describe("formula.score — Wave 4 rank-engine signals", () => {
+  // Neutralize novelty (familiarity 1.0 → multiplier 1.0) so deltas read raw.
+  const famCtx = { familiarity: { LIVE_MUSIC: 1 } };
+  const ITEM_TAGS = ["jazz", "cocktail-bar"];
+
+  it("regression guard: empty rank signals leave scores byte-identical", () => {
+    const item = makeItem({ tags: ITEM_TAGS });
+    const without = score(makeCtx(famCtx), item);
+    const withEmpty = score(
+      makeCtx({
+        ...famCtx,
+        lovedItems: [],
+        dislikedItems: [],
+        ratedCategoryAffinity: {},
+      }),
+      item,
+    );
+    expect(withEmpty.score).toBe(without.score);
+    expect(withEmpty.reasons).toEqual(without.reasons);
+  });
+
+  it("loved similarity boosts tag-similar items, weighted by the loved score", () => {
+    const item = makeItem({ tags: ITEM_TAGS });
+    const baseline = score(makeCtx(famCtx), item).score;
+
+    const loved9 = score(
+      makeCtx({
+        ...famCtx,
+        lovedItems: [{ itemId: "pl_ratio", tags: ITEM_TAGS, score: 9, title: "Ratio" }],
+      }),
+      item,
+    );
+    // per-match 0.35 × overlapWeight(2 shared → 1) × (0.4 + 0.6×9/10)
+    expect(loved9.score - baseline).toBeCloseTo(0.35 * 0.94, 5);
+    expect(loved9.reasons.some((r) => r.factor === "loved_similarity")).toBe(true);
+
+    const loved5 = score(
+      makeCtx({
+        ...famCtx,
+        lovedItems: [{ itemId: "pl_meh", tags: ITEM_TAGS, score: 5, title: "Meh" }],
+      }),
+      item,
+    );
+    expect(loved9.score).toBeGreaterThan(loved5.score);
+  });
+
+  it("caps loved similarity at +0.60 (outranks wantSim's +0.40)", () => {
+    const item = makeItem({ tags: ITEM_TAGS });
+    const baseline = score(makeCtx(famCtx), item).score;
+    const manyLoved = score(
+      makeCtx({
+        ...famCtx,
+        lovedItems: [
+          { itemId: "a", tags: ITEM_TAGS, score: 10, title: "A" },
+          { itemId: "b", tags: ITEM_TAGS, score: 10, title: "B" },
+          { itemId: "c", tags: ITEM_TAGS, score: 10, title: "C" },
+        ],
+      }),
+      item,
+    );
+    expect(manyLoved.score - baseline).toBeCloseTo(0.6, 5);
+  });
+
+  it("ignores self-matches by itemId", () => {
+    const item = makeItem({ itemId: "evt_self", tags: ITEM_TAGS });
+    const baseline = score(makeCtx(famCtx), item).score;
+    const withSelf = score(
+      makeCtx({
+        ...famCtx,
+        lovedItems: [{ itemId: "evt_self", tags: ITEM_TAGS, score: 10, title: "Self" }],
+      }),
+      item,
+    );
+    expect(withSelf.score).toBe(baseline);
+  });
+
+  it("disliked similarity penalizes, weighted by inverse score, capped at −0.60", () => {
+    const item = makeItem({ tags: ITEM_TAGS });
+    const baseline = score(makeCtx(famCtx), item).score;
+    const disliked = score(
+      makeCtx({
+        ...famCtx,
+        dislikedItems: [{ itemId: "pl_bad", tags: ITEM_TAGS, score: 1, title: "Bad" }],
+      }),
+      item,
+    );
+    // 0.35 × 1 × (0.4 + 0.6×(10−1)/10) = 0.35 × 0.94, negative
+    expect(disliked.score - baseline).toBeCloseTo(-0.35 * 0.94, 5);
+    expect(disliked.reasons.some((r) => r.factor === "disliked_similarity")).toBe(true);
+
+    const manyDisliked = score(
+      makeCtx({
+        ...famCtx,
+        dislikedItems: [
+          { itemId: "a", tags: ITEM_TAGS, score: 0.5, title: "A" },
+          { itemId: "b", tags: ITEM_TAGS, score: 0.5, title: "B" },
+          { itemId: "c", tags: ITEM_TAGS, score: 0.5, title: "C" },
+        ],
+      }),
+      item,
+    );
+    expect(manyDisliked.score - baseline).toBeCloseTo(-0.6, 5);
+  });
+
+  it("applies signed rated-category affinity at ±0.25 weight", () => {
+    const item = makeItem({ tags: ITEM_TAGS }); // category LIVE_MUSIC
+    const baseline = score(makeCtx(famCtx), item).score;
+    const positive = score(
+      makeCtx({ ...famCtx, ratedCategoryAffinity: { LIVE_MUSIC: 1 } }),
+      item,
+    );
+    expect(positive.score - baseline).toBeCloseTo(0.25, 5);
+
+    const negative = score(
+      makeCtx({ ...famCtx, ratedCategoryAffinity: { LIVE_MUSIC: -0.5 } }),
+      item,
+    );
+    expect(negative.score - baseline).toBeCloseTo(-0.125, 5);
+    expect(negative.reasons.some((r) => r.factor === "category_affinity")).toBe(true);
+  });
+
+  it("loved why-line names the loved item", () => {
+    const item = makeItem({ tags: ITEM_TAGS });
+    const result = score(
+      makeCtx({
+        ...famCtx,
+        lovedItems: [{ itemId: "pl_ratio", tags: ITEM_TAGS, score: 9.4, title: "Ratio Beerworks" }],
+      }),
+      item,
+    );
+    const loved = result.reasons.find((r) => r.factor === "loved_similarity");
+    expect(loved?.human_readable).toContain("Ratio Beerworks");
+  });
+});

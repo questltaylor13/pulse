@@ -89,6 +89,18 @@ describe("overlapWeight", () => {
   });
 });
 
+describe("tagOverlap — token normalization (Wave 4)", () => {
+  it("bridges Title-case place tags and kebab-case event tags", () => {
+    expect(tagOverlap(["Date Night"], ["date-night"])).toBe(1);
+    expect(tagOverlap(["Work Remote", "Groups"], ["work-remote", "groups"])).toBe(2);
+    expect(tagOverlap(["live_music"], ["Live Music"])).toBe(1);
+  });
+
+  it("still counts plain matches exactly once", () => {
+    expect(tagOverlap(["jazz", "Date Night"], ["jazz", "date-night", "patio"])).toBe(2);
+  });
+});
+
 describe("sharesTags", () => {
   it("respects threshold", () => {
     expect(sharesTags(["a", "b"], ["a", "b"], 2)).toBe(true);

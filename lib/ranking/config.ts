@@ -32,6 +32,16 @@ export const RANKING_CONFIG = {
     interestedSimilarity: 0.4,
     /** Max penalty from PASS tag similarity — capped at -0.50. */
     notInterestedSimilarity: 0.5,
+    /**
+     * Wave 4 — max boost from LIKED ranked-entry similarity. Deliberately
+     * ABOVE interestedSimilarity (+0.40): a confirmed visit the user loved
+     * is ground truth; a WANT is tag-overlap inference.
+     */
+    lovedSimilarity: 0.6,
+    /** Wave 4 — max penalty from DISLIKED ranked-entry similarity (> passSim). */
+    dislikedSimilarity: 0.6,
+    /** Wave 4 — signed weight on per-category rated affinity (±). */
+    categoryAffinity: 0.25,
   },
 
   /**
