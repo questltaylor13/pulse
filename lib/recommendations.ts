@@ -1,6 +1,13 @@
 /**
  * Recommendation Engine for Pulse
  *
+ * @deprecated Wave 4 — legacy engine kept only for its live importers
+ * (app/api/suggestions/route.ts, components/PeopleLikeYouAlsoLiked.tsx).
+ * It reads the legacy Item bridge and never sees direct event/place
+ * feedback or ranked entries. New personalization work belongs in
+ * lib/ranking/ (+ lib/rank-engine/ signals). Do not extend. Its sibling
+ * lib/recommendations-v2.ts (imported nowhere) was deleted in Wave 4.
+ *
  * "People like you also liked..." algorithm
  *
  * Algorithm Overview:

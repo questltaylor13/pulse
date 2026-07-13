@@ -1,6 +1,11 @@
 /**
  * Suggestion Generation Service
  *
+ * @deprecated Wave 4 — legacy engine kept only for its live importers
+ * (the /suggestions API path). Reads the legacy Item bridge; blind to
+ * direct event/place feedback and ranked entries. New personalization
+ * work belongs in lib/ranking/ (+ lib/rank-engine/ signals). Do not extend.
+ *
  * Generates "Suggested for you" weekly and monthly curated picks.
  *
  * Algorithm:
