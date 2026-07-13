@@ -27,3 +27,12 @@ export function isOutsideUsualEnabled(): boolean {
 export function isForYouEnabled(): boolean {
   return process.env.FOR_YOU_ENABLED === "true";
 }
+
+/**
+ * Wave 4 — gates the Rate & Rank engine surfaces: the sentiment/duel rating
+ * flow, /rankings pages, and the rank-derived signals in buildRankingContext.
+ * Off ⇒ the app behaves exactly as pre-Wave-4 (stars UI, no rank reads).
+ */
+export function isRateRankEnabled(): boolean {
+  return process.env.RATE_RANK_ENABLED === "true";
+}
