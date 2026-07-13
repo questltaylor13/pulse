@@ -95,6 +95,7 @@ export default async function PlacePage({ params }: PageProps) {
             prompt="Been here? Rate it"
             entry={rankEntry}
             aggregate={{ avg: ratingAvg, count: place.pulseRatingCount }}
+            legacyRating={myStatus?.rating ?? null}
           />
         ) : (
           <PlaceRating

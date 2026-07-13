@@ -78,6 +78,10 @@ export default function RankFlow({
   // DONE recorded (begin or plain been-there succeeded) / placement confirmed
   const committed = useRef(false);
   const ranked = useRef(false);
+  // Synchronous re-entry guard: `submitting` state lags a render, so a
+  // same-tick double-tap on the resolving duel could fire /api/rank/place
+  // twice without this ref.
+  const placing = useRef(false);
 
   // Reset per open
   useEffect(() => {
@@ -87,6 +91,7 @@ export default function RankFlow({
       setErrorMessage(null);
       committed.current = false;
       ranked.current = false;
+      placing.current = false;
     }
   }, [open]);
 
@@ -103,6 +108,8 @@ export default function RankFlow({
 
   const place = useCallback(
     async (inBucketIndex: number, comparisons: ComparisonLog[]) => {
+      if (placing.current) return;
+      placing.current = true;
       setSubmitting(true);
       setErrorMessage(null);
       try {
@@ -123,6 +130,7 @@ export default function RankFlow({
           listPath: data.listPath,
         });
       } catch (err) {
+        placing.current = false; // allow retry after a failure
         setErrorMessage(
           err instanceof Error ? err.message : "Something went wrong"
         );

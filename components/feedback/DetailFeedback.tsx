@@ -3,11 +3,9 @@
 import { useState } from "react";
 import type { ItemStatus } from "@prisma/client";
 import type { FeedbackRef } from "@/lib/feedback/types";
-import { isEventRef, isPlaceRef, isDiscoveryRef } from "@/lib/feedback/types";
+import { resolveContentRef, resolveItemTarget } from "@/lib/feedback/types";
 import { useFeedback } from "@/lib/feedback/hooks";
-import type { RankedItemType } from "@/lib/ranking/types";
 import { useRankFlow } from "@/components/rank/RankFlowProvider";
-import type { RankRefClient } from "@/components/rank/types";
 import ActionSheet from "./ActionSheet";
 import WhyThisSheet from "./WhyThisSheet";
 
@@ -51,12 +49,12 @@ export default function DetailFeedback({
       initialStatus,
     });
   const rankFlow = useRankFlow();
-  const whyTarget = resolveWhyTarget(ref_);
+  const whyTarget = resolveItemTarget(ref_);
 
   const handleSelect = async (next: ItemStatus) => {
     // Wave 4 Rate & Rank — "I've been there" routes through the sentiment/
     // duel flow when the flag is on (see CardMoreMenu for the card path).
-    const rankRef = resolveRankRef(ref_);
+    const rankRef = resolveContentRef(ref_);
     if (next === "DONE" && rankFlow.enabled && rankRef) {
       setOpen(false);
       rankFlow.openRankFlow({
@@ -146,16 +144,3 @@ export default function DetailFeedback({
   );
 }
 
-function resolveWhyTarget(ref: FeedbackRef): { itemType: RankedItemType; itemId: string } | null {
-  if (isEventRef(ref)) return { itemType: "event", itemId: ref.eventId };
-  if (isPlaceRef(ref)) return { itemType: "place", itemId: ref.placeId };
-  if (isDiscoveryRef(ref)) return { itemType: "discovery", itemId: ref.discoveryId };
-  return null;
-}
-
-function resolveRankRef(ref: FeedbackRef): RankRefClient | null {
-  if (isEventRef(ref)) return { eventId: ref.eventId };
-  if (isPlaceRef(ref)) return { placeId: ref.placeId };
-  if (isDiscoveryRef(ref)) return { discoveryId: ref.discoveryId };
-  return null; // legacy Item bridge
-}

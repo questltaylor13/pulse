@@ -85,17 +85,23 @@ async function main() {
     byUser.set(row.userId, list);
   }
 
+  // One round-trip idempotency map instead of a count() per (user, category).
+  const existingPairs = new Set(
+    (
+      await prisma.userRankedEntry.groupBy({
+        by: ["userId", "category"],
+      })
+    ).map((g) => `${g.userId}:${g.category}`)
+  );
+
   let created = 0;
   let skippedCategories = 0;
   for (const [userId, rows] of byUser) {
     const plan = planBackfill(rows);
     for (const categoryPlan of plan) {
-      const existing = await prisma.userRankedEntry.count({
-        where: { userId, category: categoryPlan.category },
-      });
-      if (existing > 0) {
+      if (existingPairs.has(`${userId}:${categoryPlan.category}`)) {
         console.log(
-          `  ~ skip user=${userId} category=${categoryPlan.category} (${existing} entries already exist)`
+          `  ~ skip user=${userId} category=${categoryPlan.category} (entries already exist)`
         );
         skippedCategories++;
         continue;

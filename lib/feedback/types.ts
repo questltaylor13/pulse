@@ -57,3 +57,34 @@ export function isDiscoveryRef(
     ref.discoveryId.length > 0
   );
 }
+
+// ---------------------------------------------------------------------------
+// Wave 4 — shared ref narrowing (previously copy-pasted in CardMoreMenu and
+// DetailFeedback; one source so feed cards and detail pages can never
+// disagree about which refs support the rank flow / "why" sheet).
+// ---------------------------------------------------------------------------
+
+/** Content-native ref — the shape the rank engine accepts (no Item bridge). */
+export type ContentRef =
+  | { eventId: string }
+  | { placeId: string }
+  | { discoveryId: string };
+
+/** Narrow a FeedbackRef to a content-native ref; null for legacy Item refs. */
+export function resolveContentRef(ref: FeedbackRef): ContentRef | null {
+  if (isEventRef(ref)) return { eventId: ref.eventId };
+  if (isPlaceRef(ref)) return { placeId: ref.placeId };
+  if (isDiscoveryRef(ref)) return { discoveryId: ref.discoveryId };
+  return null;
+}
+
+/** itemType/itemId pair for ranking-cache lookups ("Why am I seeing this?"). */
+export function resolveItemTarget(
+  ref: FeedbackRef
+): { itemType: "event" | "place" | "discovery"; itemId: string } | null {
+  if (isEventRef(ref)) return { itemType: "event", itemId: ref.eventId };
+  if (isPlaceRef(ref)) return { itemType: "place", itemId: ref.placeId };
+  if (isDiscoveryRef(ref))
+    return { itemType: "discovery", itemId: ref.discoveryId };
+  return null;
+}

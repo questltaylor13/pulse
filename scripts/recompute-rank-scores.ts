@@ -7,10 +7,11 @@
  * Usage: npm run rank:repair
  */
 
-import { PrismaClient } from "@prisma/client";
+// Use the shared singleton — recomputeCategory (service.ts) writes through
+// it, so a script-local PrismaClient would leave a second, never-disconnected
+// pool that hangs the process at exit.
+import { prisma } from "../lib/prisma";
 import { recomputeCategory } from "../lib/rank-engine/service";
-
-const prisma = new PrismaClient();
 
 async function main() {
   console.log("\nRecomputing rank positions + scores for all users...\n");

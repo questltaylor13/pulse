@@ -36,6 +36,12 @@ interface Props {
   entry: RateBlockEntry | null;
   /** Wave 2 aggregate line (places) — kept alongside the rank state. */
   aggregate?: { avg: number | null; count: number } | null;
+  /**
+   * Wave 2 star the user gave before the rank engine existed (or before
+   * backfill ran). Shown as a hint when no ranked entry exists yet so
+   * rating history never looks lost.
+   */
+  legacyRating?: number | null;
 }
 
 export default function RateBlock({
@@ -45,6 +51,7 @@ export default function RateBlock({
   prompt,
   entry,
   aggregate,
+  legacyRating,
 }: Props) {
   const router = useRouter();
   const { openRankFlow } = useRankFlow();
@@ -103,7 +110,9 @@ export default function RateBlock({
               Rate it
             </button>
             <span className="text-[13px] text-mute">
-              A couple of quick comparisons build your personal rankings
+              {legacyRating != null
+                ? `You gave this ${"★".repeat(legacyRating)} before — rate it to place it in your rankings`
+                : "A couple of quick comparisons build your personal rankings"}
             </span>
           </div>
         </>

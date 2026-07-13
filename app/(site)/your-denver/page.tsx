@@ -216,8 +216,9 @@ function DoneCard({
         {locationLine && (
           <p className="truncate text-xs text-slate-500">{locationLine}</p>
         )}
-        {/* Wave 4 — ranked score chip replaces stars when the entry exists;
-            unranked DONEs get a "Rank it" CTA behind the flag. */}
+        {/* Wave 4 — ranked score chip replaces stars once an entry exists;
+            unranked DONEs keep their legacy stars (history never looks
+            lost) AND get a "Rank it" CTA behind the flag. */}
         {ranked ? (
           <p>
             <span
@@ -226,18 +227,23 @@ function DoneCard({
               {ranked.score.toFixed(1)}
             </span>
           </p>
-        ) : rateRankOn && rankRef ? (
-          <RankItButton
-            refObj={rankRef}
-            itemTitle={item.title}
-            itemImageUrl={item.imageUrl}
-          />
-        ) : item.rating != null ? (
-          <p className="text-xs text-amber-500" aria-label={`Rated ${item.rating} out of 5`}>
-            {"★".repeat(item.rating)}
-            <span className="text-slate-300">{"★".repeat(5 - item.rating)}</span>
-          </p>
-        ) : null}
+        ) : (
+          <>
+            {item.rating != null && (
+              <p className="text-xs text-amber-500" aria-label={`Rated ${item.rating} out of 5`}>
+                {"★".repeat(item.rating)}
+                <span className="text-slate-300">{"★".repeat(5 - item.rating)}</span>
+              </p>
+            )}
+            {rateRankOn && rankRef && (
+              <RankItButton
+                refObj={rankRef}
+                itemTitle={item.title}
+                itemImageUrl={item.imageUrl}
+              />
+            )}
+          </>
+        )}
         <p className="mt-auto text-[11px] text-slate-400">
           Been since {formatDoneAt(item.doneAt)}
         </p>

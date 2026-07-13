@@ -26,6 +26,15 @@ export const BUCKET_RANGES: Record<RankSentiment, { lo: number; hi: number }> =
 export const SENTIMENT_ORDER: RankSentiment[] = ["LIKED", "FINE", "DISLIKED"];
 
 /**
+ * Best-first bucket index (LIKED 0, FINE 1, DISLIKED 2). The single source
+ * of bucket ordering — service, backfill, and the invariant check all use
+ * this so they can never disagree.
+ */
+export function bucketRank(sentiment: RankSentiment): number {
+  return SENTIMENT_ORDER.indexOf(sentiment);
+}
+
+/**
  * Derive scores for a category's entries given their sentiments in position
  * order (best first). Input must satisfy the bucket invariant.
  */
@@ -60,9 +69,8 @@ export function displayScore(score: number): string {
  * DISLIKED. Called before persisting a re-ordered category.
  */
 export function assertBucketInvariant(sentiments: RankSentiment[]): void {
-  const rank = (s: RankSentiment) => SENTIMENT_ORDER.indexOf(s);
   for (let i = 1; i < sentiments.length; i++) {
-    if (rank(sentiments[i]) < rank(sentiments[i - 1])) {
+    if (bucketRank(sentiments[i]) < bucketRank(sentiments[i - 1])) {
       throw new Error(
         `Bucket invariant violated at position ${i}: ${sentiments[i]} after ${sentiments[i - 1]}`
       );

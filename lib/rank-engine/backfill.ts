@@ -6,7 +6,7 @@
 
 import type { RankCategory, RankSentiment } from "@prisma/client";
 import { toRankCategory } from "./categories";
-import { deriveScores } from "./scores";
+import { bucketRank, deriveScores } from "./scores";
 
 export function starsToSentiment(rating: number): RankSentiment {
   if (rating >= 4) return "LIKED";
@@ -36,12 +36,6 @@ export interface BackfillCategoryPlan {
   entries: BackfillEntry[];
 }
 
-const SENTIMENT_RANK: Record<RankSentiment, number> = {
-  LIKED: 0,
-  FINE: 1,
-  DISLIKED: 2,
-};
-
 /**
  * Group rated rows into rank categories and order them: sentiment bucket
  * first (stars desc within bucket), earlier updatedAt breaking ties — the
@@ -60,8 +54,8 @@ export function planBackfill(rows: BackfillInput[]): BackfillCategoryPlan[] {
   return [...byCategory.entries()].map(([category, list]) => {
     const ordered = [...list].sort((a, b) => {
       const bucket =
-        SENTIMENT_RANK[starsToSentiment(a.rating)] -
-        SENTIMENT_RANK[starsToSentiment(b.rating)];
+        bucketRank(starsToSentiment(a.rating)) -
+        bucketRank(starsToSentiment(b.rating));
       if (bucket !== 0) return bucket;
       if (b.rating !== a.rating) return b.rating - a.rating;
       return a.updatedAt.getTime() - b.updatedAt.getTime();

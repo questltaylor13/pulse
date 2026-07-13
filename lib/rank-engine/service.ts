@@ -20,24 +20,25 @@ import type {
   Prisma,
   RankCategory,
   RankSentiment,
-  UserRankedEntry,
 } from "@prisma/client";
 import { markDirty } from "@/lib/ranking/cache";
 import { triggerUserRerank } from "@/lib/ranking/rerank-trigger";
-import { upsertFeedback } from "@/lib/feedback/api";
+import { recomputePlaceRating, upsertFeedback } from "@/lib/feedback/api";
 import {
   RANK_CATEGORY_LABELS,
   rankCategorySlug,
   toRankCategory,
 } from "./categories";
-import { deriveScores, assertBucketInvariant, SENTIMENT_ORDER } from "./scores";
+import { bucketRank, deriveScores } from "./scores";
+import {
+  loadCategoryEntries,
+  persistOrder,
+  refWhere,
+  type RankRef,
+} from "./ordering";
 import { expectedComparisons } from "./insertion";
 
-/** Rank engine refs are content-native only — no legacy Item bridge. */
-export type RankRef =
-  | { eventId: string }
-  | { placeId: string }
-  | { discoveryId: string };
+export type { RankRef } from "./ordering";
 
 /** Coarse star bridged into UserItemStatus.rating (decision D9). */
 export function bridgeRating(sentiment: RankSentiment): number {
@@ -110,12 +111,6 @@ async function loadContent(ref: RankRef): Promise<ContentSnapshot | null> {
   };
 }
 
-function refWhere(userId: string, ref: RankRef): Prisma.UserRankedEntryWhereInput {
-  if ("eventId" in ref) return { userId, eventId: ref.eventId };
-  if ("placeId" in ref) return { userId, placeId: ref.placeId };
-  return { userId, discoveryId: ref.discoveryId };
-}
-
 function refCreateFields(ref: RankRef): {
   eventId?: string;
   placeId?: string;
@@ -124,40 +119,6 @@ function refCreateFields(ref: RankRef): {
   if ("eventId" in ref) return { eventId: ref.eventId };
   if ("placeId" in ref) return { placeId: ref.placeId };
   return { discoveryId: ref.discoveryId };
-}
-
-const bucketRank = (s: RankSentiment) => SENTIMENT_ORDER.indexOf(s);
-
-/**
- * Renumber + rescore an ordered category list inside a transaction. `ordered`
- * is the desired final order, best first. Only rows whose position or score
- * changed are written.
- */
-async function persistOrder(
-  tx: Prisma.TransactionClient,
-  ordered: { id: string; sentiment: RankSentiment; position: number; score: number }[]
-): Promise<void> {
-  assertBucketInvariant(ordered.map((e) => e.sentiment));
-  const scores = deriveScores(ordered.map((e) => e.sentiment));
-  for (let i = 0; i < ordered.length; i++) {
-    if (ordered[i].position !== i || ordered[i].score !== scores[i]) {
-      await tx.userRankedEntry.update({
-        where: { id: ordered[i].id },
-        data: { position: i, score: scores[i] },
-      });
-    }
-  }
-}
-
-async function loadCategoryEntries(
-  tx: Prisma.TransactionClient,
-  userId: string,
-  category: RankCategory
-) {
-  return tx.userRankedEntry.findMany({
-    where: { userId, category },
-    orderBy: { position: "asc" },
-  });
 }
 
 export interface BeginPlacementResult {
@@ -189,10 +150,56 @@ export async function beginPlacement(params: {
   if (!content) throw new Error("beginPlacement: content not found");
   const category = toRankCategory(content.category);
 
+  // Status + bridge star FIRST, through the existing path (markDirty, live
+  // re-rank, Place.pulseRating* recompute). Ordered before the entry write so
+  // a failure between the two leaves the benign state — DONE recorded, item
+  // simply unranked (reachable anyway via "just mark as been there") — rather
+  // than a ranked entry with no DONE. confirmPlacement later refines this
+  // coarse star from the entry's final derived score.
+  await upsertFeedback({
+    userId,
+    ref,
+    status: "DONE",
+    source,
+    rating: bridgeRating(sentiment),
+  });
+
   const { entryId, bucketEntries } = await prisma.$transaction(async (tx) => {
     const existing = await tx.userRankedEntry.findFirst({
       where: refWhere(userId, ref),
     });
+
+    // Re-rank with unchanged category AND sentiment: leave the entry exactly
+    // where it is (still confirmed) — abandoning the duels then costs
+    // nothing. Only a sentiment/category change (or a new entry) warrants
+    // the provisional bucket-bottom move.
+    if (
+      existing &&
+      existing.category === category &&
+      existing.sentiment === sentiment
+    ) {
+      await tx.userRankedEntry.update({
+        where: { id: existing.id },
+        data: {
+          titleSnapshot: content.title,
+          imageSnapshot: content.imageUrl,
+          categorySnapshot: content.category,
+        },
+      });
+      const others = (await loadCategoryEntries(tx, userId, category)).filter(
+        (e) => e.id !== existing.id
+      );
+      return {
+        entryId: existing.id,
+        bucketEntries: others
+          .filter((e) => e.sentiment === sentiment)
+          .map((e) => ({
+            entryId: e.id,
+            title: e.titleSnapshot ?? "Untitled",
+            imageUrl: e.imageSnapshot,
+          })),
+      };
+    }
 
     // If the entry exists in a different category (content was re-categorized
     // since), pull it out of the old category and renumber that list.
@@ -213,9 +220,9 @@ export async function beginPlacement(params: {
       (e) => bucketRank(e.sentiment) <= bucketRank(sentiment)
     ).length;
 
-    let row: UserRankedEntry;
+    let rowId: string;
     if (existing) {
-      row = await tx.userRankedEntry.update({
+      const row = await tx.userRankedEntry.update({
         where: { id: existing.id },
         data: {
           category,
@@ -227,8 +234,9 @@ export async function beginPlacement(params: {
           // position/score corrected by persistOrder below
         },
       });
+      rowId = row.id;
     } else {
-      row = await tx.userRankedEntry.create({
+      const row = await tx.userRankedEntry.create({
         data: {
           userId,
           ...refCreateFields(ref),
@@ -242,11 +250,12 @@ export async function beginPlacement(params: {
           categorySnapshot: content.category,
         },
       });
+      rowId = row.id;
     }
 
     const ordered = [
       ...current.slice(0, insertAt),
-      { id: row.id, sentiment, position: -1, score: -1 },
+      { id: rowId, sentiment, position: -1, score: -1 },
       ...current.slice(insertAt),
     ];
     await persistOrder(tx, ordered);
@@ -259,17 +268,7 @@ export async function beginPlacement(params: {
         imageUrl: e.imageSnapshot,
       }));
 
-    return { entryId: row.id, bucketEntries: opponents };
-  });
-
-  // Status + bridge star through the existing path — this also handles
-  // markDirty, live re-rank, and Place.pulseRating* recompute.
-  await upsertFeedback({
-    userId,
-    ref,
-    status: "DONE",
-    source,
-    rating: bridgeRating(sentiment),
+    return { entryId: rowId, bucketEntries: opponents };
   });
 
   return {
@@ -357,6 +356,28 @@ export async function confirmPlacement(params: {
       score: scores[globalIndex],
     };
   });
+
+  // Refine the coarse begin-time bridge star (5/3/1) from the final derived
+  // score so Place.pulseRating* aggregates keep real granularity instead of
+  // collapsing to the 1/3/5 poles: 0–10 → 1–5.
+  const refinedStar = Math.min(5, Math.max(1, Math.round(result.score / 2)));
+  try {
+    await prisma.userItemStatus.updateMany({
+      where: {
+        userId,
+        ...("eventId" in ref
+          ? { eventId: ref.eventId }
+          : "placeId" in ref
+            ? { placeId: ref.placeId }
+            : { discoveryId: ref.discoveryId }),
+        status: "DONE",
+      },
+      data: { rating: refinedStar },
+    });
+    if ("placeId" in ref) await recomputePlaceRating(ref.placeId);
+  } catch (err) {
+    console.warn("[rank-engine.refineBridgeStar] failed:", err);
+  }
 
   // beginPlacement already dirtied via upsertFeedback; the placement changes
   // ordering (and therefore loved/disliked weighting), so dirty again. The
@@ -460,12 +481,16 @@ export interface RankedCategoryView {
   entries: RankedEntryView[];
 }
 
+const CONTENT_INCLUDE = {
+  event: { select: { id: true, title: true, imageUrl: true, townName: true, neighborhood: true } },
+  place: { select: { id: true, name: true, primaryImageUrl: true, townName: true, neighborhood: true } },
+  discovery: { select: { id: true, title: true, townName: true } },
+} as const;
+
+// Derived from the include const so the fetched shape and the type can
+// never drift apart.
 type EntryWithContent = Prisma.UserRankedEntryGetPayload<{
-  include: {
-    event: { select: { id: true; title: true; imageUrl: true; townName: true; neighborhood: true } };
-    place: { select: { id: true; name: true; primaryImageUrl: true; townName: true; neighborhood: true } };
-    discovery: { select: { id: true; title: true; townName: true } };
-  };
+  include: typeof CONTENT_INCLUDE;
 }>;
 
 function toView(e: EntryWithContent, rank: number): RankedEntryView {
@@ -503,12 +528,6 @@ function toView(e: EntryWithContent, rank: number): RankedEntryView {
     ref,
   };
 }
-
-const CONTENT_INCLUDE = {
-  event: { select: { id: true, title: true, imageUrl: true, townName: true, neighborhood: true } },
-  place: { select: { id: true, name: true, primaryImageUrl: true, townName: true, neighborhood: true } },
-  discovery: { select: { id: true, title: true, townName: true } },
-} as const;
 
 /** All of a user's rankings (own view — includes provisional entries). */
 export async function fetchRankings(
