@@ -171,5 +171,11 @@ export interface ForYouFeedResponse {
   sections: ForYouSection[];
   /** True when ordering came from the user's RankedFeedCache (vs a quality fallback). */
   personalized: boolean;
+  /** Wave 5 — top public lists, rendered as a rail below the sections.
+   *  Deliberately its own field rather than a ForYouSection: that item union is
+   *  `event | place` and a list is neither. Empty when SOCIAL_V1 is off or no
+   *  public list has ever been saved; the rail is omitted entirely when empty,
+   *  matching the sections.filter(s => s.items.length > 0) convention. */
+  featuredLists: import("@/lib/social/featured-lists").FeaturedList[];
   lastUpdatedAt: string; // ISO
 }

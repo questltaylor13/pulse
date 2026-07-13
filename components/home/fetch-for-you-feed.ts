@@ -7,7 +7,8 @@ import {
   rowToEventCompact,
   rowToPlaceCompact,
 } from "@/lib/ranking/rails";
-import { isForYouEnabled } from "@/lib/ranking/flags";
+import { isForYouEnabled, isSocialV1Enabled } from "@/lib/ranking/flags";
+import { fetchFeaturedLists } from "@/lib/social/featured-lists";
 import {
   activeEventsWhere,
   regionalScopeWhere,
@@ -139,9 +140,16 @@ export async function fetchForYouFeed(
     });
   }
 
+  // Wave 5 — top public lists. Failure-tolerant: the rail is a bonus surface,
+  // and it must not be able to take the whole For You feed down with it.
+  const featuredLists = isSocialV1Enabled()
+    ? await fetchFeaturedLists().catch(() => [])
+    : [];
+
   return {
     sections: sections.filter((s) => s.items.length > 0),
     personalized,
+    featuredLists,
     lastUpdatedAt: now.toISOString(),
   };
 }
