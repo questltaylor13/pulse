@@ -23,6 +23,7 @@ import type {
 } from "@prisma/client";
 import { markDirty } from "@/lib/ranking/cache";
 import { triggerUserRerank } from "@/lib/ranking/rerank-trigger";
+import { emitRankedItemActivity } from "@/lib/social/activity";
 import { recomputePlaceRating, upsertFeedback } from "@/lib/feedback/api";
 import {
   RANK_CATEGORY_LABELS,
@@ -379,6 +380,10 @@ export async function confirmPlacement(params: {
     console.warn("[rank-engine.refineBridgeStar] failed:", err);
   }
 
+  // Wave 5 — tell followers. Pointer row only; hydrated at read time. Already
+  // swallows its own errors, so a social failure cannot fail a placement.
+  await emitRankedItemActivity({ userId, rankedEntryId: result.entryId });
+
   // beginPlacement already dirtied via upsertFeedback; the placement changes
   // ordering (and therefore loved/disliked weighting), so dirty again. The
   // 45s rerank coalesce window absorbs the begin→place double-trigger.
@@ -610,6 +615,67 @@ export async function fetchPublicRankings(
     },
     moreCount: Math.max(0, entries.length - PUBLIC_RANKINGS_LIMIT),
   };
+}
+
+/** A ranked entry as the following feed renders it: content + where it landed. */
+export interface FeedRankedEntry extends RankedEntryView {
+  category: RankCategory;
+  categoryLabel: string;
+  categorySlug: string;
+  categorySize: number;
+}
+
+/**
+ * Wave 5 — hydrate feed pointer rows into current content.
+ *
+ * The following feed stores only `rankedEntryId`; everything a row displays is
+ * read through here, so a re-rank is reflected the next time the feed is read
+ * and a deleted entry simply drops out (its id is absent from the map). Keeping
+ * this in the service — rather than re-deriving title/image/href in the route —
+ * means the feed and the rankings pages can never disagree about what an entry
+ * is called.
+ *
+ * Entries the caller isn't allowed to see are the caller's problem: this
+ * resolves ids, it does not authorize them.
+ */
+export async function hydrateRankedEntriesForFeed(
+  entryIds: string[]
+): Promise<Map<string, FeedRankedEntry>> {
+  if (entryIds.length === 0) return new Map();
+
+  const entries = (await prisma.userRankedEntry.findMany({
+    where: { id: { in: entryIds } },
+    include: CONTENT_INCLUDE,
+  })) as EntryWithContent[];
+  if (entries.length === 0) return new Map();
+
+  // "#3" is a lie without a denominator, so carry the category size too. One
+  // groupBy over just the (user, category) pairs on this page.
+  const sizes = await prisma.userRankedEntry.groupBy({
+    by: ["userId", "category"],
+    where: {
+      userId: { in: [...new Set(entries.map((e) => e.userId))] },
+      category: { in: [...new Set(entries.map((e) => e.category))] },
+    },
+    _count: { _all: true },
+  });
+  const sizeByPair = new Map(
+    sizes.map((s) => [`${s.userId}|${s.category}`, s._count._all])
+  );
+
+  return new Map(
+    entries.map((e) => [
+      e.id,
+      {
+        // Positions are dense within a category, so rank = position + 1.
+        ...toView(e, e.position + 1),
+        category: e.category,
+        categoryLabel: RANK_CATEGORY_LABELS[e.category],
+        categorySlug: rankCategorySlug(e.category),
+        categorySize: sizeByPair.get(`${e.userId}|${e.category}`) ?? 1,
+      },
+    ])
+  );
 }
 
 export interface EntryStatusView {

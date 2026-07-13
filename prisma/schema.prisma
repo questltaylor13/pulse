@@ -682,6 +682,8 @@ model UserRankedEntry {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  activities UserActivity[] // Wave 5 — feed pointer rows (cascade on delete)
+
   @@unique([userId, eventId])
   @@unique([userId, placeId])
   @@unique([userId, discoveryId])
@@ -1024,12 +1026,13 @@ model UserFollow {
 
 // Activity type enum
 enum ActivityType {
-  SAVED_EVENT
-  ATTENDED_EVENT
+  SAVED_EVENT // legacy: no writer
+  ATTENDED_EVENT // legacy: no writer
   CREATED_LIST
   ADDED_TO_LIST
   FOLLOWED_USER
-  RATED_PLACE
+  RATED_PLACE // legacy: no writer; superseded by RANKED_ITEM
+  RANKED_ITEM // Wave 5: pointer row into UserRankedEntry
 }
 
 // User activity for feed
@@ -1045,11 +1048,22 @@ model UserActivity {
   isPublic     Boolean      @default(true)
   createdAt    DateTime     @default(now())
 
+  // Wave 5 — pointer row. RANKED_ITEM activities carry no snapshot of rank or
+  // title: the Beli mechanic constantly reorders lists, so the feed hydrates
+  // current content from the entry at read time. Cascade means a deleted entry
+  // takes its feed row with it (enforced by the DB, not by app code).
+  rankedEntryId String?
+  rankedEntry   UserRankedEntry? @relation(fields: [rankedEntryId], references: [id], onDelete: Cascade)
+
   user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   event      Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
   list       List?  @relation(fields: [listId], references: [id], onDelete: SetNull)
   targetUser User?  @relation("ActivityTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
 
+  // One feed row per ranked entry: the duel loop cannot spam followers.
+  // Postgres permits multiple NULLs in a unique index, so other activity
+  // types are unaffected.
+  @@unique([rankedEntryId])
   @@index([userId, createdAt])
   @@index([createdAt])
   @@index([type])

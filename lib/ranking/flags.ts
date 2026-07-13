@@ -36,3 +36,14 @@ export function isForYouEnabled(): boolean {
 export function isRateRankEnabled(): boolean {
   return process.env.RATE_RANK_ENABLED === "true";
 }
+
+/**
+ * Wave 5 — gates trust & social surfacing: RANKED_ITEM activity emission, the
+ * /feed/following page, the featured-lists rail, and the followed-loved signal
+ * in buildRankingContext. Off ⇒ no activity rows are written and the social
+ * sub-factor contributes an empty signal set, so scores are byte-identical to
+ * pre-Wave-5.
+ */
+export function isSocialV1Enabled(): boolean {
+  return process.env.SOCIAL_V1_ENABLED === "true";
+}
