@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import AuthActions from "@/components/AuthActions";
 import NavLinks from "@/components/NavLinks";
+import { isSocialV1Enabled } from "@/lib/ranking/flags";
 
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -16,7 +17,9 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
               Denver beta
             </span>
             <Suspense fallback={null}>
-              <NavLinks />
+              {/* Flag read on the server, passed down: NavLinks is a client
+                  component and cannot see env. Same pattern as RankFlowProvider. */}
+              <NavLinks socialEnabled={isSocialV1Enabled()} />
             </Suspense>
             <AuthActions />
           </div>

@@ -4,7 +4,12 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 
-export default function NavLinks() {
+interface Props {
+  /** SOCIAL_V1_ENABLED, read on the server (this is a client component). */
+  socialEnabled?: boolean;
+}
+
+export default function NavLinks({ socialEnabled = false }: Props) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
@@ -39,6 +44,13 @@ export default function NavLinks() {
       <Link href="/lists" className={linkClass("/lists")}>
         Saved
       </Link>
+      {/* Wave 5 — signed-in only: the page redirects anonymous visitors, so
+          showing it logged-out would advertise a dead end. */}
+      {socialEnabled && session?.user && (
+        <Link href="/feed/following" className={linkClass("/feed/following")}>
+          Following
+        </Link>
+      )}
       {session?.user ? (
         <Link
           href="/community"
