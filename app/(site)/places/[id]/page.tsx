@@ -6,7 +6,10 @@ import { similarPlaces } from "@/lib/detail/similar";
 import PlaceDetailPage from "@/components/detail/PlaceDetailPage";
 import DetailFeedback from "@/components/feedback/DetailFeedback";
 import PlaceRating from "@/components/feedback/PlaceRating";
+import RateBlock from "@/components/rank/RateBlock";
 import { getFeedbackMaps } from "@/lib/feedback/server";
+import { fetchEntryForRef } from "@/lib/rank-engine/service";
+import { isRateRankEnabled } from "@/lib/ranking/flags";
 
 interface PageProps {
   params: { id: string };
@@ -66,6 +69,13 @@ export default async function PlacePage({ params }: PageProps) {
   const ratingAvg =
     place.pulseRatingCount > 0 ? place.pulseRatingSum / place.pulseRatingCount : null;
 
+  // Wave 4 Rate & Rank — the sentiment/duel flow replaces the star card.
+  const rateRankOn = isRateRankEnabled();
+  const rankEntry =
+    rateRankOn && session?.user?.id
+      ? await fetchEntryForRef(session.user.id, { placeId: place.id })
+      : null;
+
   return (
     <>
       <div className="mx-auto flex max-w-3xl justify-end px-5 pt-3">
@@ -77,12 +87,23 @@ export default async function PlacePage({ params }: PageProps) {
         />
       </div>
       <div className="mx-auto max-w-3xl px-5 pt-3">
-        <PlaceRating
-          placeId={place.id}
-          initialRating={myStatus?.rating ?? null}
-          ratingCount={place.pulseRatingCount}
-          ratingAvg={ratingAvg}
-        />
+        {rateRankOn ? (
+          <RateBlock
+            refObj={{ placeId: place.id }}
+            itemTitle={place.name}
+            itemImageUrl={place.primaryImageUrl}
+            prompt="Been here? Rate it"
+            entry={rankEntry}
+            aggregate={{ avg: ratingAvg, count: place.pulseRatingCount }}
+          />
+        ) : (
+          <PlaceRating
+            placeId={place.id}
+            initialRating={myStatus?.rating ?? null}
+            ratingCount={place.pulseRatingCount}
+            ratingAvg={ratingAvg}
+          />
+        )}
       </div>
       <PlaceDetailPage
       place={{

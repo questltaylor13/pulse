@@ -89,5 +89,12 @@ export function useFeedback({ ref, initialStatus }: UseFeedbackArgs) {
     }
   }, [ref, status]);
 
-  return { status, submitting, errorMessage, upsert, remove };
+  // Wave 4 Rate & Rank — the rating flow (components/rank/RankFlow) records
+  // DONE server-side via /api/rank/begin, outside this hook's upsert path.
+  // Callers use this to reconcile the local pill without a duplicate write.
+  const setStatusLocal = useCallback((next: ItemStatus | null) => {
+    setStatus(next);
+  }, []);
+
+  return { status, submitting, errorMessage, upsert, remove, setStatusLocal };
 }

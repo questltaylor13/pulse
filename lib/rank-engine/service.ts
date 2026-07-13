@@ -593,6 +593,44 @@ export async function fetchPublicRankings(
   };
 }
 
+export interface EntryStatusView {
+  entryId: string;
+  rank: number;
+  categorySize: number;
+  categoryLabel: string;
+  categorySlug: string;
+  score: number;
+  sentiment: RankSentiment;
+  isPlacementConfirmed: boolean;
+}
+
+/**
+ * The user's ranked-entry state for one content ref (detail-page rate
+ * blocks). Positions are dense, so rank = position + 1.
+ */
+export async function fetchEntryForRef(
+  userId: string,
+  ref: RankRef
+): Promise<EntryStatusView | null> {
+  const entry = await prisma.userRankedEntry.findFirst({
+    where: refWhere(userId, ref),
+  });
+  if (!entry) return null;
+  const categorySize = await prisma.userRankedEntry.count({
+    where: { userId, category: entry.category },
+  });
+  return {
+    entryId: entry.id,
+    rank: entry.position + 1,
+    categorySize,
+    categoryLabel: RANK_CATEGORY_LABELS[entry.category],
+    categorySlug: rankCategorySlug(entry.category),
+    score: entry.score,
+    sentiment: entry.sentiment,
+    isPlacementConfirmed: entry.isPlacementConfirmed,
+  };
+}
+
 /** Per-category counts of confirmed public rankings (profile page section). */
 export async function fetchPublicRankingSummary(
   userId: string
