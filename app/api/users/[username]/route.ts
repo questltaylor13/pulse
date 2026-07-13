@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentPeriod } from "@/lib/leaderboards";
 import { LeaderboardType } from "@prisma/client";
+import { fetchPublicRankingSummary } from "@/lib/rank-engine/service";
+import { isRateRankEnabled } from "@/lib/ranking/flags";
 
 interface RouteParams {
   params: Promise<{ username: string }>;
@@ -205,6 +207,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       shareSlug: list.shareSlug,
       updatedAt: list.updatedAt,
     })),
+    // Wave 4 Rate & Rank — auto-generated ranked lists (confirmed entries
+    // only), shown when the flag is on and the owner keeps rankings public.
+    publicRankings:
+      isRateRankEnabled() && user.rankingsArePublic
+        ? await fetchPublicRankingSummary(user.id)
+        : [],
   };
 
   return NextResponse.json(profile);

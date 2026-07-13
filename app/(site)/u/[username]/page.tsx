@@ -18,6 +18,14 @@ interface PublicList {
   updatedAt: string;
 }
 
+interface PublicRanking {
+  category: string;
+  label: string;
+  slug: string;
+  count: number;
+  topTitle: string | null;
+}
+
 interface ProfileStats {
   eventsSaved: number;
   eventsAttended: number;
@@ -63,6 +71,9 @@ interface UserProfile {
   isOwnProfile: boolean;
   stats: ProfileStats;
   publicLists: PublicList[];
+  // Wave 4 Rate & Rank — auto-generated ranked lists (empty when flag off
+  // or rankings are private)
+  publicRankings: PublicRanking[];
   // Community features
   currentStreak: number;
   longestStreak: number;
@@ -418,6 +429,34 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+
+      {/* Wave 4 — Rankings (auto-generated from ratings) */}
+      {(profile.publicRankings?.length ?? 0) > 0 && (
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900 mb-4">
+            Rankings
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {profile.publicRankings.map((ranking) => (
+              <Link
+                key={ranking.slug}
+                href={`/u/${profile.username}/rankings/${ranking.slug}`}
+                className="card hover:shadow-md transition"
+              >
+                <div className="p-4">
+                  <p className="text-sm font-semibold text-slate-900">
+                    Top {ranking.label}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {ranking.count} ranked
+                    {ranking.topTitle ? ` · #1 ${ranking.topTitle}` : ""}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Public Lists */}
       {profile.publicLists.length > 0 && (
