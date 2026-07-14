@@ -1,5 +1,6 @@
 import ScrollSection from "./ScrollSection";
 import SectionDivider from "./SectionDivider";
+import ListsRail from "./ListsRail";
 import EventCardCompact from "./EventCardCompact";
 import PlaceCardCompact from "./PlaceCardCompact";
 import LastUpdatedIndicator from "./LastUpdatedIndicator";
@@ -35,10 +36,14 @@ export default function ForYouTabBody({ data, feedbackMaps }: Props) {
 
   if (sections.length === 0) {
     return (
-      <div className="px-5 py-12 text-center text-body text-mute">
-        Your feed is warming up — save a few things you like (tap the heart) and
-        we&apos;ll tune this to your taste.
-      </div>
+      <>
+        <div className="px-5 py-12 text-center text-body text-mute">
+          Your feed is warming up — save a few things you like (tap the heart) and
+          we&apos;ll tune this to your taste.
+        </div>
+        {/* A warming-up feed is exactly when someone else's list is most useful. */}
+        <ListsRail lists={data.featuredLists} />
+      </>
     );
   }
 
@@ -72,6 +77,7 @@ export default function ForYouTabBody({ data, feedbackMaps }: Props) {
           </ScrollSection>
         </div>
       ))}
+      <ListsRail lists={data.featuredLists} />
       <LastUpdatedIndicator isoTimestamp={data.lastUpdatedAt} />
     </>
   );

@@ -10,7 +10,12 @@
 
 import type { ScoreReason } from "./types";
 
-type Renderer = (ctx: { contribution: number; tagsMatched?: string[] }) => string;
+type Renderer = (ctx: {
+  contribution: number;
+  tagsMatched?: string[];
+  /** The named thing the reason is about — Wave 5's follower name. */
+  subject?: string;
+}) => string;
 
 const RENDERERS: Record<string, Renderer> = {
   base_quality: () => "A Pulse favorite",
@@ -37,6 +42,12 @@ const RENDERERS: Record<string, Renderer> = {
       ? `Because you loved ${tagsMatched[0]}`
       : "Like spots you've rated highly",
   disliked_similarity: () => "Similar to spots that missed for you",
+  // Wave 5 — the two social tiers license different claims, so they are
+  // different factors. "loved this" is only ever said about the exact item.
+  followed_loved_direct: ({ subject }) =>
+    subject ? `${subject} loved this` : "Someone you follow loved this",
+  followed_loved_similarity: ({ subject }) =>
+    subject ? `Like spots ${subject} loves` : "Popular with people you follow",
   category_affinity: ({ contribution }) =>
     contribution >= 0
       ? "You rate this kind of spot highly"
@@ -60,16 +71,18 @@ export function renderReason(
   factor: string,
   contribution: number,
   tagsMatched?: string[],
+  subject?: string,
 ): ScoreReason {
   const renderer = RENDERERS[factor];
   const human_readable = renderer
-    ? renderer({ contribution, tagsMatched })
+    ? renderer({ contribution, tagsMatched, subject })
     : fallbackCopy(factor, contribution);
   return {
     factor,
     contribution,
     human_readable,
     ...(tagsMatched?.length ? { tags_matched: tagsMatched } : {}),
+    ...(subject ? { subject } : {}),
   };
 }
 

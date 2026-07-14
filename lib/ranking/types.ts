@@ -40,6 +40,15 @@ export interface ScoreReason {
   human_readable: string;
   /** Which specific tags matched, when applicable. */
   tags_matched?: string[];
+  /**
+   * The named thing the reason is *about*, when it is about a thing rather than
+   * a tag overlap — Wave 5's "Alex loved this" names a person. Kept separate
+   * from tags_matched: smuggling a display name through a field called
+   * "tags_matched" is the kind of thing that reads fine today and misleads
+   * whoever touches it next. Optional, and the JSON blob is persisted, so
+   * pre-Wave-5 cached rows simply lack it.
+   */
+  subject?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,6 +125,10 @@ export interface RankingContext {
    * the denominator.
    */
   ratedCategoryAffinity?: Record<string, number>;
+  // -- Wave 5 social signal (optional: absent/empty when SOCIAL_V1_ENABLED is
+  //    off or the user follows nobody ⇒ scores are provably unchanged) -------
+  /** LIKED ranked entries belonging to people this user follows. */
+  followedLovedItems?: SocialLovedSignal[];
 }
 
 /** One rated item's contribution shape (Wave 4). */
@@ -126,6 +139,22 @@ export interface RatedItemSignal {
   score: number;
   /** Display title for "Because you loved {title}" why-lines. */
   title: string | null;
+}
+
+/**
+ * One LIKED entry from someone the user follows (Wave 5).
+ *
+ * Unlike RatedItemSignal, the display string is the *follower's* name, not the
+ * item's title: the headline this signal produces is "Alex loved this", so the
+ * person is what the why-line needs to name.
+ */
+export interface SocialLovedSignal {
+  itemId: string;
+  tags: string[];
+  /** The follower's derived rank-engine score for it, 0–10. */
+  score: number;
+  /** Display name of the person the viewer follows. */
+  followerName: string | null;
 }
 
 /** Q3 vibe pair selections. Shape matches UserProfile.vibePreferences Json. */

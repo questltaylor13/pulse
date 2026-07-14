@@ -7,8 +7,14 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import type { RankingContext, RankingVariantKey, RatedItemSignal, VibePair } from "./types";
-import { isRateRankEnabled } from "./flags";
+import type {
+  RankingContext,
+  RankingVariantKey,
+  RatedItemSignal,
+  SocialLovedSignal,
+  VibePair,
+} from "./types";
+import { isRateRankEnabled, isSocialV1Enabled } from "./flags";
 
 /**
  * Fetches the user + profile + feedback summary and assembles a
@@ -156,6 +162,20 @@ export async function buildRankingContext(userId: string): Promise<RankingContex
     }
   }
 
+  // -- Wave 5: what the people you follow loved ------------------------------
+  //
+  // Gated on the flag so flag-off yields an empty set and provably unchanged
+  // scores. Failure-tolerant: on error this stays empty, which is identical to
+  // flag-off — a social-graph hiccup must never degrade someone's whole feed.
+  const followedLovedItems: SocialLovedSignal[] = [];
+  if (isSocialV1Enabled()) {
+    try {
+      followedLovedItems.push(...(await loadFollowedLovedSignals(userId)));
+    } catch (err) {
+      console.warn("[ranking.context] social signal load failed:", err);
+    }
+  }
+
   const msInDay = 24 * 60 * 60 * 1000;
   const accountAgeDays = Math.max(
     0,
@@ -184,12 +204,112 @@ export async function buildRankingContext(userId: string): Promise<RankingContex
     lovedItems,
     dislikedItems,
     ratedCategoryAffinity,
+    followedLovedItems,
   };
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** At most this many follows feed the signal, most recently followed first. */
+const MAX_FOLLOWS_SCANNED = 100;
+/** Total entry budget across all followed users. */
+const MAX_SOCIAL_ENTRIES = 300;
+/** Floor per followee, so someone with one great pick is never shut out. */
+const MIN_ENTRIES_PER_FOLLOWEE = 5;
+
+/**
+ * Wave 5 — the two-hop load: who you follow → what they LIKED.
+ *
+ * Both bounds are mandatory, not decorative. This runs on the READ path
+ * (rerank-trigger.ts → rails.ts inline re-rank on dirty), not just the nightly
+ * cron, and the fan-out is unbounded in *both* directions — follow count and
+ * entries-per-followed-user. An unbounded version is a latency bomb that only
+ * goes off once someone popular exists.
+ *
+ * The budget is spent PER FOLLOWEE, not as one global top-N. UserRankedEntry
+ * .score is a within-user, within-category rank percentile (see scores.ts), so
+ * it is NOT comparable across people: someone with 500 LIKED entries has
+ * hundreds scoring ≥9, while someone with exactly one — the single favourite
+ * that made you follow them — scores it 8.35. A global `orderBy score desc,
+ * take 300` fills every slot with the prolific user and drops the sparse one
+ * entirely, so "Bea loved this" could never fire. Per-followee slices keep the
+ * fan-out bounded AND give everyone representation.
+ *
+ * Served by @@index([userId, sentiment, isPlacementConfirmed, score]) — without
+ * it, sentiment/isPlacementConfirmed are heap filters and the score sort is
+ * unindexed, so `take` would bound the output but not the work.
+ */
+async function loadFollowedLovedSignals(
+  userId: string,
+): Promise<SocialLovedSignal[]> {
+  const follows = await prisma.userFollow.findMany({
+    where: { followerId: userId },
+    orderBy: { createdAt: "desc" },
+    take: MAX_FOLLOWS_SCANNED,
+    select: {
+      followingId: true,
+      following: {
+        select: { name: true, username: true, rankingsArePublic: true },
+      },
+    },
+  });
+
+  // Only people whose rankings are public: a private ranking must not leak into
+  // a follower's feed, not even as an unattributed nudge to the ordering.
+  const visible = follows.filter((f) => f.following.rankingsArePublic);
+  if (visible.length === 0) return [];
+
+  const nameById = new Map(
+    visible.map((f) => [
+      f.followingId,
+      f.following.name ?? (f.following.username ? `@${f.following.username}` : null),
+    ]),
+  );
+
+  const perFollowee = Math.max(
+    MIN_ENTRIES_PER_FOLLOWEE,
+    Math.ceil(MAX_SOCIAL_ENTRIES / visible.length),
+  );
+
+  const batches = await Promise.all(
+    visible.map((f) =>
+      prisma.userRankedEntry.findMany({
+        where: {
+          userId: f.followingId,
+          sentiment: "LIKED",
+          isPlacementConfirmed: true,
+        },
+        orderBy: { score: "desc" },
+        take: perFollowee,
+        select: {
+          userId: true,
+          score: true,
+          eventId: true,
+          placeId: true,
+          discoveryId: true,
+          event: { select: { category: true, tags: true, vibeTags: true, companionTags: true, occasionTags: true } },
+          place: { select: { category: true, tags: true, vibeTags: true, companionTags: true, goodForTags: true } },
+          discovery: { select: { category: true, tags: true } },
+        },
+      }),
+    ),
+  );
+
+  const signals: SocialLovedSignal[] = [];
+  for (const entry of batches.flat()) {
+    const itemId = entry.eventId ?? entry.placeId ?? entry.discoveryId;
+    if (!itemId) continue;
+    signals.push({
+      itemId,
+      tags: extractTags(entry),
+      score: entry.score,
+      followerName: nameById.get(entry.userId) ?? null,
+    });
+  }
+  return signals;
+}
 
 type FeedbackRow = {
   event: { tags: string[]; vibeTags: string[]; companionTags: string[]; occasionTags: string[] } | null;

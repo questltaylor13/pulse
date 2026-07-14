@@ -5,6 +5,8 @@
 // to call" escape hatch, and progress dots. Scores stay hidden — this is a
 // gut call, not a math quiz.
 
+import InitialThumb from "@/components/ui/InitialThumb";
+
 interface DuelCard {
   title: string;
   imageUrl: string | null;
@@ -36,20 +38,13 @@ function DuelCardButton({
       onClick={onClick}
       className="group flex min-w-0 flex-1 flex-col overflow-hidden rounded-card border border-mute-divider bg-surface text-left transition active:scale-[0.98] disabled:opacity-50"
     >
-      <div className="relative h-28 w-full overflow-hidden bg-mute-hush">
-        {card.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={card.imageUrl}
-            alt=""
-            className="h-full w-full object-cover transition group-hover:scale-105"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-teal-soft to-coral/20 text-2xl font-semibold text-ink/40">
-            {card.title.charAt(0).toUpperCase()}
-          </div>
-        )}
-      </div>
+      <InitialThumb
+        src={card.imageUrl}
+        title={card.title}
+        className="relative h-28 w-full"
+        initialClassName="text-2xl"
+        imgClassName="transition group-hover:scale-105"
+      />
       <span className="line-clamp-2 px-3 py-2.5 text-sm font-medium text-ink">
         {card.title}
       </span>

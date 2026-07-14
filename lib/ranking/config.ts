@@ -42,6 +42,18 @@ export const RANKING_CONFIG = {
     dislikedSimilarity: 0.6,
     /** Wave 4 — signed weight on per-category rated affinity (±). */
     categoryAffinity: 0.25,
+    /**
+     * Wave 5 — max boost when people the user FOLLOWS loved something.
+     * Deliberately BELOW interestedSimilarity (+0.40): a friend's verdict is
+     * weaker evidence about *your* taste than your own stated interest. This is
+     * the same epistemic argument the rest of the hierarchy already makes —
+     * lovedSimilarity (+0.60) sits above wantSim because a confirmed personal
+     * visit is ground truth, and someone else's visit is not yours.
+     *
+     * Unevaluable at one user: argued from the weight hierarchy, not measured.
+     * Revisit with real follow data.
+     */
+    followedLovedSimilarity: 0.2,
   },
 
   /**

@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { isSocialV1Enabled } from "./flags";
 import type { RankedItem } from "./types";
 
 export interface CachedFeed {
@@ -69,6 +70,49 @@ export async function writeCache(
 export async function markDirty(userId: string): Promise<void> {
   await prisma.rankedFeedCache.updateMany({
     where: { userId },
+    data: { isDirty: true },
+  });
+}
+
+/**
+ * Wave 5 — dirty everyone who follows `userId`.
+ *
+ * When you rate something, your followers' feeds are now stale: the social
+ * sub-factor reads *your* ranked entries. Nothing in maybeSkip() would ever
+ * notice on its own — it gates freshness on the viewer's own feedback count,
+ * profile version, and dirty flag, none of which change when someone *else*
+ * rates something. Without this call the social signal would silently never
+ * recompute.
+ *
+ * markDirty, deliberately NOT triggerUserRerank. triggerUserRerank runs a full
+ * precomputeUser (context build + candidate pool + ~500 scored items + cache
+ * write) per user, fire-and-forget, with no queue, backpressure, or dedupe.
+ * Fanning that out per rating per follower is an amplification bomb: one
+ * popular user rating one taco shop would kick off hundreds of full recomputes.
+ * The dirty flag is enough — maybeSkip() refuses to skip when isDirty is set,
+ * so each follower recomputes lazily on their next read, or on the daily cron.
+ *
+ * One findMany + one updateMany, regardless of follower count.
+ */
+export async function markFollowersDirty(userId: string): Promise<void> {
+  // The dirty flag exists only to make the social signal recompute, and the
+  // social signal is flag-gated. With SOCIAL_V1 off this would dirty caches
+  // that provably cannot change (the social context is empty), forcing
+  // recomputes for byte-identical output — "flag off ⇒ unchanged app" has to
+  // mean unchanged work too, or a rollback still costs money.
+  if (!isSocialV1Enabled()) return;
+
+  // One statement. Materializing every follower id into an IN list is fine at
+  // ten followers and a bad idea at a hundred thousand; the relation filter
+  // never pulls them over the wire at all.
+  //
+  // `User.following` is the set of follows this cache's owner MADE (relation
+  // "Following", keyed on followerId). So "caches whose owner follows userId"
+  // is `following: { some: { followingId: userId } }`. Note it is NOT
+  // `followers` — that relation holds the rows pointing *at* the owner, and
+  // would collapse to dirtying only the rater themselves.
+  await prisma.rankedFeedCache.updateMany({
+    where: { user: { following: { some: { followingId: userId } } } },
     data: { isDirty: true },
   });
 }

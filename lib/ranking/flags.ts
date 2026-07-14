@@ -3,8 +3,8 @@
  *
  * RANKING_V2_ENABLED gates the transition from the legacy scorer to the
  * new lib/ranking/ path. While it's off, precompute still runs and
- * populates the cache, but fetchHomeFeed / /api/feed fall through to the
- * legacy sorts. Flip to "true" once dashboards are green.
+ * populates the cache, but fetchHomeFeed falls through to the legacy
+ * sorts. Flip to "true" once dashboards are green.
  *
  * The flag lives in env because the goal is no-deploy toggling (flip it
  * in Vercel env + redeploy on next cron; actual runtime read is cheap).
@@ -35,4 +35,15 @@ export function isForYouEnabled(): boolean {
  */
 export function isRateRankEnabled(): boolean {
   return process.env.RATE_RANK_ENABLED === "true";
+}
+
+/**
+ * Wave 5 — gates trust & social surfacing: RANKED_ITEM activity emission, the
+ * /feed/following page, the featured-lists rail, and the followed-loved signal
+ * in buildRankingContext. Off ⇒ no activity rows are written and the social
+ * sub-factor contributes an empty signal set, so scores are byte-identical to
+ * pre-Wave-5.
+ */
+export function isSocialV1Enabled(): boolean {
+  return process.env.SOCIAL_V1_ENABLED === "true";
 }

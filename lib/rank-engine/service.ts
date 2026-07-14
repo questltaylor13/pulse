@@ -21,8 +21,16 @@ import type {
   RankCategory,
   RankSentiment,
 } from "@prisma/client";
-import { markDirty } from "@/lib/ranking/cache";
+import { markDirty, markFollowersDirty } from "@/lib/ranking/cache";
 import { triggerUserRerank } from "@/lib/ranking/rerank-trigger";
+import { emitRankedItemActivity } from "@/lib/social/activity";
+import {
+  loadEventSnapshot,
+  loadPlaceSnapshot,
+  loadDiscoverySnapshot,
+  resolveContent,
+  type ContentSnapshot,
+} from "@/lib/content/snapshot";
 import { recomputePlaceRating, upsertFeedback } from "@/lib/feedback/api";
 import {
   RANK_CATEGORY_LABELS,
@@ -52,63 +60,11 @@ export function bridgeRating(sentiment: RankSentiment): number {
   }
 }
 
-interface ContentSnapshot {
-  title: string | null;
-  imageUrl: string | null;
-  category: string | null;
-  town: string | null;
-}
-
-async function loadContent(ref: RankRef): Promise<ContentSnapshot | null> {
-  if ("eventId" in ref) {
-    const row = await prisma.event.findUnique({
-      where: { id: ref.eventId },
-      select: {
-        title: true,
-        imageUrl: true,
-        category: true,
-        townName: true,
-        neighborhood: true,
-      },
-    });
-    if (!row) return null;
-    return {
-      title: row.title,
-      imageUrl: row.imageUrl,
-      category: row.category,
-      town: row.townName ?? row.neighborhood,
-    };
-  }
-  if ("placeId" in ref) {
-    const row = await prisma.place.findUnique({
-      where: { id: ref.placeId },
-      select: {
-        name: true,
-        primaryImageUrl: true,
-        category: true,
-        townName: true,
-        neighborhood: true,
-      },
-    });
-    if (!row) return null;
-    return {
-      title: row.name,
-      imageUrl: row.primaryImageUrl,
-      category: row.category,
-      town: row.townName ?? row.neighborhood,
-    };
-  }
-  const row = await prisma.discovery.findUnique({
-    where: { id: ref.discoveryId },
-    select: { title: true, category: true, townName: true },
-  });
-  if (!row) return null;
-  return {
-    title: row.title,
-    imageUrl: null, // Discoveries have no image field
-    category: row.category,
-    town: row.townName,
-  };
+/** Ref dispatch over the shared table→snapshot mapping in lib/content/snapshot. */
+function loadContent(ref: RankRef): Promise<ContentSnapshot | null> {
+  if ("eventId" in ref) return loadEventSnapshot(ref.eventId);
+  if ("placeId" in ref) return loadPlaceSnapshot(ref.placeId);
+  return loadDiscoverySnapshot(ref.discoveryId);
 }
 
 function refCreateFields(ref: RankRef): {
@@ -379,11 +335,19 @@ export async function confirmPlacement(params: {
     console.warn("[rank-engine.refineBridgeStar] failed:", err);
   }
 
+  // Wave 5 — tell followers. Pointer row only; hydrated at read time. Already
+  // swallows its own errors, so a social failure cannot fail a placement.
+  await emitRankedItemActivity({ userId, rankedEntryId: result.entryId });
+
   // beginPlacement already dirtied via upsertFeedback; the placement changes
   // ordering (and therefore loved/disliked weighting), so dirty again. The
   // 45s rerank coalesce window absorbs the begin→place double-trigger.
   try {
     await markDirty(userId);
+    // Wave 5 — this rating also stales every follower's feed (the social
+    // sub-factor reads our entries). Dirty only: see markFollowersDirty on why
+    // fanning out triggerUserRerank here would be an amplification bomb.
+    await markFollowersDirty(userId);
   } catch (err) {
     console.warn("[rank-engine.markDirty] failed:", err);
   }
@@ -417,6 +381,9 @@ export async function removeEntry(params: {
   if (removed) {
     try {
       await markDirty(userId);
+      // Removing an entry retracts the social signal it was contributing, and
+      // cascades away its feed row — followers are stale either way.
+      await markFollowersDirty(userId);
     } catch (err) {
       console.warn("[rank-engine.markDirty] failed:", err);
     }
@@ -494,14 +461,12 @@ type EntryWithContent = Prisma.UserRankedEntryGetPayload<{
 }>;
 
 function toView(e: EntryWithContent, rank: number): RankedEntryView {
-  const title =
-    e.event?.title ?? e.place?.name ?? e.discovery?.title ?? e.titleSnapshot ?? "Untitled";
-  const imageUrl =
-    e.event?.imageUrl ?? e.place?.primaryImageUrl ?? e.imageSnapshot;
-  const town =
-    e.event?.townName ?? e.event?.neighborhood ??
-    e.place?.townName ?? e.place?.neighborhood ??
-    e.discovery?.townName ?? null;
+  // Shared with the feedback writer and the social surfaces — see
+  // lib/content/snapshot.ts for why this mapping lives in exactly one place.
+  const content = resolveContent(e);
+  const title = content.title ?? "Untitled";
+  const imageUrl = content.imageUrl;
+  const town = content.town;
   let href: string | null = null;
   let ref: RankRef | null = null;
   if (e.eventId) {
@@ -610,6 +575,88 @@ export async function fetchPublicRankings(
     },
     moreCount: Math.max(0, entries.length - PUBLIC_RANKINGS_LIMIT),
   };
+}
+
+/** A ranked entry as the following feed renders it: content + where it landed. */
+export interface FeedRankedEntry extends RankedEntryView {
+  category: RankCategory;
+  categoryLabel: string;
+  categorySlug: string;
+  categorySize: number;
+}
+
+/**
+ * Wave 5 — hydrate feed pointer rows into current content.
+ *
+ * The following feed stores only `rankedEntryId`; everything a row displays is
+ * read through here, so a re-rank is reflected the next time the feed is read
+ * and a deleted entry simply drops out (its id is absent from the map). Keeping
+ * this in the service — rather than re-deriving title/image/href in the route —
+ * means the feed and the rankings pages can never disagree about what an entry
+ * is called.
+ *
+ * Entries the caller isn't allowed to see are the caller's problem: this
+ * resolves ids, it does not authorize them.
+ */
+export async function hydrateRankedEntriesForFeed(
+  entryIds: string[]
+): Promise<Map<string, FeedRankedEntry>> {
+  if (entryIds.length === 0) return new Map();
+
+  // Confirmed only — and this is load-bearing, not defensive. beginPlacement
+  // flips isPlacementConfirmed back to false and drops the entry to the bottom
+  // of its bucket whenever someone re-rates; the activity row deliberately
+  // survives that. Without this filter the feed would publish a verdict its
+  // author abandoned mid-duel, at a position they never chose.
+  const entries = (await prisma.userRankedEntry.findMany({
+    where: { id: { in: entryIds }, isPlacementConfirmed: true },
+    include: CONTENT_INCLUDE,
+  })) as EntryWithContent[];
+  if (entries.length === 0) return new Map();
+
+  // Rank has to be computed the way fetchPublicRankings computes it — as the
+  // index among CONFIRMED entries — not as position + 1. Positions are dense
+  // over *all* entries including provisional ones, so position + 1 would print
+  // "#4 of 5" on a card that links to a page saying "#3 of 4" about the same
+  // spot. A rank that contradicts the list it links to is exactly the false
+  // claim this wave exists to prevent.
+  const pairs = [
+    ...new Map(
+      entries.map((e) => [`${e.userId}|${e.category}`, { userId: e.userId, category: e.category }])
+    ).values(),
+  ];
+  const siblings = await prisma.userRankedEntry.findMany({
+    where: { OR: pairs, isPlacementConfirmed: true },
+    orderBy: { position: "asc" },
+    select: { id: true, userId: true, category: true },
+  });
+
+  // Position-ordered confirmed entries per (user, category) → dense 1-based rank.
+  const rankById = new Map<string, number>();
+  const sizeByPair = new Map<string, number>();
+  for (const s of siblings) {
+    const key = `${s.userId}|${s.category}`;
+    const next = (sizeByPair.get(key) ?? 0) + 1;
+    sizeByPair.set(key, next);
+    rankById.set(s.id, next); // siblings are position-asc, so this IS the rank
+  }
+
+  return new Map(
+    entries.map((e) => {
+      const key = `${e.userId}|${e.category}`;
+      return [
+        e.id,
+        {
+          ...toView(e, rankById.get(e.id) ?? 1),
+          category: e.category,
+          categoryLabel: RANK_CATEGORY_LABELS[e.category],
+          categorySlug: rankCategorySlug(e.category),
+          // "#3" is a lie without a denominator.
+          categorySize: sizeByPair.get(key) ?? 1,
+        },
+      ];
+    })
+  );
 }
 
 export interface EntryStatusView {

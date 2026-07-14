@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { RankSentiment } from "@prisma/client";
 import { useRankFlow } from "./RankFlowProvider";
+import InitialThumb from "@/components/ui/InitialThumb";
 import {
   SENTIMENT_SCORE_CLASSES,
   type RankRefClient,
@@ -86,21 +87,7 @@ export default function RankedListRow({ entry, canEdit }: Props) {
       <span className="w-8 flex-shrink-0 text-right text-base font-bold text-mute">
         {entry.rank}
       </span>
-      <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-mute-hush">
-        {entry.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={entry.imageUrl}
-            alt=""
-            loading="lazy"
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-teal-soft to-coral/20 text-lg font-semibold text-ink/40">
-            {entry.title.charAt(0).toUpperCase()}
-          </div>
-        )}
-      </div>
+      <InitialThumb src={entry.imageUrl} title={entry.title} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-ink">{entry.title}</p>
         {entry.town && (

@@ -101,6 +101,10 @@ export function score(
   const affinityBoost = computeCategoryAffinityBoost(ctx, item, config);
   if (affinityBoost.contribution !== 0) reasons.push(affinityBoost.reason);
 
+  // ---- Wave 5: what people you follow loved (boost, cap 0.20) ------------
+  const socialLoved = computeFollowedLovedSimilarity(ctx, item, config);
+  if (socialLoved.reason) reasons.push(socialLoved.reason);
+
   // ---- Q4 budget penalty (additive penalty) ------------------------------
   const budgetPenalty = computeBudgetPenalty(profile.budgetTier, item.priceTier, config);
   if (budgetPenalty.contribution !== 0) reasons.push(budgetPenalty.reason);
@@ -126,6 +130,7 @@ export function score(
     lovedBoost.contribution +
     dislikedPenalty.contribution + // signed negative when present
     affinityBoost.contribution + // signed either way
+    socialLoved.contribution + // Wave 5, 0 when the user follows nobody
     budgetPenalty.contribution +
     recencyBoost.contribution +
     startsSoonBoost.contribution;
@@ -332,6 +337,106 @@ function computeLovedSimilarity(
     "loved_similarity",
     contribution,
     bestTitle ? [bestTitle] : undefined,
+  );
+  return { contribution, reason };
+}
+
+// ---------------------------------------------------------------------------
+// Wave 5 — social signal: what the people you FOLLOW loved.
+//
+// Two-tiered, and the tiering is the point. computeLovedSimilarity *skips*
+// exact self-matches (you've already been there, so it's a poor recommendation).
+// Here the exact match is the entire headline: "Alex loved this place" is the
+// strongest thing this signal can say. Tag overlap — Alex loved something
+// *like* this — is a real but much weaker inference, so it's the fallback.
+//
+// The two tiers get distinct factor keys because they license different claims.
+// Rendering "Alex loved this" for a tag-overlap match would be a false
+// statement about a real person, which is precisely the failure mode this wave
+// exists to prevent.
+// ---------------------------------------------------------------------------
+
+/** A followed user loved this exact item. Strong. */
+const SOCIAL_DIRECT_MATCH = 0.5;
+/**
+ * A followed user loved something tag-similar. Weak inference, so each match is
+ * small enough that a single one cannot saturate SOCIAL_OVERLAP_CAP — otherwise
+ * score-weighting inside the overlap tier would be dead code (every match, from
+ * a 5.0 to a 10.0, would clamp to the same number).
+ */
+const SOCIAL_OVERLAP_MATCH = 0.03;
+/**
+ * Tag overlap gets its own sub-budget, well under the full cap.
+ *
+ * The tiers CANNOT share one clamp. Summing them into a single total and
+ * clamping once means two common-tag overlaps ("cocktail-bar", "date-night")
+ * saturate the cap on their own — and then a place a followed user actually
+ * went to scores identically to a place nobody you follow has ever visited.
+ * The direct hit would drive the why-line while contributing nothing to the
+ * ordering, which is the opposite of the design's claim. Separate budgets keep
+ * a direct hit provably above any amount of overlap.
+ */
+const SOCIAL_OVERLAP_CAP = 0.08;
+
+function computeFollowedLovedSimilarity(
+  ctx: RankingContext,
+  item: RankableItem,
+  config: RankingConfig,
+): { contribution: number; reason: ScoreReason | null } {
+  const cap = config.weights.followedLovedSimilarity;
+  const signals = ctx.followedLovedItems ?? [];
+  if (signals.length === 0) return { contribution: 0, reason: null };
+
+  // A follow must never override an explicit rejection. The candidate pool only
+  // hard-filters DONE, and computePassSimilarity deliberately skips exact
+  // self-matches — so without this, a place the user actively passed on could
+  // take the single largest social boost available and come back with "Alex
+  // loved this" on it.
+  if (ctx.passItems?.some((p) => p.itemId === item.itemId)) {
+    return { contribution: 0, reason: null };
+  }
+
+  let overlapTotal = 0;
+  let bestDirect = 0;
+  let bestOverlap = 0;
+  let directName: string | null = null;
+  let overlapName: string | null = null;
+
+  for (const s of signals) {
+    const weight = ratedScoreWeight(s.score);
+
+    if (s.itemId === item.itemId) {
+      const match = SOCIAL_DIRECT_MATCH * weight;
+      if (match > bestDirect) {
+        bestDirect = match;
+        directName = s.followerName;
+      }
+      continue;
+    }
+
+    const match =
+      SOCIAL_OVERLAP_MATCH * overlapWeight(tagOverlap(s.tags, item.tags)) * weight;
+    overlapTotal += match;
+    if (match > bestOverlap) {
+      bestOverlap = match;
+      overlapName = s.followerName;
+    }
+  }
+
+  const direct = clamp(bestDirect, 0, cap);
+  const overlap = clamp(overlapTotal, 0, SOCIAL_OVERLAP_CAP);
+  const contribution = clamp(direct + overlap, 0, cap);
+  if (contribution === 0) return { contribution: 0, reason: null };
+
+  // The reason names the strongest contributor. A direct hit always wins it:
+  // "Alex loved this" is only ever said about the exact item.
+  const isDirect = bestDirect > 0;
+  const name = isDirect ? directName : overlapName;
+  const reason = renderReason(
+    isDirect ? "followed_loved_direct" : "followed_loved_similarity",
+    contribution,
+    undefined,
+    name ?? undefined, // a person, not a tag — see ScoreReason.subject
   );
   return { contribution, reason };
 }

@@ -9,7 +9,8 @@
 // machine from lib/rank-engine/insertion.ts (same module the server uses to
 // size the flow); the final index lands via POST /api/rank/place.
 //
-// Sheet chrome mirrors components/feedback/ActionSheet.tsx (house style).
+// Sheet chrome (backdrop, grip, Esc, error strip, footer) comes from the shared
+// <BottomSheet>, which ActionSheet also uses.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RankSentiment } from "@prisma/client";
@@ -22,6 +23,7 @@ import {
   type InsertionState,
 } from "@/lib/rank-engine/insertion";
 import type { RankFlowResult, RankRefClient } from "./types";
+import BottomSheet from "@/components/ui/BottomSheet";
 import SentimentSheet from "./SentimentSheet";
 import ComparisonDuel from "./ComparisonDuel";
 import RankResultCard from "./RankResultCard";
@@ -98,13 +100,6 @@ export default function RankFlow({
   const close = useCallback(() => {
     onClose({ committed: committed.current, ranked: ranked.current });
   }, [onClose]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, close]);
 
   const place = useCallback(
     async (inBucketIndex: number, comparisons: ComparisonLog[]) => {
@@ -217,75 +212,53 @@ export default function RankFlow({
     [step, submitting, place]
   );
 
-  if (!open) return null;
-
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Rate this"
-      className="fixed inset-0 z-modal flex items-end justify-center bg-ink/25 transition-opacity"
-      onClick={close}
+    <BottomSheet
+      open={open}
+      onClose={close}
+      ariaLabel="Rate this"
+      errorMessage={errorMessage}
+      // No footer on the result step: the placement is already committed, so
+      // "Cancel" would be a lie about what the button does.
+      cancelLabel={
+        step.kind === "result"
+          ? null
+          : step.kind === "dueling"
+            ? "Finish later"
+            : "Cancel"
+      }
     >
-      <div
-        className="w-full max-w-md rounded-t-[24px] bg-surface pb-safe animate-in slide-in-from-bottom duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Grip handle */}
-        <div className="flex justify-center pt-2.5 pb-1.5">
-          <div className="h-1 w-9 rounded-full bg-slate-300" />
-        </div>
+      {step.kind === "sentiment" && (
+        <SentimentSheet
+          itemTitle={itemTitle}
+          submitting={submitting}
+          onSelect={(s) => void selectSentiment(s)}
+          onJustMark={() => void justMark()}
+        />
+      )}
 
-        {step.kind === "sentiment" && (
-          <SentimentSheet
-            itemTitle={itemTitle}
-            submitting={submitting}
-            onSelect={(s) => void selectSentiment(s)}
-            onJustMark={() => void justMark()}
-          />
-        )}
+      {step.kind === "dueling" && (
+        <ComparisonDuel
+          subject={{ title: itemTitle, imageUrl: itemImageUrl ?? null }}
+          opponent={step.bucket[opponentIndex(step.state)]}
+          duelNumber={step.state.duels + 1}
+          maxDuels={step.maxComparisons}
+          submitting={submitting}
+          onPick={duel}
+          onSkip={() => duel("SKIPPED")}
+        />
+      )}
 
-        {step.kind === "dueling" && (
-          <ComparisonDuel
-            subject={{ title: itemTitle, imageUrl: itemImageUrl ?? null }}
-            opponent={step.bucket[opponentIndex(step.state)]}
-            duelNumber={step.state.duels + 1}
-            maxDuels={step.maxComparisons}
-            submitting={submitting}
-            onPick={duel}
-            onSkip={() => duel("SKIPPED")}
-          />
-        )}
-
-        {step.kind === "result" && (
-          <RankResultCard
-            rank={step.rank}
-            categorySize={step.categorySize}
-            categoryLabel={step.categoryLabel}
-            score={step.score}
-            listPath={step.listPath}
-            onDone={close}
-          />
-        )}
-
-        {errorMessage && (
-          <div className="mx-5 mt-2 rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
-            {errorMessage}
-          </div>
-        )}
-
-        {step.kind !== "result" && (
-          <div className="p-3">
-            <button
-              type="button"
-              onClick={close}
-              className="w-full rounded-xl bg-mute-hush py-3 text-sm font-medium text-ink hover:bg-mute-divider"
-            >
-              {step.kind === "dueling" ? "Finish later" : "Cancel"}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+      {step.kind === "result" && (
+        <RankResultCard
+          rank={step.rank}
+          categorySize={step.categorySize}
+          categoryLabel={step.categoryLabel}
+          score={step.score}
+          listPath={step.listPath}
+          onDone={close}
+        />
+      )}
+    </BottomSheet>
   );
 }

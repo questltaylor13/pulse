@@ -7,7 +7,8 @@ import {
   rowToEventCompact,
   rowToPlaceCompact,
 } from "@/lib/ranking/rails";
-import { isForYouEnabled } from "@/lib/ranking/flags";
+import { isForYouEnabled, isSocialV1Enabled } from "@/lib/ranking/flags";
+import { fetchFeaturedListsCached } from "@/lib/social/featured-lists";
 import {
   activeEventsWhere,
   regionalScopeWhere,
@@ -37,6 +38,13 @@ export async function fetchForYouFeed(
 ): Promise<ForYouFeedResponse> {
   const now = new Date();
   const horizonEnd = addDaysDenver(now, 21);
+
+  // Kicked off alongside the ranked feed rather than awaited after it — the rail
+  // has no dependency on the ranking, so serializing it just parked its latency
+  // on TTFB. Failure-tolerant: a bonus rail must not take the feed down with it.
+  const featuredListsPromise = isSocialV1Enabled()
+    ? fetchFeaturedListsCached().catch(() => [])
+    : Promise.resolve([]);
 
   const ranked =
     userId && isForYouEnabled()
@@ -142,6 +150,7 @@ export async function fetchForYouFeed(
   return {
     sections: sections.filter((s) => s.items.length > 0),
     personalized,
+    featuredLists: await featuredListsPromise,
     lastUpdatedAt: now.toISOString(),
   };
 }
