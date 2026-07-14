@@ -25,8 +25,32 @@ import { runEnrichment, type EnrichRunOptions } from "@/lib/enrich-place";
 const prisma = new PrismaClient();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+const KNOWN_FLAGS = ["--attributes-only", "--dry-run", "--force"];
+const KNOWN_OPTIONS = ["--limit", "--category"];
+
 function parseArgs(): EnrichRunOptions {
   const args = process.argv.slice(2);
+
+  // Unknown args are a HARD ERROR, not a shrug.
+  //
+  // They used to be silently ignored, which put the footgun directly under the
+  // one command that must never misfire: `--attributes --force` (a plausible
+  // typo for --attributes-only) parsed as mode "full" + force, which regenerates
+  // every pulseDescription in the corpus. Those are live. The mode exists
+  // precisely to not do that.
+  for (const arg of args) {
+    const name = arg.split("=")[0];
+    if (!KNOWN_FLAGS.includes(name) && !KNOWN_OPTIONS.includes(name)) {
+      console.error(`Unknown argument: ${arg}`);
+      console.error(`Known: ${[...KNOWN_FLAGS, ...KNOWN_OPTIONS.map((o) => `${o}=…`)].join(" ")}`);
+      process.exit(1);
+    }
+    if (KNOWN_OPTIONS.includes(name) && !arg.includes("=")) {
+      console.error(`${name} needs a value, e.g. ${name}=10`);
+      process.exit(1);
+    }
+  }
+
   const options: EnrichRunOptions = {
     mode: args.includes("--attributes-only") ? "attributes" : "full",
     dryRun: args.includes("--dry-run"),
@@ -35,8 +59,27 @@ function parseArgs(): EnrichRunOptions {
   };
 
   for (const arg of args) {
-    if (arg.startsWith("--limit=")) options.limit = parseInt(arg.split("=")[1], 10);
+    if (arg.startsWith("--limit=")) {
+      const n = parseInt(arg.split("=")[1], 10);
+      if (!Number.isFinite(n) || n <= 0) {
+        console.error(`--limit must be a positive integer, got "${arg.split("=")[1]}"`);
+        process.exit(1);
+      }
+      options.limit = n;
+    }
     if (arg.startsWith("--category=")) options.category = arg.split("=")[1];
+  }
+
+  // Full + force regenerates every live description in the corpus. Make the
+  // operator say so out loud.
+  if (options.mode === "full" && options.force && !options.dryRun) {
+    console.error(
+      "REFUSING: `--force` in full mode regenerates EVERY pulseDescription and tag set,\n" +
+        "and those are live in production. If you want the situational booleans, use\n" +
+        "`--attributes-only` (which never touches copy). If you really do mean to\n" +
+        "regenerate all copy, add --dry-run first and look at what it would hit.",
+    );
+    process.exit(1);
   }
 
   return options;

@@ -229,7 +229,7 @@ export async function runAllScrapers(): Promise<{
   const sportsDroppedTitles: string[] = [];
   for (const result of allResults) {
     for (const ev of result.events) {
-      if (isTicketedProGame(ev.title, ev.description, ev.venueName)) {
+      if (isTicketedProGame(ev.title, ev.venueName)) {
         sportsDroppedBySource.set(result.source, (sportsDroppedBySource.get(result.source) ?? 0) + 1);
         if (sportsDroppedTitles.length < 5) sportsDroppedTitles.push(`${result.source}: ${ev.title}`);
       }
@@ -244,7 +244,7 @@ export async function runAllScrapers(): Promise<{
 
   const allEvents = allResults
     .flatMap((r) => r.events)
-    .filter((e) => !isTicketedProGame(e.title, e.description, e.venueName));
+    .filter((e) => !isTicketedProGame(e.title, e.venueName));
   const allErrors = allResults.flatMap((r) => r.errors);
   const deduplicated = deduplicateEvents(allEvents);
 

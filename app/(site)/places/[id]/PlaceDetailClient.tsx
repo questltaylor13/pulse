@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { vibeTagLabels } from "@/lib/constants/vibe-tags";
 import Link from "next/link";
 import { Category, OpeningStatus, Place as PrismaPlace, Event } from "@prisma/client";
 import { CATEGORY_COLORS, CATEGORY_LABELS } from "@/lib/constants/categories";
@@ -169,7 +170,7 @@ export default function PlaceDetailClient({
           {/* Vibe Tags */}
           {place.vibeTags && place.vibeTags.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {place.vibeTags.map((tag) => (
+              {vibeTagLabels(place.vibeTags).map((tag) => (
                 <span
                   key={tag}
                   className="rounded-full bg-violet-100 px-3 py-1 text-sm font-medium text-violet-700"

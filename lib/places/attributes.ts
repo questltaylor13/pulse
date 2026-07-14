@@ -1,10 +1,13 @@
 /**
  * The attribute chips on place detail.
  *
- * Wave 6B. Note that isDogFriendly / isDrinkingOptional / hasMocktailMenu were
- * already on the Place model and rendered NOWHERE — the detail page drew vibe
- * chips and nothing else. They are surfaced here alongside the five new
- * situational booleans, since they answer the same kind of question.
+ * Wave 6B. isDogFriendly / isDrinkingOptional / hasMocktailMenu already existed
+ * on the model and are rendered on the CARDS (components/badges/DogFriendlyBadge,
+ * SoberFriendlyBadge, via PlaceCard + EventCard) — but not on the detail page,
+ * which drew vibe chips and nothing else. They are surfaced here alongside the
+ * five new situational booleans because they answer the same kind of question,
+ * and the copy deliberately matches the badges so the same fact does not speak in
+ * two voices ("Great without drinking", not the column name).
  */
 
 export interface PlaceAttributes {
@@ -15,6 +18,7 @@ export interface PlaceAttributes {
   fitsLargeGroups: boolean;
   isDogFriendly: boolean;
   isDrinkingOptional: boolean;
+  isAlcoholFree: boolean;
   hasMocktailMenu: boolean;
 }
 
@@ -49,8 +53,20 @@ export function placeAttributeChips(attrs: Partial<PlaceAttributes>): AttributeC
   }
 
   if (attrs.isDogFriendly) chips.push({ key: "dogs", label: "Dog-friendly" });
-  if (attrs.isDrinkingOptional) chips.push({ key: "sober", label: "Drinking optional" });
-  if (attrs.hasMocktailMenu) chips.push({ key: "mocktails", label: "Mocktails" });
+
+  // Three-state, not two. An alcohol-free bar is not a place where "drinking is
+  // optional" — drinking is ABSENT. Saying the former is exactly wrong, and
+  // PlaceCard's SoberFriendlyBadge already gets this right by gating the
+  // "optional" variant behind !isAlcoholFree. Match it, and match its copy.
+  if (attrs.isAlcoholFree) {
+    chips.push({ key: "sober", label: "Alcohol-free" });
+  } else if (attrs.isDrinkingOptional) {
+    chips.push({ key: "sober", label: "Great without drinking" });
+  } else if (attrs.hasMocktailMenu) {
+    // Only worth its own chip when the sober chip did not already imply it —
+    // otherwise a mocktail bar gets two chips saying the same thing.
+    chips.push({ key: "mocktails", label: "Mocktails" });
+  }
 
   return chips;
 }

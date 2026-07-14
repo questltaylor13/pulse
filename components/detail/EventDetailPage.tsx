@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { filterValidVibeTags } from "@/lib/constants/vibe-tags";
+import { formatTagLabel } from "@/lib/constants/vibe-tags";
 import SimilarItemsRow from "./SimilarItemsRow";
 
 /* ------------------------------------------------------------------ */
@@ -81,7 +81,10 @@ function formatTimeRange(start: string, end: string | null): string {
 /* ------------------------------------------------------------------ */
 
 export default function EventDetailPage({ event, similarEvents }: Props) {
-  const vibes = filterValidVibeTags(event.vibeTags).slice(0, 4);
+  // Event tags use their OWN kebab vocabulary (lib/enrich-event.ts), which shares
+  // only 4 tokens with the Place allowlist. Validating against that allowlist
+  // silently dropped ~78% of event vibe tags, including "fun" and "live-music".
+  const vibes = event.vibeTags.map(formatTagLabel).slice(0, 4);
   const hasTicketLink = event.ticketUrl || event.sourceUrl;
 
   const handleShare = async () => {

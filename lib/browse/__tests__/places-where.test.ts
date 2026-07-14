@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { buildPlacesWhere, PLACE_FLAG_COLUMNS } from "@/lib/browse/places-where";
-import type { BrowseConfig } from "@/lib/browse/browse-configs";
+import { buildPlacesWhere, PLACE_FLAG_COLUMNS, HELPER_FLAGS } from "@/lib/browse/places-where";
+import { BROWSE_CONFIGS, type BrowseConfig } from "@/lib/browse/browse-configs";
 import type { BrowseFilters } from "@/lib/browse/filters";
 
 const NO_FILTERS: BrowseFilters = {
@@ -95,6 +95,60 @@ describe("buildPlacesWhere — /browse/groups, which returned zero places", () =
   it("wires the dateNight helper too (also imported and never called)", () => {
     const w = buildPlacesWhere(config({ flag: "dateNight" }), NO_FILTERS, NOW);
     expect(JSON.stringify(clauses(w))).toContain("Date Night");
+  });
+});
+
+describe("every real BROWSE_CONFIGS entry resolves", () => {
+  // Without this, a typo in browse-configs.ts is only discovered when a user
+  // loads the live page: placeFlag THROWS (500) and flag used to fail OPEN
+  // (silently showing every place in Denver). Neither surfaces in CI. Pin it.
+  it("every configured placeFlag is an allowlisted indexed column", () => {
+    for (const [key, cfg] of Object.entries(BROWSE_CONFIGS)) {
+      if (cfg.defaults.placeFlag) {
+        expect(PLACE_FLAG_COLUMNS, `config "${key}"`).toContain(cfg.defaults.placeFlag);
+      }
+    }
+  });
+
+  it("every configured flag resolves to a helper", () => {
+    for (const [key, cfg] of Object.entries(BROWSE_CONFIGS)) {
+      if (cfg.defaults.flag) {
+        expect(Object.keys(HELPER_FLAGS), `config "${key}"`).toContain(cfg.defaults.flag);
+      }
+    }
+  });
+
+  it("builds a where for every places-source config without throwing", () => {
+    for (const [key, cfg] of Object.entries(BROWSE_CONFIGS)) {
+      if (cfg.source !== "places") continue;
+      expect(() => buildPlacesWhere(cfg, NO_FILTERS, NOW), `config "${key}"`).not.toThrow();
+    }
+  });
+});
+
+describe("buildPlacesWhere — an unknown flag fails LOUD, not open", () => {
+  it("throws on a typo'd flag rather than silently matching everything", () => {
+    expect(() => buildPlacesWhere(config({ flag: "groupFriendy" }), NO_FILTERS, NOW)).toThrow(
+      /unknown browse flag/i,
+    );
+  });
+});
+
+describe("buildPlacesWhere — vibe tokens that are really columns", () => {
+  it("matches the isDogFriendly COLUMN, not just a tag nothing writes", () => {
+    // "dog-friendly" is offered by FilterSheet and is in VIBE_TAGS, but
+    // enrichment never writes it into vibeTags — Place.isDogFriendly holds it.
+    const w = buildPlacesWhere(config({}), { ...NO_FILTERS, vibes: ["dog-friendly"] }, NOW);
+    const all = JSON.stringify(clauses(w));
+    expect(all).toContain("isDogFriendly");
+    expect(all).toContain("dog-friendly");
+  });
+
+  it("still matches the tag array for a vibe with no backing column", () => {
+    const w = buildPlacesWhere(config({}), { ...NO_FILTERS, vibes: ["cozy"] }, NOW);
+    const all = JSON.stringify(clauses(w));
+    expect(all).toContain("cozy");
+    expect(all).not.toContain("isDogFriendly");
   });
 });
 

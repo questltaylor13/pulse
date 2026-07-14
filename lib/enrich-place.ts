@@ -87,6 +87,17 @@ export interface PlaceEnrichment {
   hasOutdoorSeating: boolean;
   hasIndoorSeating: boolean;
   fitsLargeGroups: boolean;
+  /**
+   * How many of the five booleans arrived as REAL JSON booleans.
+   *
+   * Without this there is no floor: a model that returns `{}` (or answers "yes"
+   * for everything, which asBool correctly rejects) parses to a perfectly valid
+   * all-false enrichment, we stamp situationalEnrichedAt, and the weekly cron —
+   * which gates on that column being null — never looks at the place again. It
+   * would be invisible to every situational browse page forever, on the strength
+   * of an answer the model never gave.
+   */
+  situationalAnswers: number;
 }
 
 /**
@@ -180,6 +191,10 @@ export function parseEnrichment(raw: string): PlaceEnrichment | null {
     ? o.pulseDescription.trim()
     : null;
 
+  const situationalAnswers = SITUATIONAL_ATTRIBUTES.filter(
+    ([key]) => typeof o[key] === "boolean",
+  ).length;
+
   return {
     vibeTags: filterValidVibeTags(asArray(o.vibeTags)),
     companionTags: whitelist(o.companionTags, COMPANION_TAGS),
@@ -191,6 +206,7 @@ export function parseEnrichment(raw: string): PlaceEnrichment | null {
     hasOutdoorSeating: asBool(o.hasOutdoorSeating),
     hasIndoorSeating: asBool(o.hasIndoorSeating, true),
     fitsLargeGroups: asBool(o.fitsLargeGroups),
+    situationalAnswers,
   };
 }
 
@@ -285,7 +301,11 @@ export async function runEnrichment(
 
   const places = await prisma.place.findMany({
     where: buildSelectionWhere(options),
-    orderBy: { combinedScore: "desc" },
+    // nulls: "last" matters. calculateCombinedScore returns null for any place
+    // with no rating or <5 reviews, and Postgres sorts DESC as NULLS FIRST — so
+    // a plain `desc` led every batch with the LEAST-known places, exactly
+    // inverting the intent of enriching the best ones first.
+    orderBy: { combinedScore: { sort: "desc", nulls: "last" } },
     take: limit,
   });
 
@@ -318,15 +338,26 @@ export async function runEnrichment(
       );
     }
 
-    if (!parsedEnrichment) {
+    // A model that answered NONE of the five must not be recorded as having
+    // answered. Writing situationalEnrichedAt here would retire the place from
+    // the weekly cron's `situationalEnrichedAt: null` gate permanently, on the
+    // strength of an answer we never got. Same for a full-mode response that
+    // produced no tags at all — the pulseDescription gate would strand it.
+    const unusable =
+      !parsedEnrichment ||
+      parsedEnrichment.situationalAnswers === 0 ||
+      (mode === "full" && parsedEnrichment.vibeTags.length === 0);
+
+    if (unusable) {
       failed++;
+      onProgress(`unusable response for ${place.name} — leaving it for the next run`);
       await sleep(delayMs);
       continue;
     }
 
     await prisma.place.update({
       where: { id: place.id },
-      data: buildUpdateData(mode, parsedEnrichment, new Date()),
+      data: buildUpdateData(mode, parsedEnrichment!, new Date()),
     });
     enriched++;
     onProgress(`enriched ${place.name}`);

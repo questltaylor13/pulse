@@ -38,7 +38,7 @@ export const BROWSE_CONFIGS: Record<string, BrowseConfig> = {
 
   // Wave 6B — situational. Data-driven via `placeFlag`, which maps to an indexed
   // boolean column (allowlisted in lib/browse/places-where.ts).
-  "watch-the-game": { title: "Where to watch the game", subtitle: "Screens on, sound up", source: "places", defaults: { placeFlag: "goodForWatchingSports" } },
+  "watch-the-game": { title: "Where to watch the game", subtitle: "Tonight's watch parties, and the bars that always have it on", source: "places", defaults: { placeFlag: "goodForWatchingSports", eventFilter: "watch-party" } },
   "kid-friendly": { title: "Good with kids", subtitle: "Nobody minds the noise", source: "places", defaults: { placeFlag: "isKidFriendly" } },
   "big-groups": { title: "Fits a big group", subtitle: "Six of you, no reservation", source: "places", defaults: { placeFlag: "fitsLargeGroups" } },
 };

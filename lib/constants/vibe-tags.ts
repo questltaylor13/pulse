@@ -83,6 +83,49 @@ export function isValidVibeTag(tag: string): tag is VibeTag {
 }
 
 /**
+ * The human label for a tag. kebab-case is the STORAGE and QUERY vocabulary — it
+ * is not what a user should ever read.
+ *
+ * This exists because the first cut of Wave 6B migrated the corpus to kebab and
+ * forgot that eight components render `vibeTags` straight to the screen. The
+ * result would have been "cozy · lively" on every card where "Cozy · Lively" used
+ * to be, and "date-spot" / "shareable-plates" on place detail. The wave's stated
+ * win — enriched places finally show their vibe chips — would have landed as a
+ * visible downgrade.
+ */
+export function vibeTagLabel(tag: string): string {
+  return normalizeVibeTag(tag)
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/** Validate, then label. What every PLACE render site wants. */
+export function vibeTagLabels(tags: string[]): string[] {
+  return filterValidVibeTags(tags).map(vibeTagLabel);
+}
+
+/**
+ * Display-format a tag WITHOUT validating it against this vocabulary.
+ *
+ * `Event.vibeTags` is a different, disjoint, already-canonical kebab vocabulary
+ * (lib/enrich-event.ts: fun, live-music, concert, dancing…). It shares only four
+ * tokens with the Place vocabulary, so running event tags through
+ * filterValidVibeTags — which EventDetailPage did — silently dropped ~78% of
+ * them, including the three most common. Format, don't validate.
+ */
+export function formatTagLabel(tag: string): string {
+  return tag
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-")
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/**
  * The values to put in a `vibeTags hasSome` query: the canonical kebab token AND
  * its legacy Title-case spelling.
  *

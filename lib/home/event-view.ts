@@ -1,4 +1,5 @@
 import type { Category } from "@prisma/client";
+import { vibeTagLabels } from "@/lib/constants/vibe-tags";
 import { CATEGORY_LABELS } from "@/lib/constants/categories";
 import {
   addDaysDenver,
@@ -63,7 +64,7 @@ export function placeSecondaryMeta(p: PlaceCompact): string {
     parts.push(p.neighborhood);
   }
   if (p.priceLevel !== null) parts.push("$".repeat(Math.max(1, p.priceLevel)));
-  if (p.vibeTags?.length) parts.push(p.vibeTags.slice(0, 2).join(" · "));
+  if (p.vibeTags?.length) parts.push(vibeTagLabels(p.vibeTags).slice(0, 2).join(" · "));
   return parts.join(" · ");
 }
 

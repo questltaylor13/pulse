@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { vibeTagLabels } from "@/lib/constants/vibe-tags";
 import Image from "next/image";
 import type { PlaceCompact } from "@/lib/home/types";
 import { categoryLabel } from "@/lib/home/event-view";
@@ -18,7 +19,7 @@ export default function PlaceListCard({ place }: Props) {
   if (place.priceLevel !== null && place.priceLevel > 0)
     meta.push("$".repeat(place.priceLevel));
 
-  const vibes = (place.vibeTags ?? []).slice(0, 2).join(" · ");
+  const vibes = vibeTagLabels(place.vibeTags ?? []).slice(0, 2).join(" · ");
 
   return (
     <Link

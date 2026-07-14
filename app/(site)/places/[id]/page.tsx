@@ -136,6 +136,7 @@ export default async function PlacePage({ params }: PageProps) {
               fitsLargeGroups: place.fitsLargeGroups,
               isDogFriendly: place.isDogFriendly,
               isDrinkingOptional: place.isDrinkingOptional,
+              isAlcoholFree: place.isAlcoholFree,
               hasMocktailMenu: place.hasMocktailMenu,
             }
           : {}),

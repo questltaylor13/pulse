@@ -5,6 +5,8 @@ import {
   normalizeVibeTag,
   filterValidVibeTags,
   isValidVibeTag,
+  vibeTagLabel,
+  vibeTagLabels,
 } from "@/lib/constants/vibe-tags";
 
 // Wave 6B: kebab-case is the ONE canonical vibe vocabulary. Before this, the
@@ -68,6 +70,30 @@ describe("filterValidVibeTags", () => {
 
   it("returns an empty array for empty input", () => {
     expect(filterValidVibeTags([])).toEqual([]);
+  });
+});
+
+describe("vibeTagLabel — kebab is for storage, never for users", () => {
+  it("titles a single-word tag", () => {
+    expect(vibeTagLabel("cozy")).toBe("Cozy");
+    expect(vibeTagLabel("lively")).toBe("Lively");
+  });
+
+  it("un-hyphenates a compound tag rather than showing the raw token", () => {
+    // Without this, place detail renders "date-spot" and "shareable-plates".
+    expect(vibeTagLabel("high-energy")).toBe("High Energy");
+    expect(vibeTagLabel("date-spot")).toBe("Date Spot");
+    expect(vibeTagLabel("shareable-plates")).toBe("Shareable Plates");
+  });
+
+  it("labels a legacy Title-case value identically — the migration is invisible", () => {
+    // The corpus is mid-migration. A card must look the same either side of it.
+    expect(vibeTagLabel("Cozy")).toBe("Cozy");
+    expect(vibeTagLabel("cozy")).toBe("Cozy");
+  });
+
+  it("vibeTagLabels validates and labels in one step", () => {
+    expect(vibeTagLabels(["Cozy", "lively", "Blorptastic"])).toEqual(["Cozy", "Lively"]);
   });
 });
 

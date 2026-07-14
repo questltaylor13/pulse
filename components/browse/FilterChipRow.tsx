@@ -29,8 +29,10 @@ export default function FilterChipRow() {
     (param: string, value: string) => {
       const params = new URLSearchParams(searchParams?.toString() ?? "");
       if (!value) {
-        // "Any category" clears the category param
-        params.delete("category");
+        // "Any category" clears the category param. It is "categories" — plural —
+        // like everything else filtersFromParams reads. Deleting the singular
+        // name (which is what this did) left the filter permanently stuck on.
+        params.delete("categories");
       } else if (params.get(param) === value) {
         params.delete(param);
       } else {
@@ -43,7 +45,9 @@ export default function FilterChipRow() {
   );
 
   const isActive = (param: string, value: string) => {
-    if (!value) return !searchParams?.get("category");
+    // Same plural. Reading the singular here made "Any category" render
+    // permanently highlighted, alongside whichever category was actually active.
+    if (!value) return !searchParams?.get("categories");
     return searchParams?.get(param) === value;
   };
 

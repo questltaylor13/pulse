@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { filterValidVibeTags } from "@/lib/constants/vibe-tags";
+import { vibeTagLabels } from "@/lib/constants/vibe-tags";
 import { placeAttributeChips } from "@/lib/places/attributes";
 import SimilarItemsRow from "./SimilarItemsRow";
 
@@ -51,6 +51,7 @@ interface PlaceData {
   fitsLargeGroups?: boolean;
   isDogFriendly?: boolean;
   isDrinkingOptional?: boolean;
+  isAlcoholFree?: boolean;
   hasMocktailMenu?: boolean;
 }
 
@@ -145,7 +146,7 @@ function HoursTable({ hours }: { hours: any }) {
 /* ------------------------------------------------------------------ */
 
 export default function PlaceDetailPage({ place, upcomingEvents, similarPlaces }: Props) {
-  const vibes = filterValidVibeTags(place.vibeTags).slice(0, 4);
+  const vibes = vibeTagLabels(place.vibeTags).slice(0, 4);
   const attributeChips = placeAttributeChips(place);
   const price = priceLabel(place.priceLevel);
 
@@ -227,7 +228,7 @@ export default function PlaceDetailPage({ place, upcomingEvents, similarPlaces }
           {attributeChips.map((chip) => (
             <span
               key={chip.key}
-              className="rounded-pill border border-teal/25 bg-teal/10 px-2.5 py-0.5 text-[11px] font-medium text-teal"
+              className="rounded-pill border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-[11px] font-medium text-teal-800"
             >
               {chip.label}
             </span>

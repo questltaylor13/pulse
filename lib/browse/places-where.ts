@@ -5,7 +5,7 @@ import {
   workFriendlyPlacesWhere,
   dateNightPlacesWhere,
 } from "@/lib/home/places-section-filters";
-import { vibeTagQueryValues } from "@/lib/constants/vibe-tags";
+import { vibeTagQueryValues, normalizeVibeTag } from "@/lib/constants/vibe-tags";
 import type { BrowseConfig } from "./browse-configs";
 import type { BrowseFilters } from "./filters";
 
@@ -53,11 +53,29 @@ function isPlaceFlagColumn(s: string): s is PlaceFlagColumn {
  * fetch-browse.ts and never called — /browse/groups asked for a vibeTag
  * ("group-friendly") that nothing in the corpus writes, and so returned nothing.
  */
-const HELPER_FLAGS: Record<string, () => Prisma.PlaceWhereInput> = {
+export const HELPER_FLAGS: Record<string, () => Prisma.PlaceWhereInput> = Object.create(null);
+Object.assign(HELPER_FLAGS, {
   isLocalFavorite: localFavoritesWhere,
   goodForWorking: workFriendlyPlacesWhere,
   groupFriendly: groupFriendlyPlacesWhere,
   dateNight: dateNightPlacesWhere,
+});
+
+/**
+ * Vibe tokens that are really FACTS, backed by a real column.
+ *
+ * `dog-friendly` is in VIBE_TAGS and FilterSheet offers it — but enrichment never
+ * writes it into `vibeTags` (its own comment: these "are facts we hold on the
+ * model, not vibes to guess at"). `Place.isDogFriendly` is where it lives. So a
+ * vibeTags-only query returned nothing, and the chip was worse than dead: it
+ * looked like it worked and always returned zero.
+ */
+const VIBE_TAG_COLUMNS: Record<string, string> = {
+  "dog-friendly": "isDogFriendly",
+  "good-for-work": "goodForWorking",
+  "big-patio": "hasOutdoorSeating",
+  "family-friendly": "isKidFriendly",
+  "group-friendly": "fitsLargeGroups",
 };
 
 const NEW_PLACE_WINDOW_MS = 45 * 24 * 60 * 60 * 1000;
@@ -78,8 +96,20 @@ export function buildPlacesWhere(
     });
   }
 
-  const helper = config.defaults.flag ? HELPER_FLAGS[config.defaults.flag] : undefined;
-  if (helper) and.push(helper());
+  if (config.defaults.flag) {
+    const helper = HELPER_FLAGS[config.defaults.flag];
+    // Throws rather than failing open. Silently pushing NO clause on an unknown
+    // flag meant one transposed letter ("groupFriendy") turned "Good for groups"
+    // into the 50 most-recently-updated open places in Denver — no error, no
+    // failing test, exactly the silent-wrong-results class this module exists to
+    // kill. Symmetric with placeFlag below.
+    if (!helper) {
+      throw new Error(
+        `Unknown browse flag "${config.defaults.flag}". Allowed: ${Object.keys(HELPER_FLAGS).join(", ")}`,
+      );
+    }
+    and.push(helper());
+  }
 
   if (config.defaults.placeFlag) {
     const column = config.defaults.placeFlag;
@@ -100,7 +130,19 @@ export function buildPlacesWhere(
   }
 
   if (filters.vibes.length) {
-    and.push({ vibeTags: { hasSome: vibeTagQueryValues(filters.vibes) } });
+    // Some "vibes" in the picker are not vibes at all — they are FACTS we hold in
+    // a real column. "dog-friendly" is never written into vibeTags (enrichment's
+    // own comment says these are facts, not vibes to guess at), so querying the
+    // tag array alone made the Dog-friendly chip return an empty page. Match the
+    // column OR the tag.
+    const or: Prisma.PlaceWhereInput[] = [
+      { vibeTags: { hasSome: vibeTagQueryValues(filters.vibes) } },
+    ];
+    for (const vibe of filters.vibes) {
+      const column = VIBE_TAG_COLUMNS[normalizeVibeTag(vibe)];
+      if (column) or.push({ [column]: true });
+    }
+    and.push(or.length === 1 ? or[0] : { OR: or });
   }
 
   return { AND: and };

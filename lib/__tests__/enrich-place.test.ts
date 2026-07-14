@@ -92,6 +92,32 @@ describe("parseEnrichment — the situational booleans", () => {
   });
 });
 
+describe("parseEnrichment — situationalAnswers is the floor that stops a bogus mark", () => {
+  it("counts only REAL JSON booleans", () => {
+    expect(parseEnrichment(FULL_RESPONSE)?.situationalAnswers).toBe(5);
+  });
+
+  it("is 0 when the model answered none of them", () => {
+    // The trap: {} parses to a perfectly valid all-false enrichment. Writing
+    // situationalEnrichedAt on that retires the place from the weekly cron's
+    // null-gate FOREVER, on the strength of an answer we never got. runEnrichment
+    // treats 0 as unusable and leaves the place for the next run.
+    expect(parseEnrichment("{}")?.situationalAnswers).toBe(0);
+  });
+
+  it("is 0 when the model answered in strings — an answer we did not ask for", () => {
+    const e = parseEnrichment(
+      JSON.stringify({ goodForWatchingSports: "yes", isKidFriendly: "no", fitsLargeGroups: 1 }),
+    );
+    expect(e?.situationalAnswers).toBe(0);
+  });
+
+  it("counts an explicit false — that IS an answer", () => {
+    const e = parseEnrichment(JSON.stringify({ goodForWatchingSports: false }));
+    expect(e?.situationalAnswers).toBe(1);
+  });
+});
+
 describe("parseEnrichment — malformed input", () => {
   it("returns null on non-JSON rather than throwing", () => {
     expect(parseEnrichment("I'm sorry, I can't help with that.")).toBeNull();

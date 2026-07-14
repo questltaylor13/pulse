@@ -9,6 +9,7 @@ const NONE: PlaceAttributes = {
   fitsLargeGroups: false,
   isDogFriendly: false,
   isDrinkingOptional: false,
+  isAlcoholFree: false,
   hasMocktailMenu: false,
 };
 
@@ -29,10 +30,29 @@ describe("placeAttributeChips", () => {
     expect(labels({ fitsLargeGroups: true })).toContain("Fits big groups");
   });
 
-  it("surfaces the attributes that already existed on the model and were rendered nowhere", () => {
+  it("surfaces the attributes the detail page never showed", () => {
     expect(labels({ isDogFriendly: true })).toContain("Dog-friendly");
-    expect(labels({ isDrinkingOptional: true })).toContain("Drinking optional");
     expect(labels({ hasMocktailMenu: true })).toContain("Mocktails");
+  });
+
+  it("reuses the badge's copy rather than inventing a second voice for the same fact", () => {
+    // SoberFriendlyBadge already says this on the card. "Drinking optional" reads
+    // like the column name it is.
+    expect(labels({ isDrinkingOptional: true })).toContain("Great without drinking");
+  });
+
+  it("does NOT call an alcohol-free bar a place where drinking is optional", () => {
+    // Drinking isn't optional there — it's absent. Saying the former is not a
+    // near-miss, it's the opposite of true.
+    const l = labels({ isAlcoholFree: true, isDrinkingOptional: true });
+    expect(l).toContain("Alcohol-free");
+    expect(l).not.toContain("Great without drinking");
+  });
+
+  it("does not give a mocktail bar two chips that say the same thing", () => {
+    const l = labels({ isDrinkingOptional: true, hasMocktailMenu: true });
+    expect(l).toContain("Great without drinking");
+    expect(l).not.toContain("Mocktails");
   });
 
   it("does NOT chip indoor seating when true — that is the unremarkable default", () => {

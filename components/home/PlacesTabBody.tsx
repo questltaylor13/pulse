@@ -1,4 +1,5 @@
 import ScrollSection from "./ScrollSection";
+import SituationalRail from "./SituationalRail";
 import SectionDivider from "./SectionDivider";
 import PlaceCardCompact from "./PlaceCardCompact";
 import NeighborhoodCard from "./NeighborhoodCard";
@@ -47,6 +48,10 @@ export default function PlacesTabBody({ category, data, feedbackMaps }: Props) {
 
   return (
     <>
+      {/* Section 0: the situational entry point. Without this the browse pages
+          it links to are unreachable — no nav enumerates BROWSE_CONFIGS. */}
+      <SituationalRail />
+
       {/* Section 1: Just added on Pulse */}
       {newInDenver.length === 0 && category !== "all" ? (
         <CollapsedSection title="Just added on Pulse" category={category} />
