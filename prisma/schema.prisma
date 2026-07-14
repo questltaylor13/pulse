@@ -1600,6 +1600,16 @@ model Place {
   touristTrapScore Float? // 0.0 - 1.0; higher = more touristy
   goodForWorking   Boolean @default(false)
 
+  // Wave 6B — situational attributes. Booleans, not tags: the tag vocabularies
+  // are the problem (see lib/constants/vibe-tags.ts), not the solution. The
+  // three the browse `placeFlag` default queries are indexed; that is the
+  // invariant — placeFlag only accepts indexed columns.
+  goodForWatchingSports Boolean @default(false) // has screens, actually shows games
+  isKidFriendly         Boolean @default(false)
+  hasOutdoorSeating     Boolean @default(false)
+  hasIndoorSeating      Boolean @default(true) // default true: most places do
+  fitsLargeGroups       Boolean @default(false) // 6+ without a reservation
+
   // Hype/buzz signals
   buzzScore       Int @default(0) // Social media mentions, saves, etc.
   preOpeningSaves Int @default(0) // How many users saved before opening
@@ -1650,6 +1660,9 @@ model Place {
   @@index([isLocalFavorite])
   @@index([goodForWorking])
   @@index([region])
+  @@index([goodForWatchingSports])
+  @@index([isKidFriendly])
+  @@index([fitsLargeGroups])
   eventSeries EventSeries[]
 }
 

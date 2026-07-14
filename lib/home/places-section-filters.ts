@@ -1,8 +1,18 @@
 import type { Prisma } from "@prisma/client";
 
-// Actual tag vocabulary (Title-case) from our Place corpus. The enrichment
-// pipeline writes Title-case values; filters below must match that, not
-// lowercased/kebab-cased theoretical versions.
+// Tag vocabulary note (Wave 6B).
+//
+// `vibeTags` is migrating to ONE canonical kebab-case vocabulary
+// (20260714130000_normalize_vibe_tags). The `vibeTags` filters below therefore
+// list BOTH spellings, deliberately and permanently: a data migration and a code
+// deploy cannot be atomic, and matching both makes the ordering irrelevant —
+// correct before the migration, correct after it, correct if it is re-run. It
+// costs an array literal inside a `hasSome`.
+//
+// `companionTags` / `occasionTags` / `goodForTags` are NOT migrating. They are
+// internally consistent — enrichment writes Title-case and every reader queries
+// Title-case — so they are left exactly as they are. Only vibeTags had the split
+// (kebab allowlist vs Title-case writer), and only vibeTags is fixed here.
 
 // Section 3: Where locals actually go
 // Category gate: locals go everywhere except gyms-as-discovery — exclude
@@ -29,7 +39,7 @@ export function dateNightPlacesWhere(): Prisma.PlaceWhereInput {
     // categories that actually fit "first date / low-pressure / conversation".
     category: { in: ["RESTAURANT", "BARS", "COFFEE"] },
     OR: [
-      { vibeTags: { hasSome: ["Intimate", "Cozy", "Sophisticated", "Upscale"] } },
+      { vibeTags: { hasSome: ["intimate", "cozy", "sophisticated", "upscale", "Intimate", "Cozy", "Sophisticated", "Upscale"] } },
       { companionTags: { hasSome: ["Date Night", "Couples"] } },
       { occasionTags: { hasSome: ["First Date", "Anniversary"] } },
     ],
@@ -48,7 +58,7 @@ export function groupFriendlyPlacesWhere(): Prisma.PlaceWhereInput {
     category: { in: ["RESTAURANT", "BARS", "ACTIVITY_VENUE"] },
     OR: [
       { companionTags: { hasSome: ["Groups", "Friends"] } },
-      { vibeTags: { hasSome: ["Lively", "Energetic"] } },
+      { vibeTags: { hasSome: ["lively", "energetic", "Lively", "Energetic"] } },
       { occasionTags: { hasSome: ["Celebration", "Birthday", "Happy Hour"] } },
     ],
   };
