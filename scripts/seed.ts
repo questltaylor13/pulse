@@ -23,6 +23,7 @@
  */
 
 import { PrismaClient, Category, RelationshipStatus, DenverTenure, PreferenceType, EventListStatus, InteractionStatus, ItemType, ItemStatus, PickSetRange, FeedbackType, GoingWith, DayOfWeek, TimeOfDay, BudgetPreference, PlanType } from "@prisma/client";
+import { occurrenceDateOf } from "@/lib/series/ingest";
 import * as bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -2305,10 +2306,10 @@ async function seedEvents(cityId: string) {
 
     const result = await prisma.event.upsert({
       where: {
-        source_externalId_startTime: {
+        source_externalId_occurrenceDate: {
           source: event.source,
           externalId: event.externalId,
-          startTime: event.startTime,
+          occurrenceDate: occurrenceDateOf(event.startTime),
         },
       },
       update: eventData,

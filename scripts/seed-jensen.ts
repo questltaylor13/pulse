@@ -10,6 +10,7 @@
  */
 
 import { PrismaClient, Category, PreferenceType, RelationshipStatus } from "@prisma/client";
+import { occurrenceDateOf } from "@/lib/series/ingest";
 import * as bcrypt from "bcryptjs";
 import { classifyEvent } from "../lib/scrapers/classify";
 
@@ -791,10 +792,10 @@ async function main() {
   for (const event of SEED_EVENTS) {
     const result = await prisma.event.upsert({
       where: {
-        source_externalId_startTime: {
+        source_externalId_occurrenceDate: {
           source: event.source,
           externalId: event.externalId,
-          startTime: event.startTime,
+          occurrenceDate: occurrenceDateOf(event.startTime),
         },
       },
       update: {

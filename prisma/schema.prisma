@@ -399,6 +399,11 @@ model Event {
   /// not delete its history.
   seriesId String?
 
+  /// Wave 6A — the Denver calendar date of startTime. Part of occurrence
+  /// identity (see @@unique below). Nullable only so the migration can backfill
+  /// it; ingest always sets it.
+  occurrenceDate DateTime? @db.Date
+
   // AI enrichment fields
   oneLiner     String? // Punchy 10-15 word description
   noveltyScore Int? // 1-10 uniqueness rating
@@ -452,20 +457,26 @@ model Event {
 
   guideStops GuideStop[]
 
-  /// Wave 6A — an occurrence IS a (thing, time) pair.
+  /// Wave 6A — an occurrence IS a (thing, DAY) pair.
   ///
   /// Was @@unique([externalId, source]), with startTime as PAYLOAD — which is
   /// what let Westword's series-URL row mutate its startTime forward every night,
   /// dragging a three-week-old rating onto this week's edition and then
   /// suppressing the event from that user's feed forever.
   ///
-  /// Strictly weaker than the old key (it can only split groups, never merge
-  /// them), so the migration cannot violate it on existing data.
+  /// The day, not the instant. Sources wobble the reported start time (7:00pm
+  /// one night, 7:05pm on the next scrape); keying on the exact timestamp would
+  /// mint a fresh duplicate row every single night, which is the bug wearing a
+  /// different hat. occurrenceDate is the Denver calendar date of startTime.
+  ///
+  /// Strictly weaker than the old key (adding a column can only split groups,
+  /// never merge them), so the migration cannot violate it on existing data —
+  /// and existing rows keep their externalId, so nothing needs re-keying.
   ///
   /// Enforceable only because ingest now synthesizes a non-null externalId —
   /// Postgres treats NULLs as DISTINCT in a unique index, so a nullable column
   /// here would silently permit the duplicate rows this is meant to stop.
-  @@unique([source, externalId, startTime])
+  @@unique([source, externalId, occurrenceDate])
   @@index([cityId, startTime])
   @@index([category])
   @@index([placeId])

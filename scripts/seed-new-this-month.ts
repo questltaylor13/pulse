@@ -6,6 +6,7 @@
  */
 
 import { PrismaClient, Category } from "@prisma/client";
+import { occurrenceDateOf } from "@/lib/series/ingest";
 
 const prisma = new PrismaClient();
 
@@ -92,10 +93,10 @@ async function main() {
   for (const item of NEW_ITEMS) {
     await prisma.event.upsert({
       where: {
-        source_externalId_startTime: {
+        source_externalId_occurrenceDate: {
           source: "pulse-curated",
           externalId: item.externalId,
-          startTime: PERMANENT_SENTINEL,
+          occurrenceDate: occurrenceDateOf(PERMANENT_SENTINEL),
         },
       },
       update: {

@@ -15,6 +15,8 @@ import { makeIcsScraper, type IcsScraperConfig } from "./ics";
 import { enrichEvent } from "@/lib/enrich-event";
 import { geocodeEvents } from "@/lib/geocode";
 import { deriveRegionalFields } from "@/lib/regional/metadata";
+import { deriveSeriesKey } from "@/lib/series/key";
+import { resolveExternalId, occurrenceDateOf, attachSeries } from "@/lib/series/ingest";
 import { denverDateKey } from "@/lib/time/denver";
 import { prioritize } from "./source-priority";
 import { isProSportsEvent } from "./exclusions";
@@ -254,72 +256,82 @@ export async function runAllScrapers(): Promise<{
     return { total: 0, inserted: 0, updated: 0, enriched: 0, dropped: 0, errors: [...allErrors, "Denver city not found in database"] };
   }
 
-  for (const event of deduplicated) {
-    const existing = event.externalId
-      ? await prisma.event.findFirst({
-          where: { externalId: event.externalId, source: event.source },
-        })
-      : null;
+  // Wave 6A — series attach. Best-effort and flag-gated: a failure to resolve a
+  // series must never fail the ingest of the occurrence itself. An unlinked
+  // occurrence is a worse feed, not a broken one.
+  const seriesIdByKey = await attachSeries(city.id, deduplicated).catch((err) => {
+    console.warn("[scrapers.attachSeries] failed:", err);
+    return new Map<string, string>();
+  });
 
+  for (const event of deduplicated) {
     // PRD 2 Phase 1: auto-tag regional metadata from the static drive-time
     // table based on the scraper's neighborhood value. Keeps scrapers simple
     // (they just set neighborhood="Boulder" etc.) while region/driveTime/
     // driveNote/isDayTrip/isWeekendTrip get derived centrally.
     const regional = deriveRegionalFields(event.neighborhood);
 
-    if (existing) {
-      await prisma.event.update({
-        where: { id: existing.id },
-        data: {
-          title: event.title,
-          description: event.description,
-          category: event.category,
-          tags: event.tags,
-          venueName: event.venueName,
-          address: event.address,
-          neighborhood: event.neighborhood,
-          startTime: event.startTime,
-          endTime: event.endTime,
-          priceRange: event.priceRange,
-          sourceUrl: event.sourceUrl,
-          imageUrl: event.imageUrl,
-          region: regional.region,
-          townName: regional.townName,
-          isDayTrip: regional.isDayTrip,
-          isWeekendTrip: regional.isWeekendTrip,
-          driveTimeFromDenver: regional.driveTimeFromDenver,
-          driveNote: regional.driveNote,
-        },
-      });
-      updated++;
-    } else {
-      const created = await prisma.event.create({
-        data: {
-          cityId: city.id,
-          title: event.title,
-          description: event.description,
-          category: event.category,
-          tags: event.tags,
-          venueName: event.venueName,
-          address: event.address,
-          neighborhood: event.neighborhood,
-          startTime: event.startTime,
-          endTime: event.endTime,
-          priceRange: event.priceRange,
+    // Wave 6A — occurrence identity. externalId is guaranteed non-null (a NULL
+    // defeats the unique index entirely, which is what let permalink-less events
+    // duplicate nightly), and the DAY carries the occurrence, not the instant.
+    const seriesKey = deriveSeriesKey(event.title, event.venueName);
+    const externalId = resolveExternalId(event, seriesKey);
+    const occurrenceDate = occurrenceDateOf(event.startTime);
+    const seriesId = seriesIdByKey.get(seriesKey) ?? null;
+
+    // Payload deliberately EXCLUDES startTime: it is identity now, not data.
+    // Overwriting it on match is precisely what dragged a three-week-old rating
+    // onto this week's edition of a Westword series.
+    const payload = {
+      title: event.title,
+      description: event.description,
+      category: event.category,
+      tags: event.tags,
+      venueName: event.venueName,
+      address: event.address,
+      neighborhood: event.neighborhood,
+      endTime: event.endTime,
+      priceRange: event.priceRange,
+      sourceUrl: event.sourceUrl,
+      imageUrl: event.imageUrl,
+      seriesId,
+      region: regional.region,
+      townName: regional.townName,
+      isDayTrip: regional.isDayTrip,
+      isWeekendTrip: regional.isWeekendTrip,
+      driveTimeFromDenver: regional.driveTimeFromDenver,
+      driveNote: regional.driveNote,
+    };
+
+    // A real upsert, replacing findFirst + branch — which was also a TOCTOU race
+    // that the unique constraint could not catch while externalId was nullable.
+    const row = await prisma.event.upsert({
+      where: {
+        source_externalId_occurrenceDate: {
           source: event.source,
-          sourceUrl: event.sourceUrl,
-          externalId: event.externalId,
-          imageUrl: event.imageUrl,
-          region: regional.region,
-          townName: regional.townName,
-          isDayTrip: regional.isDayTrip,
-          isWeekendTrip: regional.isWeekendTrip,
-          driveTimeFromDenver: regional.driveTimeFromDenver,
-          driveNote: regional.driveNote,
+          externalId,
+          occurrenceDate,
         },
-      });
-      newEventIds.push(created.id);
+      },
+      update: payload,
+      create: {
+        ...payload,
+        cityId: city.id,
+        source: event.source,
+        externalId,
+        startTime: event.startTime,
+        occurrenceDate,
+      },
+      select: { id: true, createdAt: true, updatedAt: true },
+    });
+
+    // upsert gives no insert/update signal, so infer it: a row created in this
+    // transaction has createdAt === updatedAt.
+    if (row.createdAt.getTime() === row.updatedAt.getTime()) {
+      newEventIds.push(row.id);
       inserted++;
+    } else {
+      updated++;
     }
   }
 

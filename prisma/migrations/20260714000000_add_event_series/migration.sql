@@ -13,6 +13,19 @@ ALTER TABLE "Event" RENAME COLUMN "isRecurring" TO "isPermanent";
 -- AlterTable
 ALTER TABLE "Event" ADD COLUMN "seriesId" TEXT;
 
+-- Occurrence date: the Denver CALENDAR DAY of startTime.
+--
+-- The day, not the instant. Sources wobble the reported start time (7:00pm one
+-- night, 7:05pm on the next scrape). Keying occurrence identity on the exact
+-- timestamp would mint a fresh duplicate row every single night — the same bug
+-- in a different hat.
+ALTER TABLE "Event" ADD COLUMN "occurrenceDate" DATE;
+
+-- Backfill from existing startTimes so the unique index below can be built.
+UPDATE "Event"
+SET "occurrenceDate" = ("startTime" AT TIME ZONE 'America/Denver')::date
+WHERE "occurrenceDate" IS NULL;
+
 -- AlterTable
 ALTER TABLE "UserItemStatus" ADD COLUMN "seriesId" TEXT;
 
@@ -56,7 +69,7 @@ CREATE INDEX "Event_seriesId_startTime_idx" ON "Event"("seriesId", "startTime");
 --
 -- Safe on existing data: the new key is strictly WEAKER than the old one (adding
 -- a column can only split groups, never merge them), so no current row pair can
--- violate it.
+-- violate it — and existing rows keep their externalId, so nothing is re-keyed.
 --
 -- Only enforceable because ingest now synthesizes a non-null externalId: Postgres
 -- treats NULLs as DISTINCT in a unique index, so while externalId could be NULL
@@ -64,7 +77,7 @@ CREATE INDEX "Event_seriesId_startTime_idx" ON "Event"("seriesId", "startTime");
 DROP INDEX "Event_externalId_source_key";
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Event_source_externalId_startTime_key" ON "Event"("source", "externalId", "startTime");
+CREATE UNIQUE INDEX "Event_source_externalId_occurrenceDate_key" ON "Event"("source", "externalId", "occurrenceDate");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "UserItemStatus_userId_seriesId_key" ON "UserItemStatus"("userId", "seriesId");

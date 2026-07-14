@@ -15,6 +15,12 @@ export interface ScrapedEvent {
   sourceUrl?: string;
   externalId?: string;
   imageUrl?: string;
+  /**
+   * Wave 6A — human-readable recurrence, when the source actually states one
+   * ("Every Sunday"). Westword parses this already and, until now, discarded it.
+   * Presence of a cadence is one of the two grounds on which a series is asserted.
+   */
+  cadence?: string;
 }
 
 export interface ScraperResult {

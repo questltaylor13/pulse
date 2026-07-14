@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { occurrenceDateOf } from "@/lib/series/ingest";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -79,10 +80,10 @@ export async function POST(request: NextRequest) {
         // part of identity now, not payload.
         await prisma.event.upsert({
           where: {
-            source_externalId_startTime: {
+            source_externalId_occurrenceDate: {
               source: eventData.source,
               externalId: eventData.externalId,
-              startTime: eventData.startTime,
+              occurrenceDate: occurrenceDateOf(eventData.startTime),
             },
           },
           create: {
