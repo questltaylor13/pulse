@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const result = await prisma.event.updateMany({
     where: {
       startTime: { lt: twoHoursAgo },
-      isRecurring: false,
+      isPermanent: false,
       isArchived: false,
     },
     data: { isArchived: true },

@@ -30,7 +30,7 @@ export async function GET() {
       address: true,
       priceRange: true,
       imageUrl: true,
-      isRecurring: true,
+      isPermanent: true,
       tags: true,
     },
   });

@@ -83,13 +83,19 @@ async function main() {
   const denver = await prisma.city.findUnique({ where: { slug: "denver" } });
   if (!denver) throw new Error("Denver not found");
 
+  // These are isPermanent rows (always-available), so their startTime is a
+  // sentinel rather than a real occurrence time. It is part of the occurrence
+  // key now, so it must be the same value in the where and the create.
+  const PERMANENT_SENTINEL = new Date("2026-12-31");
+
   let created = 0;
   for (const item of NEW_ITEMS) {
     await prisma.event.upsert({
       where: {
-        externalId_source: {
-          externalId: item.externalId,
+        source_externalId_startTime: {
           source: "pulse-curated",
+          externalId: item.externalId,
+          startTime: PERMANENT_SENTINEL,
         },
       },
       update: {
@@ -106,8 +112,8 @@ async function main() {
         category: item.category,
         tags: item.tags,
         priceRange: item.priceRange,
-        startTime: new Date("2026-12-31"),
-        isRecurring: true,
+        startTime: PERMANENT_SENTINEL,
+        isPermanent: true,
         isNew: true,
         oneLiner: item.oneLiner,
         noveltyScore: item.noveltyScore,

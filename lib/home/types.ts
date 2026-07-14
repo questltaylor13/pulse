@@ -51,7 +51,7 @@ export interface EventCompact {
   startTime: string; // ISO
   priceRange: string;
   isEditorsPick: boolean;
-  isRecurring: boolean;
+  isPermanent: boolean;
   noveltyScore: number | null;
   driveTimeFromDenver: number | null;
   tags: string[];

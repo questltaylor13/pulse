@@ -75,12 +75,14 @@ export async function POST(request: NextRequest) {
   for (const eventData of parsed.data.events) {
     try {
       if (eventData.externalId) {
-        // Upsert by externalId + source
+        // Wave 6A — an occurrence is a (thing, time) pair, so startTime is
+        // part of identity now, not payload.
         await prisma.event.upsert({
           where: {
-            externalId_source: {
-              externalId: eventData.externalId,
+            source_externalId_startTime: {
               source: eventData.source,
+              externalId: eventData.externalId,
+              startTime: eventData.startTime,
             },
           },
           create: {

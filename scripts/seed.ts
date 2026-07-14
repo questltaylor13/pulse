@@ -2305,9 +2305,10 @@ async function seedEvents(cityId: string) {
 
     const result = await prisma.event.upsert({
       where: {
-        externalId_source: {
-          externalId: event.externalId,
+        source_externalId_startTime: {
           source: event.source,
+          externalId: event.externalId,
+          startTime: event.startTime,
         },
       },
       update: eventData,

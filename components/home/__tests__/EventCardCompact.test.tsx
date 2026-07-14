@@ -20,7 +20,7 @@ const baseEvent = {
   startTime: new Date().toISOString(),
   priceRange: "$$",
   isEditorsPick: false,
-  isRecurring: false,
+  isPermanent: false,
   noveltyScore: null,
   driveTimeFromDenver: null,
   tags: [],

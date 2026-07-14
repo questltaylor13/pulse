@@ -310,6 +310,7 @@ model City {
   items     Item[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  eventSeries EventSeries[]
 }
 
 model Preference {
@@ -384,8 +385,19 @@ model Event {
   isAlcoholFree      Boolean @default(false) // No alcohol at all
   soberFriendlyNotes String? // "Great mocktail menu" or "Coffee-focused event"
 
-  // Recurring / permanent activities
-  isRecurring Boolean @default(false)
+  /// Wave 6A — ALWAYS-AVAILABLE, place-like activity (climbing gym, museum,
+  /// Meow Wolf). NOT a recurring series. Exempt from archiving; feed-active
+  /// regardless of startTime; sync-events-to-items maps these to itemType
+  /// "PLACE". Genuinely recurring things (weekly trivia) use EventSeries.
+  ///
+  /// Renamed from `isRecurring`, which said "recurring" and meant "is a Place"
+  /// — a misnomer that has already produced one wrong handoff doc.
+  isPermanent Boolean @default(false)
+
+  /// Wave 6A — the recurring series this occurrence belongs to, if any.
+  /// Null for one-off events. SetNull (not Cascade): deleting a series must
+  /// not delete its history.
+  seriesId String?
 
   // AI enrichment fields
   oneLiner     String? // Punchy 10-15 word description
@@ -418,6 +430,7 @@ model Event {
 
   city            City                   @relation(fields: [cityId], references: [id], onDelete: Cascade)
   place           Place?                 @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  series          EventSeries?           @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   createdBy       Influencer?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
   interactions    UserEventInteraction[]
   listItems       ListItem[]
@@ -439,16 +452,60 @@ model Event {
 
   guideStops GuideStop[]
 
-  @@unique([externalId, source])
+  /// Wave 6A — an occurrence IS a (thing, time) pair.
+  ///
+  /// Was @@unique([externalId, source]), with startTime as PAYLOAD — which is
+  /// what let Westword's series-URL row mutate its startTime forward every night,
+  /// dragging a three-week-old rating onto this week's edition and then
+  /// suppressing the event from that user's feed forever.
+  ///
+  /// Strictly weaker than the old key (it can only split groups, never merge
+  /// them), so the migration cannot violate it on existing data.
+  ///
+  /// Enforceable only because ingest now synthesizes a non-null externalId —
+  /// Postgres treats NULLs as DISTINCT in a unique index, so a nullable column
+  /// here would silently permit the duplicate rows this is meant to stop.
+  @@unique([source, externalId, startTime])
   @@index([cityId, startTime])
   @@index([category])
   @@index([placeId])
+  @@index([seriesId, startTime])
   @@index([createdById])
   @@index([status])
   @@index([isEditorsPick])
   @@index([isArchived, startTime])
   @@index([lat, lng])
   @@index([region, startTime])
+}
+
+/// Wave 6A — a recurring event (weekly trivia, monthly art walk).
+///
+/// Occurrences are Event rows pointing here. Ratings and DONE-status resolve to
+/// the SERIES, so rating one Tuesday's trivia means you have rated the trivia —
+/// rather than rating an arbitrary row that gets archived seven days later.
+model EventSeries {
+  id        String   @id @default(cuid())
+  cityId    String
+  title     String // canonical title, from the most recent occurrence
+  venueName String
+  placeId   String? // resolved venue, when venue-match finds one
+  category  Category
+  cadence   String? // "Every Tuesday" — only when a source actually tells us
+
+  /// normalize(title)|normalize(venue) — see lib/series/key.ts. THE identity.
+  seriesKey String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  city             City              @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  place            Place?            @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  events           Event[]
+  userItemStatuses UserItemStatus[]
+  rankedEntries    UserRankedEntry[]
+
+  @@index([placeId])
+  @@index([cityId])
 }
 
 // Creator/Influencer featuring or hosting an event
@@ -569,6 +626,10 @@ model UserItemStatus {
   discoveryId String?
   discovery   Discovery? @relation(fields: [discoveryId], references: [id], onDelete: SetNull)
 
+  /// Wave 6A — a recurring series. Rating one occurrence rates the series.
+  seriesId String?
+  series   EventSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+
   status ItemStatus
   source FeedbackSource @default(LEGACY)
 
@@ -593,6 +654,7 @@ model UserItemStatus {
   @@unique([userId, eventId])
   @@unique([userId, placeId])
   @@unique([userId, discoveryId])
+  @@unique([userId, seriesId])
   @@index([userId, status])
   @@index([itemId])
   @@index([eventId])
@@ -666,6 +728,10 @@ model UserRankedEntry {
   discoveryId String?
   discovery   Discovery? @relation(fields: [discoveryId], references: [id], onDelete: SetNull)
 
+  /// Wave 6A — a recurring series. Rating one occurrence rates the series.
+  seriesId String?
+  series   EventSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+
   category  RankCategory
   sentiment RankSentiment
   position  Int
@@ -687,6 +753,7 @@ model UserRankedEntry {
   @@unique([userId, eventId])
   @@unique([userId, placeId])
   @@unique([userId, discoveryId])
+  @@unique([userId, seriesId])
   @@index([userId, category, position])
   // Wave 5 — serves the social two-hop load (who you follow → what they LIKED).
   // Without it, sentiment + isPlacementConfirmed are heap filters and the score
@@ -1558,6 +1625,7 @@ model Place {
   @@index([isLocalFavorite])
   @@index([goodForWorking])
   @@index([region])
+  eventSeries EventSeries[]
 }
 
 // Hidden Gems Engine (PRD 3) — curated Discoveries that don't fit Event or Place taxonomy
