@@ -59,6 +59,12 @@ export interface ContentRelations {
     category?: string | null;
     townName?: string | null;
   } | null;
+  /** Wave 6A — a recurring series. Its "town" is its venue. */
+  series?: {
+    title?: string;
+    category?: string | null;
+    venueName?: string | null;
+  } | null;
   /** Denormalized fallbacks, for rows whose content has since been deleted. */
   titleSnapshot?: string | null;
   imageSnapshot?: string | null;
@@ -82,6 +88,7 @@ export function resolveContent(row: ContentRelations): ContentSnapshot {
       row.event?.title ??
       row.place?.name ??
       row.discovery?.title ??
+      row.series?.title ??
       row.titleSnapshot ??
       null,
     imageUrl:
@@ -93,6 +100,7 @@ export function resolveContent(row: ContentRelations): ContentSnapshot {
       row.event?.category ??
       row.place?.category ??
       row.discovery?.category ??
+      row.series?.category ??
       row.categorySnapshot ??
       null,
     town:
@@ -101,6 +109,7 @@ export function resolveContent(row: ContentRelations): ContentSnapshot {
       row.place?.townName ??
       row.place?.neighborhood ??
       row.discovery?.townName ??
+      row.series?.venueName ??
       null,
   };
 }
@@ -145,6 +154,16 @@ export async function loadDiscoverySnapshot(
     select: { title: true, category: true, townName: true },
   });
   return discovery ? resolveContent({ discovery }) : null;
+}
+
+export async function loadSeriesSnapshot(
+  seriesId: string
+): Promise<ContentSnapshot | null> {
+  const series = await prisma.eventSeries.findUnique({
+    where: { id: seriesId },
+    select: { title: true, category: true, venueName: true },
+  });
+  return series ? resolveContent({ series }) : null;
 }
 
 /**

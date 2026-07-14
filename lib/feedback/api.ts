@@ -28,14 +28,27 @@ import {
   isEventRef,
   isItemRef,
   isPlaceRef,
+  isSeriesRef,
 } from "./types";
+import { seriesIdForEvent } from "@/lib/series/resolve";
 import {
   EMPTY_SNAPSHOT,
   loadDiscoverySnapshot,
   loadEventSnapshot,
   loadItemSnapshot,
   loadPlaceSnapshot,
+  loadSeriesSnapshot,
 } from "@/lib/content/snapshot";
+
+/**
+ * Wave 6A — an event that belongs to a series is rated AS the series.
+ * Everything else passes through untouched.
+ */
+async function promoteRef(ref: FeedbackRef): Promise<FeedbackRef> {
+  if (!isEventRef(ref)) return ref;
+  const seriesId = await seriesIdForEvent(ref.eventId);
+  return seriesId ? { seriesId } : ref;
+}
 
 // After PRD 5 Phase 1, UserItemStatus has four native FKs (itemId, eventId,
 // placeId, discoveryId). Each ref shape maps directly to one column — no
@@ -117,7 +130,11 @@ export async function upsertFeedback(params: {
   /** Wave 2 Beli: optional 1–5 rating (typically written with DONE). */
   rating?: number;
 }): Promise<UserItemStatus> {
-  const { userId, ref, status, source, rating } = params;
+  const { userId, status, source, rating } = params;
+  // Wave 6A — rating one Tuesday's trivia rates THE trivia. The UI still sends
+  // { eventId }; the promotion happens here, server-side, so a client that has
+  // never heard of series still rates them at the right grain.
+  const ref = await promoteRef(params.ref);
   // Only include `rating` in the write when the caller passed one, so a plain
   // WANT/PASS/DONE toggle never clobbers an existing rating.
   const common = { status, source, ...(rating !== undefined ? { rating } : {}) };
@@ -157,6 +174,14 @@ export async function upsertFeedback(params: {
       create: { userId, discoveryId: ref.discoveryId, ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
     }));
   }
+  if (isSeriesRef(ref)) {
+    const snap = (await loadSeriesSnapshot(ref.seriesId)) ?? EMPTY_SNAPSHOT;
+    return afterWrite(userId, source, prisma.userItemStatus.upsert({
+      where: { userId_seriesId: { userId, seriesId: ref.seriesId } },
+      update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
+      create: { userId, seriesId: ref.seriesId, ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
+    }));
+  }
   throw new Error("upsertFeedback: ref missing valid id");
 }
 
@@ -164,7 +189,11 @@ export async function deleteFeedback(params: {
   userId: string;
   ref: FeedbackRef;
 }): Promise<number> {
-  const { userId, ref } = params;
+  const { userId } = params;
+  // Wave 6A — the write went in against the SERIES, so the delete must too.
+  // Without this, un-marking a DONE on a series occurrence would delete nothing
+  // and the rating would silently survive the retraction.
+  const ref = await promoteRef(params.ref);
   // Wave 4 — retracting a DONE must also retract its ranked entry, or the
   // item lingers in /rankings after the visit itself was undone. Best-effort:
   // the status delete is the primary operation.
@@ -204,6 +233,11 @@ export async function deleteFeedback(params: {
   if (isDiscoveryRef(ref)) {
     const count = await runDelete({ userId, discoveryId: ref.discoveryId });
     await retractRankedEntry({ discoveryId: ref.discoveryId });
+    return count;
+  }
+  if (isSeriesRef(ref)) {
+    const count = await runDelete({ userId, seriesId: ref.seriesId });
+    await retractRankedEntry({ seriesId: ref.seriesId });
     return count;
   }
   throw new Error("deleteFeedback: ref missing valid id");
