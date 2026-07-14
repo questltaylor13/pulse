@@ -7,6 +7,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import InitialThumb from "@/components/ui/InitialThumb";
 import type { SuggestedTastemaker } from "@/lib/social/suggestions";
 
 interface Props {
@@ -75,21 +76,12 @@ function SuggestionRow({ user }: { user: SuggestedTastemaker }) {
   return (
     <li className="flex items-center gap-3 p-3">
       <Link href={`/u/${user.username}`} className="flex min-w-0 flex-1 items-center gap-3">
-        <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-mute-hush">
-          {user.profileImageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={user.profileImageUrl}
-              alt=""
-              loading="lazy"
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-teal-soft to-coral/20 text-sm font-semibold text-ink/40">
-              {(user.name ?? user.username).charAt(0).toUpperCase()}
-            </div>
-          )}
-        </div>
+        <InitialThumb
+          src={user.profileImageUrl}
+          title={user.name ?? user.username}
+          className="h-10 w-10 rounded-full"
+          initialClassName="text-sm"
+        />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-ink">
             {user.name ?? `@${user.username}`}

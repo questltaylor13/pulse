@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { ActivityType } from "@prisma/client";
 import FollowSuggestions from "./FollowSuggestions";
+import InitialThumb from "@/components/ui/InitialThumb";
 import type { SuggestedTastemaker } from "@/lib/social/suggestions";
 
 interface FeedUser {
@@ -154,21 +155,12 @@ function ActivityRow({ item }: { item: FeedItem }) {
   const profileHref = item.user.username ? `/u/${item.user.username}` : null;
 
   const avatar = (
-    <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-full bg-mute-hush">
-      {item.user.profileImageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={item.user.profileImageUrl}
-          alt=""
-          loading="lazy"
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-teal-soft to-coral/20 text-xs font-semibold text-ink/40">
-          {who.replace("@", "").charAt(0).toUpperCase()}
-        </div>
-      )}
-    </div>
+    <InitialThumb
+      src={item.user.profileImageUrl}
+      title={who.replace("@", "")}
+      className="h-9 w-9 rounded-full"
+      initialClassName="text-xs"
+    />
   );
 
   return (
@@ -200,21 +192,7 @@ function ActivityRow({ item }: { item: FeedItem }) {
 function RankedCard({ entry, owner }: { entry: RankedEntry; owner: FeedUser }) {
   const body = (
     <div className="mt-2 flex items-center gap-3 rounded-xl border border-mute-divider p-2 transition hover:bg-slate-50">
-      <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-mute-hush">
-        {entry.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={entry.imageUrl}
-            alt=""
-            loading="lazy"
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-teal-soft to-coral/20 text-lg font-semibold text-ink/40">
-            {entry.title.charAt(0).toUpperCase()}
-          </div>
-        )}
-      </div>
+      <InitialThumb src={entry.imageUrl} title={entry.title} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-ink">{entry.title}</p>
         <p className="truncate text-xs text-mute">

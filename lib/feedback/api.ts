@@ -29,73 +29,28 @@ import {
   isItemRef,
   isPlaceRef,
 } from "./types";
-
-interface ItemSnapshot {
-  title: string | null;
-  category: string | null;
-  town: string | null;
-}
+import {
+  EMPTY_SNAPSHOT,
+  loadDiscoverySnapshot,
+  loadEventSnapshot,
+  loadItemSnapshot,
+  loadPlaceSnapshot,
+  type ContentSnapshot,
+} from "@/lib/content/snapshot";
 
 // After PRD 5 Phase 1, UserItemStatus has four native FKs (itemId, eventId,
 // placeId, discoveryId). Each ref shape maps directly to one column — no
 // lazy Item bridge needed anymore. The pre-Phase-5 /lists UI still writes
 // via `itemId` for backwards compatibility; new UI surfaces write direct.
+//
+// The table→snapshot mapping itself lives in lib/content/snapshot.ts, shared
+// with the rank engine. These wrappers keep this module's existing contract:
+// a missing row degrades to null snapshot fields rather than refusing the
+// write — feedback on a since-deleted item is still feedback worth recording.
 
-interface ResolvedSnapshot {
-  title: string | null;
-  category: string | null;
-  town: string | null;
-}
-
-async function loadEventSnapshot(eventId: string): Promise<ResolvedSnapshot> {
-  const row = await prisma.event.findUnique({
-    where: { id: eventId },
-    select: { title: true, category: true, townName: true, neighborhood: true },
-  });
-  return {
-    title: row?.title ?? null,
-    category: row?.category ?? null,
-    town: row?.townName ?? row?.neighborhood ?? null,
-  };
-}
-
-async function loadPlaceSnapshot(placeId: string): Promise<ResolvedSnapshot> {
-  const row = await prisma.place.findUnique({
-    where: { id: placeId },
-    select: { name: true, category: true, townName: true, neighborhood: true },
-  });
-  return {
-    title: row?.name ?? null,
-    category: row?.category ?? null,
-    town: row?.townName ?? row?.neighborhood ?? null,
-  };
-}
-
-async function loadItemSnapshot(itemId: string): Promise<ItemSnapshot> {
-  const row = await prisma.item.findUnique({
-    where: { id: itemId },
-    select: { title: true, category: true, neighborhood: true },
-  });
-  return {
-    title: row?.title ?? null,
-    category: row?.category ?? null,
-    town: row?.neighborhood ?? null,
-  };
-}
-
-async function loadDiscoverySnapshot(
-  discoveryId: string
-): Promise<ItemSnapshot> {
-  const row = await prisma.discovery.findUnique({
-    where: { id: discoveryId },
-    select: { title: true, category: true, townName: true },
-  });
-  return {
-    title: row?.title ?? null,
-    category: row?.category ?? null,
-    town: row?.townName ?? null,
-  };
-}
+const snapshotOrEmpty = async (
+  load: Promise<ContentSnapshot | null>
+): Promise<ContentSnapshot> => (await load) ?? EMPTY_SNAPSHOT;
 
 /**
  * Wrap a Prisma write in a cache-invalidation hook. Flags the user's
@@ -173,7 +128,7 @@ export async function upsertFeedback(params: {
   const common = { status, source, ...(rating !== undefined ? { rating } : {}) };
 
   if (isItemRef(ref)) {
-    const snap = await loadItemSnapshot(ref.itemId);
+    const snap = await snapshotOrEmpty(loadItemSnapshot(ref.itemId));
     return afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_itemId: { userId, itemId: ref.itemId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
@@ -181,7 +136,7 @@ export async function upsertFeedback(params: {
     }));
   }
   if (isEventRef(ref)) {
-    const snap = await loadEventSnapshot(ref.eventId);
+    const snap = await snapshotOrEmpty(loadEventSnapshot(ref.eventId));
     return afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_eventId: { userId, eventId: ref.eventId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
@@ -189,7 +144,7 @@ export async function upsertFeedback(params: {
     }));
   }
   if (isPlaceRef(ref)) {
-    const snap = await loadPlaceSnapshot(ref.placeId);
+    const snap = await snapshotOrEmpty(loadPlaceSnapshot(ref.placeId));
     const row = await afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_placeId: { userId, placeId: ref.placeId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
@@ -200,7 +155,7 @@ export async function upsertFeedback(params: {
     return row;
   }
   if (isDiscoveryRef(ref)) {
-    const snap = await loadDiscoverySnapshot(ref.discoveryId);
+    const snap = await snapshotOrEmpty(loadDiscoverySnapshot(ref.discoveryId));
     return afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_discoveryId: { userId, discoveryId: ref.discoveryId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },

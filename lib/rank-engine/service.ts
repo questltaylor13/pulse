@@ -24,6 +24,12 @@ import type {
 import { markDirty, markFollowersDirty } from "@/lib/ranking/cache";
 import { triggerUserRerank } from "@/lib/ranking/rerank-trigger";
 import { emitRankedItemActivity } from "@/lib/social/activity";
+import {
+  loadEventSnapshot,
+  loadPlaceSnapshot,
+  loadDiscoverySnapshot,
+  type ContentSnapshot,
+} from "@/lib/content/snapshot";
 import { recomputePlaceRating, upsertFeedback } from "@/lib/feedback/api";
 import {
   RANK_CATEGORY_LABELS,
@@ -53,63 +59,11 @@ export function bridgeRating(sentiment: RankSentiment): number {
   }
 }
 
-interface ContentSnapshot {
-  title: string | null;
-  imageUrl: string | null;
-  category: string | null;
-  town: string | null;
-}
-
-async function loadContent(ref: RankRef): Promise<ContentSnapshot | null> {
-  if ("eventId" in ref) {
-    const row = await prisma.event.findUnique({
-      where: { id: ref.eventId },
-      select: {
-        title: true,
-        imageUrl: true,
-        category: true,
-        townName: true,
-        neighborhood: true,
-      },
-    });
-    if (!row) return null;
-    return {
-      title: row.title,
-      imageUrl: row.imageUrl,
-      category: row.category,
-      town: row.townName ?? row.neighborhood,
-    };
-  }
-  if ("placeId" in ref) {
-    const row = await prisma.place.findUnique({
-      where: { id: ref.placeId },
-      select: {
-        name: true,
-        primaryImageUrl: true,
-        category: true,
-        townName: true,
-        neighborhood: true,
-      },
-    });
-    if (!row) return null;
-    return {
-      title: row.name,
-      imageUrl: row.primaryImageUrl,
-      category: row.category,
-      town: row.townName ?? row.neighborhood,
-    };
-  }
-  const row = await prisma.discovery.findUnique({
-    where: { id: ref.discoveryId },
-    select: { title: true, category: true, townName: true },
-  });
-  if (!row) return null;
-  return {
-    title: row.title,
-    imageUrl: null, // Discoveries have no image field
-    category: row.category,
-    town: row.townName,
-  };
+/** Ref dispatch over the shared table→snapshot mapping in lib/content/snapshot. */
+function loadContent(ref: RankRef): Promise<ContentSnapshot | null> {
+  if ("eventId" in ref) return loadEventSnapshot(ref.eventId);
+  if ("placeId" in ref) return loadPlaceSnapshot(ref.placeId);
+  return loadDiscoverySnapshot(ref.discoveryId);
 }
 
 function refCreateFields(ref: RankRef): {

@@ -3,9 +3,9 @@
 import { useState } from "react";
 import type { ItemStatus } from "@prisma/client";
 import type { FeedbackRef } from "@/lib/feedback/types";
-import { resolveContentRef, resolveItemTarget } from "@/lib/feedback/types";
+import { resolveItemTarget } from "@/lib/feedback/types";
 import { useFeedback } from "@/lib/feedback/hooks";
-import { useRankFlow } from "@/components/rank/RankFlowProvider";
+import { useDoneInterception } from "./useDoneInterception";
 import ActionSheet from "./ActionSheet";
 import WhyThisSheet from "./WhyThisSheet";
 
@@ -48,23 +48,22 @@ export default function DetailFeedback({
       ref: ref_,
       initialStatus,
     });
-  const rankFlow = useRankFlow();
+  const interceptDone = useDoneInterception();
   const whyTarget = resolveItemTarget(ref_);
 
   const handleSelect = async (next: ItemStatus) => {
-    // Wave 4 Rate & Rank — "I've been there" routes through the sentiment/
-    // duel flow when the flag is on (see CardMoreMenu for the card path).
-    const rankRef = resolveContentRef(ref_);
-    if (next === "DONE" && rankFlow.enabled && rankRef) {
-      setOpen(false);
-      rankFlow.openRankFlow({
-        ref: rankRef,
-        itemTitle,
-        source: "DETAIL_PAGE",
-        onCompleted: () => setStatusLocal("DONE"),
-      });
-      return;
-    }
+    // Wave 4 Rate & Rank — "I've been there" routes through the sentiment/duel
+    // flow when the flag is on (shared with CardMoreMenu).
+    const intercepted = interceptDone({
+      next,
+      ref: ref_,
+      itemTitle,
+      source: "DETAIL_PAGE",
+      onIntercept: () => setOpen(false),
+      onCompleted: () => setStatusLocal("DONE"),
+    });
+    if (intercepted) return;
+
     const result = await upsert(next, "DETAIL_PAGE");
     if (result.ok) setOpen(false);
   };

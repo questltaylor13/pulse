@@ -3,9 +3,9 @@
 import { useState } from "react";
 import type { ItemStatus } from "@prisma/client";
 import type { FeedbackRef } from "@/lib/feedback/types";
-import { resolveContentRef, resolveItemTarget } from "@/lib/feedback/types";
+import { resolveItemTarget } from "@/lib/feedback/types";
 import { useFeedback } from "@/lib/feedback/hooks";
-import { useRankFlow } from "@/components/rank/RankFlowProvider";
+import { useDoneInterception } from "./useDoneInterception";
 import ActionSheet from "./ActionSheet";
 import WhyThisSheet from "./WhyThisSheet";
 
@@ -38,7 +38,7 @@ export default function CardMoreMenu({
       ref: ref_,
       initialStatus,
     });
-  const rankFlow = useRankFlow();
+  const interceptDone = useDoneInterception();
 
   // PRD 6 Phase 4 — derive itemType + itemId from the FeedbackRef for the
   // "Why am I seeing this?" path. Legacy itemRef (Item bridge) has no
@@ -47,23 +47,21 @@ export default function CardMoreMenu({
 
   const handleSelect = async (next: ItemStatus) => {
     const prev = status;
-    // Wave 4 Rate & Rank — "I've been there" routes through the sentiment/
-    // duel flow when the flag is on. Legacy Item-bridge refs fall through to
-    // the plain DONE write (the rank engine is content-native only).
-    const rankRef = resolveContentRef(ref_);
-    if (next === "DONE" && rankFlow.enabled && rankRef) {
-      setOpen(false);
-      rankFlow.openRankFlow({
-        ref: rankRef,
-        itemTitle,
-        source: "FEED_CARD",
-        onCompleted: () => {
-          setStatusLocal("DONE");
-          if (prev !== "DONE") onRemove?.();
-        },
-      });
-      return;
-    }
+    // Wave 4 Rate & Rank — "I've been there" routes through the sentiment/duel
+    // flow when the flag is on (shared with DetailFeedback).
+    const intercepted = interceptDone({
+      next,
+      ref: ref_,
+      itemTitle,
+      source: "FEED_CARD",
+      onIntercept: () => setOpen(false),
+      onCompleted: () => {
+        setStatusLocal("DONE");
+        if (prev !== "DONE") onRemove?.();
+      },
+    });
+    if (intercepted) return;
+
     const result = await upsert(next, "FEED_CARD");
     if (!result.ok) return; // Error surfaced in-sheet by the hook
     setOpen(false);
