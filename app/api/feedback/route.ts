@@ -23,6 +23,10 @@ const refSchema = z.union([
   z.object({ eventId: z.string().min(1) }).strict(),
   z.object({ placeId: z.string().min(1) }).strict(),
   z.object({ discoveryId: z.string().min(1) }).strict(),
+  // Wave 6A — the server promotes an event to its series, and toView hands the
+  // client back a { seriesId } ref. Re-ranking from /rankings posts it straight
+  // back here, so the schema has to accept it or the button is dead.
+  z.object({ seriesId: z.string().min(1) }).strict(),
 ]);
 
 const postSchema = z.object({

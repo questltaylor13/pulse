@@ -64,7 +64,7 @@ export interface ScoredEvent {
   scoreBreakdown: ScoreBreakdown;
   recommendationReason: string;
   reasonType: ReasonType;
-  isRecurring?: boolean;
+  isPermanent?: boolean;
   oneLiner?: string | null;
   noveltyScore?: number | null;
   isExplorationPick?: boolean;
@@ -207,7 +207,7 @@ interface EventForScoring {
   place?: PlaceData | null;
   saveCount?: number; // For trending calculation
   // Lifestyle fields
-  isRecurring?: boolean;
+  isPermanent?: boolean;
   oneLiner?: string | null;
   noveltyScore?: number | null;
   isDogFriendly?: boolean;
@@ -1337,7 +1337,7 @@ export function scoreEvent(
     scoreBreakdown: breakdown,
     recommendationReason: reason,
     reasonType,
-    isRecurring: event.isRecurring,
+    isPermanent: event.isPermanent,
     oneLiner: event.oneLiner,
     noveltyScore: event.noveltyScore,
     isTrendingPick: trendingScore >= 10,

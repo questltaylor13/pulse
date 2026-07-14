@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { occurrenceIdentity } from "@/lib/series/occurrence";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -75,16 +76,16 @@ export async function POST(request: NextRequest) {
   for (const eventData of parsed.data.events) {
     try {
       if (eventData.externalId) {
-        // Upsert by externalId + source
+        // Wave 6A — identity as ONE value, spread into both halves of the upsert.
+        // Keying on occurrenceDate while inserting NULL into it silently reopens
+        // the duplicate-row bug: NULLs are DISTINCT in a unique index, so the
+        // constraint cannot see the duplicates it exists to stop.
+        const identity = occurrenceIdentity(eventData);
         await prisma.event.upsert({
-          where: {
-            externalId_source: {
-              externalId: eventData.externalId,
-              source: eventData.source,
-            },
-          },
+          where: { source_externalId_occurrenceDate: identity },
           create: {
             ...eventData,
+            ...identity,
             cityId: denver.id,
           },
           update: {
@@ -94,10 +95,15 @@ export async function POST(request: NextRequest) {
         });
         results.updated++;
       } else {
-        // Create new event
+        // No externalId supplied. Synthesize the identity rather than inserting a
+        // NULL: a NULL externalId is DISTINCT from every other NULL in the unique
+        // index, so the row would be invisible to dedup and re-created on every
+        // subsequent import.
+        const synthesized = occurrenceIdentity(eventData);
         await prisma.event.create({
           data: {
             ...eventData,
+            ...synthesized,
             cityId: denver.id,
           },
         });

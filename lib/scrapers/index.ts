@@ -15,6 +15,9 @@ import { makeIcsScraper, type IcsScraperConfig } from "./ics";
 import { enrichEvent } from "@/lib/enrich-event";
 import { geocodeEvents } from "@/lib/geocode";
 import { deriveRegionalFields } from "@/lib/regional/metadata";
+import { deriveSeriesKey } from "@/lib/series/key";
+import { attachSeries } from "@/lib/series/ingest";
+import { occurrenceIdentity } from "@/lib/series/occurrence";
 import { denverDateKey } from "@/lib/time/denver";
 import { prioritize } from "./source-priority";
 import { isProSportsEvent } from "./exclusions";
@@ -254,72 +257,91 @@ export async function runAllScrapers(): Promise<{
     return { total: 0, inserted: 0, updated: 0, enriched: 0, dropped: 0, errors: [...allErrors, "Denver city not found in database"] };
   }
 
-  for (const event of deduplicated) {
-    const existing = event.externalId
-      ? await prisma.event.findFirst({
-          where: { externalId: event.externalId, source: event.source },
-        })
-      : null;
+  // Wave 6A — series attach. Best-effort and flag-gated: a failure to resolve a
+  // series must never fail the ingest of the occurrence itself. An unlinked
+  // occurrence is a worse feed, not a broken one.
+  const seriesIdByKey = await attachSeries(city.id, deduplicated).catch((err) => {
+    console.warn("[scrapers.attachSeries] failed:", err);
+    return new Map<string, string>();
+  });
 
+  for (const event of deduplicated) {
     // PRD 2 Phase 1: auto-tag regional metadata from the static drive-time
     // table based on the scraper's neighborhood value. Keeps scrapers simple
     // (they just set neighborhood="Boulder" etc.) while region/driveTime/
     // driveNote/isDayTrip/isWeekendTrip get derived centrally.
     const regional = deriveRegionalFields(event.neighborhood);
 
-    if (existing) {
-      await prisma.event.update({
-        where: { id: existing.id },
-        data: {
-          title: event.title,
-          description: event.description,
-          category: event.category,
-          tags: event.tags,
-          venueName: event.venueName,
-          address: event.address,
-          neighborhood: event.neighborhood,
-          startTime: event.startTime,
-          endTime: event.endTime,
-          priceRange: event.priceRange,
-          sourceUrl: event.sourceUrl,
-          imageUrl: event.imageUrl,
-          region: regional.region,
-          townName: regional.townName,
-          isDayTrip: regional.isDayTrip,
-          isWeekendTrip: regional.isWeekendTrip,
-          driveTimeFromDenver: regional.driveTimeFromDenver,
-          driveNote: regional.driveNote,
-        },
-      });
-      updated++;
-    } else {
-      const created = await prisma.event.create({
-        data: {
-          cityId: city.id,
-          title: event.title,
-          description: event.description,
-          category: event.category,
-          tags: event.tags,
-          venueName: event.venueName,
-          address: event.address,
-          neighborhood: event.neighborhood,
-          startTime: event.startTime,
-          endTime: event.endTime,
-          priceRange: event.priceRange,
-          source: event.source,
-          sourceUrl: event.sourceUrl,
-          externalId: event.externalId,
-          imageUrl: event.imageUrl,
-          region: regional.region,
-          townName: regional.townName,
-          isDayTrip: regional.isDayTrip,
-          isWeekendTrip: regional.isWeekendTrip,
-          driveTimeFromDenver: regional.driveTimeFromDenver,
-          driveNote: regional.driveNote,
-        },
-      });
-      newEventIds.push(created.id);
+    // Wave 6A — occurrence identity. externalId is guaranteed non-null (a NULL
+    // defeats the unique index entirely, which is what let permalink-less events
+    // duplicate nightly), and the DAY carries the occurrence, not the instant.
+    const seriesKey = deriveSeriesKey(event.title, event.venueName);
+    // ONE value, spread into BOTH the where and the create. Computing the two
+    // halves separately is how four other call sites ended up keying on
+    // occurrenceDate while inserting NULL into it.
+    const identity = occurrenceIdentity(event, seriesKey);
+    const seriesId = seriesIdByKey.get(seriesKey) ?? null;
+
+    const payload = {
+      title: event.title,
+      description: event.description,
+      category: event.category,
+      tags: event.tags,
+      venueName: event.venueName,
+      address: event.address,
+      neighborhood: event.neighborhood,
+      // startTime IS safe to update now, and must be: occurrenceDate is the
+      // identity column, so a matched row is by construction the same Denver day.
+      // A source legitimately moving a show from 7pm to 9pm the same night has to
+      // land — and endTime already did, so omitting startTime produced rows that
+      // ended before they started.
+      startTime: event.startTime,
+      endTime: event.endTime,
+      priceRange: event.priceRange,
+      sourceUrl: event.sourceUrl,
+      imageUrl: event.imageUrl,
+      // Stored so recurrence can be detected across NIGHTS, not just within one
+      // scrape batch — a weekly is invisible to batch-local detection because
+      // do303 only ever returns one occurrence of it per listing page.
+      seriesKey,
+      // NEVER write a null seriesId over an existing link. attachSeries returns
+      // an empty map when SERIES_V1_ENABLED is off, so `seriesId ?? null` in the
+      // update payload would make a flag-OFF scrape silently NULL every series
+      // link in the database — a rollback that destroys the graph instead of
+      // restoring behaviour. Unlinking must be deliberate, never a side effect of
+      // a disabled flag. (Same hazard when planSeries can't re-assert a series
+      // from tonight's batch alone: the link must survive.)
+      ...(seriesId ? { seriesId } : {}),
+      region: regional.region,
+      townName: regional.townName,
+      isDayTrip: regional.isDayTrip,
+      isWeekendTrip: regional.isWeekendTrip,
+      driveTimeFromDenver: regional.driveTimeFromDenver,
+      driveNote: regional.driveNote,
+    };
+
+    // A real upsert, replacing findFirst + branch — which was also a TOCTOU race
+    // that the unique constraint could not catch while externalId was nullable.
+    const row = await prisma.event.upsert({
+      where: { source_externalId_occurrenceDate: identity },
+      update: payload,
+      create: { ...payload, ...identity, cityId: city.id },
+      select: { id: true, createdAt: true, updatedAt: true },
+    });
+
+    // upsert gives no insert/update signal, so infer it from the run's own clock.
+    //
+    // NOT createdAt === updatedAt: Prisma evaluates @default(now()) and @updatedAt
+    // as two separate clock reads, so a millisecond boundary between them yields a
+    // 1ms delta and the insert is misread as an update. That row would then never
+    // enter newEventIds — never geocoded, never AI-enriched, permanently missing a
+    // qualityScore and oneLiner, with no backfill path (enrichEvent has no other
+    // caller). Comparing against the scrape's start is deterministic.
+    if (row.createdAt.getTime() >= startTime) {
+      newEventIds.push(row.id);
       inserted++;
+    } else {
+      updated++;
     }
   }
 

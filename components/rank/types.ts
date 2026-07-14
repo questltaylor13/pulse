@@ -5,7 +5,8 @@ import type { RankSentiment } from "@prisma/client";
 export type RankRefClient =
   | { eventId: string }
   | { placeId: string }
-  | { discoveryId: string };
+  | { discoveryId: string }
+  | { seriesId: string }; // Wave 6A — the server may promote an event to its series
 
 export interface SentimentOption {
   sentiment: RankSentiment;

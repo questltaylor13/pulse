@@ -24,10 +24,12 @@ import type {
 import { markDirty, markFollowersDirty } from "@/lib/ranking/cache";
 import { triggerUserRerank } from "@/lib/ranking/rerank-trigger";
 import { emitRankedItemActivity } from "@/lib/social/activity";
+import { seriesIdForEvent } from "@/lib/series/resolve";
 import {
   loadEventSnapshot,
   loadPlaceSnapshot,
   loadDiscoverySnapshot,
+  loadSeriesSnapshot,
   resolveContent,
   type ContentSnapshot,
 } from "@/lib/content/snapshot";
@@ -48,6 +50,16 @@ import { expectedComparisons } from "./insertion";
 
 export type { RankRef } from "./ordering";
 
+/**
+ * Wave 6A — an event that belongs to a series is ranked AS the series, so a
+ * user's ranked list holds "Trivia at Ratio", not "the 14 July edition of it".
+ */
+async function promoteRankRef(ref: RankRef): Promise<RankRef> {
+  if (!("eventId" in ref)) return ref;
+  const seriesId = await seriesIdForEvent(ref.eventId);
+  return seriesId ? { seriesId } : ref;
+}
+
 /** Coarse star bridged into UserItemStatus.rating (decision D9). */
 export function bridgeRating(sentiment: RankSentiment): number {
   switch (sentiment) {
@@ -64,6 +76,7 @@ export function bridgeRating(sentiment: RankSentiment): number {
 function loadContent(ref: RankRef): Promise<ContentSnapshot | null> {
   if ("eventId" in ref) return loadEventSnapshot(ref.eventId);
   if ("placeId" in ref) return loadPlaceSnapshot(ref.placeId);
+  if ("seriesId" in ref) return loadSeriesSnapshot(ref.seriesId);
   return loadDiscoverySnapshot(ref.discoveryId);
 }
 
@@ -71,9 +84,11 @@ function refCreateFields(ref: RankRef): {
   eventId?: string;
   placeId?: string;
   discoveryId?: string;
+  seriesId?: string;
 } {
   if ("eventId" in ref) return { eventId: ref.eventId };
   if ("placeId" in ref) return { placeId: ref.placeId };
+  if ("seriesId" in ref) return { seriesId: ref.seriesId };
   return { discoveryId: ref.discoveryId };
 }
 
@@ -100,7 +115,11 @@ export async function beginPlacement(params: {
   sentiment: RankSentiment;
   source: FeedbackSource;
 }): Promise<BeginPlacementResult> {
-  const { userId, ref, sentiment, source } = params;
+  const { userId, sentiment, source } = params;
+  // Wave 6A — ranking one Tuesday's trivia ranks THE trivia. Promoted here as
+  // well as in upsertFeedback, because the rank flow can be opened directly from
+  // a card without a preceding feedback write.
+  const ref = await promoteRankRef(params.ref);
 
   const content = await loadContent(ref);
   if (!content) throw new Error("beginPlacement: content not found");
@@ -259,7 +278,15 @@ export async function confirmPlacement(params: {
   inBucketIndex: number;
   comparisons: { opponentEntryId: string; outcome: ComparisonOutcome }[];
 }): Promise<ConfirmPlacementResult> {
-  const { userId, ref, inBucketIndex, comparisons } = params;
+  const { userId, inBucketIndex, comparisons } = params;
+  // Wave 6A — MUST promote here too. beginPlacement created the entry keyed by
+  // seriesId, but the client still holds (and posts back) the original
+  // { eventId }. Without this, refWhere finds nothing, confirmPlacement throws
+  // "entry not found", and NO series entry is ever confirmed — which would leave
+  // the DONE written, the series suppressed from discovery, and the regulars rail
+  // structurally empty. The feature would delete your favourite weekly instead of
+  // surfacing it.
+  const ref = await promoteRankRef(params.ref);
 
   const result = await prisma.$transaction(async (tx) => {
     const entry = await tx.userRankedEntry.findFirst({
@@ -321,11 +348,9 @@ export async function confirmPlacement(params: {
     await prisma.userItemStatus.updateMany({
       where: {
         userId,
-        ...("eventId" in ref
-          ? { eventId: ref.eventId }
-          : "placeId" in ref
-            ? { placeId: ref.placeId }
-            : { discoveryId: ref.discoveryId }),
+        // refCreateFields already IS the ref→columns mapping; inlining a third
+        // copy of it here is how the series arm gets forgotten next time.
+        ...refCreateFields(ref),
         status: "DONE",
       },
       data: { rating: refinedStar },
@@ -452,6 +477,8 @@ const CONTENT_INCLUDE = {
   event: { select: { id: true, title: true, imageUrl: true, townName: true, neighborhood: true } },
   place: { select: { id: true, name: true, primaryImageUrl: true, townName: true, neighborhood: true } },
   discovery: { select: { id: true, title: true, townName: true } },
+  // Wave 6A — a ranked series. No image of its own; its "town" is its venue.
+  series: { select: { id: true, title: true, venueName: true, category: true } },
 } as const;
 
 // Derived from the include const so the fetched shape and the type can
@@ -469,7 +496,11 @@ function toView(e: EntryWithContent, rank: number): RankedEntryView {
   const town = content.town;
   let href: string | null = null;
   let ref: RankRef | null = null;
-  if (e.eventId) {
+  if (e.seriesId) {
+    // A series has no page of its own yet; point at its next occurrence's event.
+    href = null;
+    ref = { seriesId: e.seriesId };
+  } else if (e.eventId) {
     href = `/events/${e.eventId}`;
     ref = { eventId: e.eventId };
   } else if (e.placeId) {
@@ -678,8 +709,10 @@ export async function fetchEntryForRef(
   userId: string,
   ref: RankRef
 ): Promise<EntryStatusView | null> {
+  // The entry is stored against the series, so the lookup must ask for it there.
+  const promoted = await promoteRankRef(ref);
   const entry = await prisma.userRankedEntry.findFirst({
-    where: refWhere(userId, ref),
+    where: refWhere(userId, promoted),
   });
   if (!entry) return null;
   const categorySize = await prisma.userRankedEntry.count({

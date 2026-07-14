@@ -47,3 +47,16 @@ export function isRateRankEnabled(): boolean {
 export function isSocialV1Enabled(): boolean {
   return process.env.SOCIAL_V1_ENABLED === "true";
 }
+
+/**
+ * Wave 6A — gates the EventSeries model: series creation at ingest, series-level
+ * rating refs, and the "On again this week" rail. Off ⇒ refs resolve to
+ * { eventId } exactly as pre-Wave-6.
+ *
+ * The ingest dedup FIX is deliberately NOT behind this flag. It is a bug fix,
+ * not a feature — gating it would mean ratings keep landing on the wrong row
+ * for as long as the flag is off, which is the entire problem.
+ */
+export function isSeriesV1Enabled(): boolean {
+  return process.env.SERIES_V1_ENABLED === "true";
+}

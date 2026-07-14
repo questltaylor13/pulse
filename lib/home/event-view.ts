@@ -14,8 +14,8 @@ export function categoryLabel(cat: Category | null | undefined): string {
   return CATEGORY_LABELS[cat] || "Event";
 }
 
-export function formatEventTime(iso: string, isRecurring: boolean): string {
-  if (isRecurring) return "Ongoing";
+export function formatEventTime(iso: string, isPermanent: boolean): string {
+  if (isPermanent) return "Ongoing";
   const d = new Date(iso);
   const now = new Date();
   const time = formatTimeDenver(d);

@@ -11,6 +11,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { isSeriesV1Enabled } from "./flags";
 import type { Prisma } from "@prisma/client";
 import type { RankableItem, RankingContext, RankedItemType } from "./types";
 import { normalizeQuality, normalizePriceTier } from "./normalizers";
@@ -64,6 +65,38 @@ export async function buildCandidatePool(
         ? {
             userStatuses: { none: { userId: ctx.userId, status: "DONE" } },
             userItemStatuses: { none: { userId: ctx.userId, status: "DONE" } },
+          }
+        : {}),
+      // Wave 6A — a DONE'd SERIES suppresses all of its future occurrences.
+      //
+      // Without this, rating "Trivia at Ratio" would suppress exactly one row —
+      // the 14 July edition — and next Tuesday's row, being a different Event,
+      // would come straight back into the feed. Forever. Every week. Rating the
+      // thing you love is not a reason to keep recommending it to you as though
+      // it were new; it is the reason to stop (and to surface it in the regulars
+      // rail instead — see components/home/RegularsRail.tsx).
+      //
+      // Events with no series pass through untouched.
+      //
+      // Flag-gated, and that matters for ROLLBACK, not for the happy path: if the
+      // flag is flipped off after users have rated series, an ungated clause would
+      // keep suppressing every occurrence of those series while the regulars rail
+      // went dark — the favourite weekly would vanish from every surface at once,
+      // repairable only by hand-deleting rows. Flag-off must mean pre-Wave-6.
+      ...(isSeriesV1Enabled()
+        ? {
+            OR: [
+              { seriesId: null },
+              {
+                series: {
+                  is: {
+                    userItemStatuses: {
+                      none: { userId: ctx.userId, status: "DONE" },
+                    },
+                  },
+                },
+              },
+            ],
           }
         : {}),
     },

@@ -9,6 +9,7 @@ import {
 } from "@/lib/ranking/rails";
 import { isForYouEnabled, isSocialV1Enabled } from "@/lib/ranking/flags";
 import { fetchFeaturedListsCached } from "@/lib/social/featured-lists";
+import { fetchRegulars } from "@/lib/home/fetch-regulars";
 import {
   activeEventsWhere,
   regionalScopeWhere,
@@ -45,6 +46,10 @@ export async function fetchForYouFeed(
   const featuredListsPromise = isSocialV1Enabled()
     ? fetchFeaturedListsCached().catch(() => [])
     : Promise.resolve([]);
+
+  // Wave 6A — your rated weeklies, on again. Kicked off alongside the ranked
+  // feed; fetchRegulars swallows its own errors and flag-gates itself.
+  const regularsPromise = fetchRegulars(userId, now);
 
   const ranked =
     userId && isForYouEnabled()
@@ -147,10 +152,26 @@ export async function fetchForYouFeed(
     });
   }
 
+  const regulars = await regularsPromise;
+
+  // A regular must not ALSO appear as a discovery card. The cached ranked feed is
+  // rebuilt by the daily cron, so between rating a series and the next precompute
+  // its occurrence is still sitting in the cache — and the page would show "On
+  // again this week: Trivia at Ratio #1" directly above an un-pilled Trivia at
+  // Ratio card offered as a fresh recommendation.
+  const regularEventIds = new Set(regulars.map((r) => r.eventId));
+  const deduped = sections.map((s) => ({
+    ...s,
+    items: s.items.filter(
+      (item) => !(item.kind === "event" && regularEventIds.has(item.id))
+    ),
+  }));
+
   return {
-    sections: sections.filter((s) => s.items.length > 0),
+    sections: deduped.filter((s) => s.items.length > 0),
     personalized,
     featuredLists: await featuredListsPromise,
+    regulars,
     lastUpdatedAt: now.toISOString(),
   };
 }

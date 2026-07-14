@@ -131,7 +131,7 @@ interface EventCardProps {
   isDrinkingOptional?: boolean;
   isAlcoholFree?: boolean;
   soberFriendlyNotes?: string | null;
-  isRecurring?: boolean;
+  isPermanent?: boolean;
   noveltyScore?: number | null;
   oneLiner?: string | null;
   tags?: string[];
@@ -203,7 +203,7 @@ export default function EventCard({
   isDrinkingOptional,
   isAlcoholFree,
   soberFriendlyNotes,
-  isRecurring,
+  isPermanent,
   noveltyScore,
   oneLiner,
   tags = [],
@@ -507,7 +507,7 @@ export default function EventCard({
             <svg className="h-4 w-4 mr-2 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <span className="truncate">{isRecurring ? "Always Available" : formatDateTime(startTime, compact ? null : endTime)}</span>
+            <span className="truncate">{isPermanent ? "Always Available" : formatDateTime(startTime, compact ? null : endTime)}</span>
           </div>
           <div className="flex items-center">
             <svg className="h-4 w-4 mr-2 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

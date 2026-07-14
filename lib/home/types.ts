@@ -51,7 +51,7 @@ export interface EventCompact {
   startTime: string; // ISO
   priceRange: string;
   isEditorsPick: boolean;
-  isRecurring: boolean;
+  isPermanent: boolean;
   noveltyScore: number | null;
   driveTimeFromDenver: number | null;
   tags: string[];
@@ -177,5 +177,9 @@ export interface ForYouFeedResponse {
    *  public list has ever been saved; the rail is omitted entirely when empty,
    *  matching the sections.filter(s => s.items.length > 0) convention. */
   featuredLists: import("@/lib/social/featured-lists").FeaturedList[];
+  /** Wave 6A — series you ranked LIKED, on again within 7 days. Empty when
+   *  SERIES_V1 is off, the viewer is anonymous, or they've ranked no series.
+   *  The rail is omitted entirely when empty, matching the sections convention. */
+  regulars: import("@/lib/home/regulars").RegularItem[];
   lastUpdatedAt: string; // ISO
 }

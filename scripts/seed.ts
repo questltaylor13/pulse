@@ -23,6 +23,7 @@
  */
 
 import { PrismaClient, Category, RelationshipStatus, DenverTenure, PreferenceType, EventListStatus, InteractionStatus, ItemType, ItemStatus, PickSetRange, FeedbackType, GoingWith, DayOfWeek, TimeOfDay, BudgetPreference, PlanType } from "@prisma/client";
+import { occurrenceIdentity } from "@/lib/series/occurrence";
 import * as bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -2304,14 +2305,12 @@ async function seedEvents(cityId: string) {
     };
 
     const result = await prisma.event.upsert({
-      where: {
-        externalId_source: {
-          externalId: event.externalId,
-          source: event.source,
-        },
-      },
+      where: { source_externalId_occurrenceDate: occurrenceIdentity(event) },
       update: eventData,
-      create: eventData,
+      // Identity in the create too — keying on occurrenceDate while inserting
+      // NULL into it makes the row invisible to the unique index (NULLs are
+      // DISTINCT), so every re-seed would duplicate it.
+      create: { ...eventData, ...occurrenceIdentity(event) },
     });
     events.push({ id: result.id, category: result.category, tags: result.tags });
   }

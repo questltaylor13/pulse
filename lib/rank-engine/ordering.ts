@@ -14,7 +14,8 @@ import { assertBucketInvariant, deriveScores } from "./scores";
 export type RankRef =
   | { eventId: string }
   | { placeId: string }
-  | { discoveryId: string };
+  | { discoveryId: string }
+  | { seriesId: string }; // Wave 6A — rating a recurring series
 
 export function refWhere(
   userId: string,
@@ -22,6 +23,7 @@ export function refWhere(
 ): Prisma.UserRankedEntryWhereInput {
   if ("eventId" in ref) return { userId, eventId: ref.eventId };
   if ("placeId" in ref) return { userId, placeId: ref.placeId };
+  if ("seriesId" in ref) return { userId, seriesId: ref.seriesId };
   return { userId, discoveryId: ref.discoveryId };
 }
 

@@ -23,7 +23,7 @@ async function main() {
   let updated = 0;
 
   for (const event of events) {
-    const itemType = event.isRecurring ? "PLACE" : "EVENT";
+    const itemType = event.isPermanent ? "PLACE" : "EVENT";
 
     const data = {
       type: itemType as "EVENT" | "PLACE",
@@ -34,7 +34,7 @@ async function main() {
       tags: event.tags,
       venueName: event.venueName,
       address: event.address,
-      startTime: event.isRecurring ? null : event.startTime,
+      startTime: event.isPermanent ? null : event.startTime,
       endTime: event.endTime,
       priceRange: event.priceRange,
       source: event.source,

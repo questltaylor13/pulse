@@ -23,7 +23,9 @@ function stableId(url: string): string {
  * "Sun., Feb 22, 6:00 pm – 8:00 pm" or "Every Sunday, 10:30 AM"
  * into a Date. Returns null if unparseable.
  */
-function parseWestwordDate(dateStr: string): { start: Date; end?: Date } | null {
+function parseWestwordDate(
+  dateStr: string,
+): { start: Date; end?: Date; cadence?: string } | null {
   // Clean HTML entities
   const cleaned = dateStr.replace(/&#8211;/g, "–").replace(/\s+/g, " ").trim();
 
@@ -49,7 +51,12 @@ function parseWestwordDate(dateStr: string): { start: Date; end?: Date } | null 
     const parsed = new Date(
       `${nextDate.toDateString()} ${timeStr}`,
     );
-    return isNaN(parsed.getTime()) ? null : { start: parsed };
+    // Wave 6A — the source is TELLING us this recurs. Westword has always parsed
+    // "Every Sunday" to anchor the next occurrence and then thrown the fact away,
+    // which is why its weeklies collapsed into one immortal mutating row. Keep it:
+    // a stated cadence is one of the two grounds on which a series is asserted.
+    const cadence = `Every ${dayName.charAt(0).toUpperCase()}${dayName.slice(1).toLowerCase()}`;
+    return isNaN(parsed.getTime()) ? null : { start: parsed, cadence };
   }
 
   // "Mon., Feb 22, 1:00 pm" or "Mon., Feb 22, 1:00 pm – 3:00 pm"
@@ -128,6 +135,7 @@ function parseDomEvents(html: string): ScrapedEvent[] {
         source: SOURCE,
         sourceUrl,
         externalId: stableId(sourceUrl),
+        cadence: parsed.cadence,
         imageUrl,
       });
     } catch {

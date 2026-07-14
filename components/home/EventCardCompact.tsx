@@ -83,7 +83,7 @@ export default function EventCardCompact({
             {event.title}
           </h3>
           <p className="mt-1 truncate text-[12px] text-mute">
-            {formatEventTime(event.startTime, event.isRecurring)}
+            {formatEventTime(event.startTime, event.isPermanent)}
           </p>
           {eventSecondaryMeta(event) && (
             <p className="truncate text-[12px] text-mute">{eventSecondaryMeta(event)}</p>

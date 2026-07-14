@@ -17,7 +17,7 @@ export function activeEventsWhere(now: Date = new Date()): Prisma.EventWhereInpu
     isArchived: false,
     status: "PUBLISHED",
     OR: [
-      { isRecurring: true },
+      { isPermanent: true },
       { startTime: { gte: now } },
     ],
   };

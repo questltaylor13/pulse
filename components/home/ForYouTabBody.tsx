@@ -1,6 +1,7 @@
 import ScrollSection from "./ScrollSection";
 import SectionDivider from "./SectionDivider";
 import ListsRail from "./ListsRail";
+import RegularsRail from "./RegularsRail";
 import EventCardCompact from "./EventCardCompact";
 import PlaceCardCompact from "./PlaceCardCompact";
 import LastUpdatedIndicator from "./LastUpdatedIndicator";
@@ -37,6 +38,7 @@ export default function ForYouTabBody({ data, feedbackMaps }: Props) {
   if (sections.length === 0) {
     return (
       <>
+        <RegularsRail items={data.regulars} />
         <div className="px-5 py-12 text-center text-body text-mute">
           Your feed is warming up — save a few things you like (tap the heart) and
           we&apos;ll tune this to your taste.
@@ -49,6 +51,9 @@ export default function ForYouTabBody({ data, feedbackMaps }: Props) {
 
   return (
     <>
+      {/* Your regulars first: they are the highest-confidence thing on the page —
+          you already told us you love them. */}
+      <RegularsRail items={data.regulars} />
       {sections.map((section, idx) => (
         <div key={section.id}>
           {idx > 0 && idx % 2 === 0 && <SectionDivider />}

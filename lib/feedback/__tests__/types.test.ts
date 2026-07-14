@@ -4,6 +4,9 @@ import {
   isPlaceRef,
   isDiscoveryRef,
   isItemRef,
+  isSeriesRef,
+  resolveContentRef,
+  resolveItemTarget,
   type FeedbackRef,
 } from "@/lib/feedback/types";
 
@@ -39,5 +42,21 @@ describe("FeedbackRef type guards", () => {
     expect(isItemRef(eventRef)).toBe(false);
     expect(isItemRef(placeRef)).toBe(false);
     expect(isItemRef(discoveryRef)).toBe(false);
+  });
+});
+
+describe("Wave 6A — series refs", () => {
+  it("narrows a series ref to a content ref", () => {
+    expect(resolveContentRef({ seriesId: "ser_1" })).toEqual({ seriesId: "ser_1" });
+  });
+
+  it("gives a series NO itemTarget — the why-sheet explains feed items, and the feed ranks occurrences", () => {
+    // A series has no RankedFeedCache entry to explain. Returning a target would
+    // open an empty sheet; null hides the row instead.
+    expect(resolveItemTarget({ seriesId: "ser_1" })).toBeNull();
+  });
+
+  it("still rejects the legacy Item bridge", () => {
+    expect(resolveContentRef({ itemId: "itm_1" })).toBeNull();
   });
 });

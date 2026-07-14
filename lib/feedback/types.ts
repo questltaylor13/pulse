@@ -37,7 +37,8 @@ export type FeedbackRef =
   | { itemId: string }
   | { eventId: string }
   | { placeId: string }
-  | { discoveryId: string };
+  | { discoveryId: string }
+  | { seriesId: string };
 
 export function isItemRef(ref: FeedbackRef): ref is { itemId: string } {
   return "itemId" in ref && typeof ref.itemId === "string" && ref.itemId.length > 0;
@@ -57,6 +58,19 @@ export function isDiscoveryRef(
     ref.discoveryId.length > 0
   );
 }
+/**
+ * Wave 6A — a recurring series. Rating one Tuesday's trivia rates THE trivia.
+ *
+ * The UI never constructs one of these: it sends { eventId } as it always has,
+ * and the server promotes it (see lib/series/resolve.ts). Keeping the promotion
+ * server-side means a client that has never heard of series still rates them
+ * correctly.
+ */
+export function isSeriesRef(ref: FeedbackRef): ref is { seriesId: string } {
+  return (
+    "seriesId" in ref && typeof ref.seriesId === "string" && ref.seriesId.length > 0
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Wave 4 — shared ref narrowing (previously copy-pasted in CardMoreMenu and
@@ -68,17 +82,27 @@ export function isDiscoveryRef(
 export type ContentRef =
   | { eventId: string }
   | { placeId: string }
-  | { discoveryId: string };
+  | { discoveryId: string }
+  | { seriesId: string };
 
 /** Narrow a FeedbackRef to a content-native ref; null for legacy Item refs. */
 export function resolveContentRef(ref: FeedbackRef): ContentRef | null {
   if (isEventRef(ref)) return { eventId: ref.eventId };
   if (isPlaceRef(ref)) return { placeId: ref.placeId };
   if (isDiscoveryRef(ref)) return { discoveryId: ref.discoveryId };
+  if (isSeriesRef(ref)) return { seriesId: ref.seriesId };
   return null;
 }
 
-/** itemType/itemId pair for ranking-cache lookups ("Why am I seeing this?"). */
+/**
+ * itemType/itemId pair for ranking-cache lookups ("Why am I seeing this?").
+ *
+ * Null for a series, deliberately. The why-sheet explains why an item is in your
+ * ranked FEED, and the feed ranks occurrences, not series — a series has no
+ * RankedFeedCache entry to explain. Same reason the legacy Item bridge returns
+ * null: no cache entry, no explanation, so hide the row rather than show an
+ * empty sheet.
+ */
 export function resolveItemTarget(
   ref: FeedbackRef
 ): { itemType: "event" | "place" | "discovery"; itemId: string } | null {
