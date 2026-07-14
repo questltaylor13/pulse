@@ -5,11 +5,15 @@ import { useState, useCallback } from "react";
 import { filtersFromParams, activeFilterCount } from "@/lib/browse/filters";
 import FilterSheet from "./FilterSheet";
 
+// The param names here MUST match what filtersFromParams() reads: "categories"
+// and "vibes", both plural. Three of these four wrote singular ("category",
+// "vibe"), which nothing reads — so the chips lit up and filtered nothing.
+// FilterSheet was fixed for exactly this and FilterChipRow was missed.
 const QUICK_CHIPS = [
-  { label: "Any category", param: "category", value: "" },
+  { label: "Any category", param: "categories", value: "" },
   { label: "Free", param: "price", value: "free" },
-  { label: "Dog friendly", param: "vibe", value: "dog-friendly" },
-  { label: "Outdoors", param: "category", value: "OUTDOORS" },
+  { label: "Dog friendly", param: "vibes", value: "dog-friendly" },
+  { label: "Outdoors", param: "categories", value: "OUTDOORS" },
 ] as const;
 
 export default function FilterChipRow() {

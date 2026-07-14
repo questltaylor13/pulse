@@ -4,7 +4,7 @@ import { addDaysDenver, denverHour, startOfTodayDenver, endOfTodayDenver } from 
 import { boundingBox } from "@/lib/geo";
 import { filterAndSortByDistance } from "./distance";
 import { matchesTimeOfDay } from "./filter-logic";
-import { localFavoritesWhere, groupFriendlyPlacesWhere, workFriendlyPlacesWhere, dateNightPlacesWhere } from "@/lib/home/places-section-filters";
+import { buildPlacesWhere } from "./places-where";
 import type { BrowseConfig } from "./browse-configs";
 import type { BrowseFilters } from "./filters";
 
@@ -141,19 +141,9 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
   }
 
   if (config.source === "places") {
-    const where: any = { openingStatus: "OPEN" };
-
-    if (config.defaults.filter === "new") {
-      where.OR = [{ isNew: true }, { openedDate: { gte: new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000) } }];
-    }
-    if (config.defaults.flag === "isLocalFavorite") Object.assign(where, localFavoritesWhere());
-    if (config.defaults.flag === "goodForWorking") Object.assign(where, workFriendlyPlacesWhere());
-    if (config.defaults.vibeTag) {
-      where.vibeTags = { hasSome: [config.defaults.vibeTag] };
-    }
-
-    if (filters.categories.length) where.category = { in: filters.categories };
-    if (filters.vibes.length) where.vibeTags = { hasSome: filters.vibes };
+    // Composed as an AND array in lib/browse/places-where.ts. The clauses used to
+    // be merged onto one object, where each silently overwrote the last.
+    const where: any = buildPlacesWhere(config, filters, now);
 
     if (distanceActive) {
       const bb = boundingBox(origin!, radiusMiles!);

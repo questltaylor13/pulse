@@ -83,6 +83,33 @@ export function isValidVibeTag(tag: string): tag is VibeTag {
 }
 
 /**
+ * The values to put in a `vibeTags hasSome` query: the canonical kebab token AND
+ * its legacy Title-case spelling.
+ *
+ * Matching both is deliberate and permanent. A data migration and a code deploy
+ * cannot be atomic, so a query that spoke only one vocabulary would be wrong on
+ * one side of the change. This is correct before 20260714130000_normalize_vibe_tags,
+ * correct after it, and correct if it is re-run.
+ */
+export function vibeTagQueryValues(tags: string[]): string[] {
+  const out = new Set<string>();
+  for (const tag of tags) {
+    const kebab = normalizeVibeTag(tag);
+    if (!kebab) continue;
+    out.add(kebab);
+    // "cozy" -> "Cozy", "high-energy" -> "High Energy": the shape enrichment
+    // used to write.
+    out.add(
+      kebab
+        .split("-")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" "),
+    );
+  }
+  return [...out];
+}
+
+/**
  * Normalize, drop anything outside the vocabulary, de-duplicate. Order is
  * preserved. Dedup matters mid-migration, when a row can hold both spellings.
  */

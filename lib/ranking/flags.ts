@@ -60,3 +60,20 @@ export function isSocialV1Enabled(): boolean {
 export function isSeriesV1Enabled(): boolean {
   return process.env.SERIES_V1_ENABLED === "true";
 }
+
+/**
+ * Wave 6B — gates the situational surfaces: the /browse/watch-the-game,
+ * /browse/kid-friendly and /browse/big-groups pages, and the attribute chip row
+ * on place detail. Off ⇒ those routes 404 and no chips render.
+ *
+ * The flag exists because the five booleans are `false` for every place until
+ * the enrichment backfill runs — exactly as goodForWorking is 0/460 today. Ship
+ * the code, run the backfill, then flip this on so the pages are never empty.
+ *
+ * The narrowed pro-sports exclusion is deliberately NOT behind this flag. It is
+ * a bug fix (we were deleting every watch party at ingest), and gating it would
+ * mean continuing to destroy that content for as long as the flag is off.
+ */
+export function isSituationsV1Enabled(): boolean {
+  return process.env.SITUATIONS_V1_ENABLED === "true";
+}
