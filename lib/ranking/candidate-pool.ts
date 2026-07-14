@@ -66,6 +66,26 @@ export async function buildCandidatePool(
             userItemStatuses: { none: { userId: ctx.userId, status: "DONE" } },
           }
         : {}),
+      // Wave 6A — a DONE'd SERIES suppresses all of its future occurrences.
+      //
+      // Without this, rating "Trivia at Ratio" would suppress exactly one row —
+      // the 14 July edition — and next Tuesday's row, being a different Event,
+      // would come straight back into the feed. Forever. Every week. Rating the
+      // thing you love is not a reason to keep recommending it to you as though
+      // it were new; it is the reason to stop (and to surface it in the regulars
+      // rail instead — see components/home/RegularsRail.tsx).
+      //
+      // Events with no series pass through untouched.
+      OR: [
+        { seriesId: null },
+        {
+          series: {
+            is: {
+              userItemStatuses: { none: { userId: ctx.userId, status: "DONE" } },
+            },
+          },
+        },
+      ],
     },
     select: {
       id: true,

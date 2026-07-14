@@ -9,6 +9,7 @@ import {
 } from "@/lib/ranking/rails";
 import { isForYouEnabled, isSocialV1Enabled } from "@/lib/ranking/flags";
 import { fetchFeaturedListsCached } from "@/lib/social/featured-lists";
+import { fetchRegulars } from "@/lib/home/fetch-regulars";
 import {
   activeEventsWhere,
   regionalScopeWhere,
@@ -45,6 +46,10 @@ export async function fetchForYouFeed(
   const featuredListsPromise = isSocialV1Enabled()
     ? fetchFeaturedListsCached().catch(() => [])
     : Promise.resolve([]);
+
+  // Wave 6A — your rated weeklies, on again. Kicked off alongside the ranked
+  // feed; fetchRegulars swallows its own errors and flag-gates itself.
+  const regularsPromise = fetchRegulars(userId, now);
 
   const ranked =
     userId && isForYouEnabled()
@@ -151,6 +156,7 @@ export async function fetchForYouFeed(
     sections: sections.filter((s) => s.items.length > 0),
     personalized,
     featuredLists: await featuredListsPromise,
+    regulars: await regularsPromise,
     lastUpdatedAt: now.toISOString(),
   };
 }
