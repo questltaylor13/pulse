@@ -11,6 +11,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { isSeriesV1Enabled } from "./flags";
 import type { Prisma } from "@prisma/client";
 import type { RankableItem, RankingContext, RankedItemType } from "./types";
 import { normalizeQuality, normalizePriceTier } from "./normalizers";
@@ -76,16 +77,28 @@ export async function buildCandidatePool(
       // rail instead — see components/home/RegularsRail.tsx).
       //
       // Events with no series pass through untouched.
-      OR: [
-        { seriesId: null },
-        {
-          series: {
-            is: {
-              userItemStatuses: { none: { userId: ctx.userId, status: "DONE" } },
-            },
-          },
-        },
-      ],
+      //
+      // Flag-gated, and that matters for ROLLBACK, not for the happy path: if the
+      // flag is flipped off after users have rated series, an ungated clause would
+      // keep suppressing every occurrence of those series while the regulars rail
+      // went dark — the favourite weekly would vanish from every surface at once,
+      // repairable only by hand-deleting rows. Flag-off must mean pre-Wave-6.
+      ...(isSeriesV1Enabled()
+        ? {
+            OR: [
+              { seriesId: null },
+              {
+                series: {
+                  is: {
+                    userItemStatuses: {
+                      none: { userId: ctx.userId, status: "DONE" },
+                    },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
     },
     select: {
       id: true,

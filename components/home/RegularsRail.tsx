@@ -63,8 +63,12 @@ function RegularCard({ item }: { item: RegularItem }) {
   );
 }
 
-function formatNext(startTime: Date): string {
-  return new Date(startTime).toLocaleDateString(undefined, {
+function formatNext(startTime: Date | string): string {
+  // Denver, explicitly. This renders on the server, where Vercel's clock is UTC —
+  // a Tuesday 8pm Denver event is Wednesday 02:00 UTC, so the rail would have
+  // cheerfully labelled the Tuesday trivia "Wednesday".
+  return new Date(startTime).toLocaleDateString("en-US", {
     weekday: "long",
+    timeZone: "America/Denver",
   });
 }

@@ -66,3 +66,31 @@ describe("deriveSeriesKey", () => {
     expect(deriveSeriesKey("Trivia Night", "Ratio Beerworks")).toMatch(/^[a-z0-9|-]+$/);
   });
 });
+
+describe("deriveSeriesKey — traps the review caught", () => {
+  it("does NOT strip a word that merely BEGINS with a month name", () => {
+    // "Decadence" starts with "Dec". A greedy month match turned it into "adence"
+    // and then the delimiter stripped it entirely, merging Denver's NYE festival
+    // with every other NYE event at that venue.
+    expect(deriveSeriesKey("Decadence: NYE Festival", "Convention Center")).not.toBe(
+      deriveSeriesKey("NYE Festival", "Convention Center")
+    );
+    expect(deriveSeriesKey("Mayday: The Musical", "Buell")).not.toBe(
+      deriveSeriesKey("The Musical", "Buell")
+    );
+  });
+
+  it("still strips a REAL month prefix", () => {
+    expect(deriveSeriesKey("July 15: Trivia Night", "Ratio")).toBe(
+      deriveSeriesKey("Trivia Night", "Ratio")
+    );
+  });
+
+  it("treats 'The Ogden Theatre' and 'Ogden Theatre' as one venue", () => {
+    // A leading article must not split a series. The scrapers' venue normalizer
+    // already knew this; deriving our own second opinion was the bug.
+    expect(deriveSeriesKey("Trivia", "The Ogden Theatre")).toBe(
+      deriveSeriesKey("Trivia", "Ogden Theatre")
+    );
+  });
+});

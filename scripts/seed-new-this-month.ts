@@ -6,7 +6,7 @@
  */
 
 import { PrismaClient, Category } from "@prisma/client";
-import { occurrenceDateOf } from "@/lib/series/ingest";
+import { occurrenceIdentity } from "@/lib/series/occurrence";
 
 const prisma = new PrismaClient();
 
@@ -93,11 +93,13 @@ async function main() {
   for (const item of NEW_ITEMS) {
     await prisma.event.upsert({
       where: {
-        source_externalId_occurrenceDate: {
+        source_externalId_occurrenceDate: occurrenceIdentity({
           source: "pulse-curated",
           externalId: item.externalId,
-          occurrenceDate: occurrenceDateOf(PERMANENT_SENTINEL),
-        },
+          title: item.title,
+          venueName: item.venueName,
+          startTime: PERMANENT_SENTINEL,
+        }),
       },
       update: {
         isNew: true,
@@ -119,8 +121,13 @@ async function main() {
         oneLiner: item.oneLiner,
         noveltyScore: item.noveltyScore,
         qualityScore: item.qualityScore,
-        source: "pulse-curated",
-        externalId: item.externalId,
+        ...occurrenceIdentity({
+          source: "pulse-curated",
+          externalId: item.externalId,
+          title: item.title,
+          venueName: item.venueName,
+          startTime: PERMANENT_SENTINEL,
+        }),
         cityId: denver.id,
         status: "PUBLISHED",
         publishedAt: new Date(),

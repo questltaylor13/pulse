@@ -51,10 +51,12 @@ export async function buildRankingContext(userId: string): Promise<RankingContex
       eventId: true,
       placeId: true,
       discoveryId: true,
+      seriesId: true,
       itemId: true,
       event: { select: { id: true, category: true, tags: true, vibeTags: true, companionTags: true, occasionTags: true } },
       place: { select: { id: true, category: true, tags: true, vibeTags: true, companionTags: true, goodForTags: true } },
       discovery: { select: { id: true, category: true, tags: true } },
+      series: { select: { id: true, category: true, tags: true } },
       itemCategorySnapshot: true,
     },
   });
@@ -68,7 +70,12 @@ export async function buildRankingContext(userId: string): Promise<RankingContex
 
   for (const row of feedback) {
     totalFeedbackCount += 1;
-    const itemId = row.eventId ?? row.placeId ?? row.discoveryId ?? row.itemId;
+    // Wave 6A — a series-grain row must count. Skipping it (as `?? row.itemId`
+    // alone did) meant a rated weekly contributed no tags and no doneId, while
+    // still incrementing totalFeedbackCount — so it silently DILUTED every
+    // familiarity ratio instead of informing them.
+    const itemId =
+      row.eventId ?? row.placeId ?? row.discoveryId ?? row.seriesId ?? row.itemId;
     if (!itemId) continue;
 
     const tags = extractTags(row);
@@ -121,15 +128,21 @@ export async function buildRankingContext(userId: string): Promise<RankingContex
         eventId: true,
         placeId: true,
         discoveryId: true,
+        seriesId: true,
         event: { select: { category: true, tags: true, vibeTags: true, companionTags: true, occasionTags: true } },
         place: { select: { category: true, tags: true, vibeTags: true, companionTags: true, goodForTags: true } },
         discovery: { select: { category: true, tags: true } },
+        series: { select: { category: true, tags: true } },
       },
     });
 
     const perCategory = new Map<string, { liked: number; disliked: number; rated: number }>();
     for (const entry of entries) {
-      const itemId = entry.eventId ?? entry.placeId ?? entry.discoveryId;
+      // Wave 6A — include the series grain, or a ranked weekly produces itemId ""
+      // and drops out of lovedItems/dislikedItems entirely: Wave 4's "rank signals
+      // feed For-You" would simply not apply to series.
+      const itemId =
+        entry.eventId ?? entry.placeId ?? entry.discoveryId ?? entry.seriesId;
       const tags = extractTags(entry);
       const signal: RatedItemSignal = {
         itemId: itemId ?? "",
@@ -146,6 +159,7 @@ export async function buildRankingContext(userId: string): Promise<RankingContex
         entry.event?.category ??
         entry.place?.category ??
         entry.discovery?.category ??
+        entry.series?.category ??
         entry.categorySnapshot ??
         null;
       if (category) {
@@ -315,6 +329,9 @@ type FeedbackRow = {
   event: { tags: string[]; vibeTags: string[]; companionTags: string[]; occasionTags: string[] } | null;
   place: { tags: string[]; vibeTags: string[]; companionTags: string[]; goodForTags: string[] } | null;
   discovery: { tags: string[] } | null;
+  // Wave 6A. Optional: the ranked-entry query selects it, the feedback query
+  // selects it, but callers constructed elsewhere need not.
+  series?: { tags: string[] } | null;
 };
 
 function extractTags(row: FeedbackRow): string[] {
@@ -326,6 +343,9 @@ function extractTags(row: FeedbackRow): string[] {
   }
   if (row.discovery) {
     return row.discovery.tags;
+  }
+  if (row.series) {
+    return row.series.tags;
   }
   return [];
 }

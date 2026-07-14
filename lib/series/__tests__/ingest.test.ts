@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { resolveExternalId, occurrenceDateOf, planSeries } from "@/lib/series/ingest";
+import { resolveExternalId, occurrenceDateOf } from "@/lib/series/occurrence";
 import type { ScrapedEvent } from "@/lib/scrapers/types";
 
 function ev(overrides: Partial<ScrapedEvent> = {}): ScrapedEvent {
@@ -97,55 +97,5 @@ describe("occurrenceDateOf", () => {
     expect(occurrenceDateOf(denverTuesdayNight).toISOString()).toBe(
       "2026-07-14T00:00:00.000Z"
     );
-  });
-});
-
-describe("planSeries", () => {
-  const at = (iso: string, over: Partial<ScrapedEvent> = {}) =>
-    ev({ startTime: new Date(iso), ...over });
-
-  it("asserts a series when the source states a cadence", () => {
-    // One occurrence is enough IF the source told us it recurs — that is exactly
-    // the fact Westword parses and used to discard.
-    const planned = planSeries([
-      at("2026-07-14T19:00:00-06:00", { cadence: "Every Tuesday" }),
-    ]);
-    expect(planned.size).toBe(1);
-    expect([...planned.values()][0].cadence).toBe("Every Tuesday");
-  });
-
-  it("asserts a series from two occurrences on different nights", () => {
-    // do303 carries no recurrence hint at all — repetition IS the evidence.
-    const planned = planSeries([
-      at("2026-07-14T19:00:00-06:00"),
-      at("2026-07-21T19:00:00-06:00"),
-    ]);
-    expect(planned.size).toBe(1);
-  });
-
-  it("does NOT invent a series from a single one-off", () => {
-    // One Tuesday pub quiz is indistinguishable from a weekly. Inventing a series
-    // for every event would make the concept meaningless.
-    expect(planSeries([at("2026-07-14T19:00:00-06:00")]).size).toBe(0);
-  });
-
-  it("does NOT assert a series from two rows on the SAME night", () => {
-    // Two sources reporting one night's trivia is a cross-source duplicate, not
-    // evidence of recurrence.
-    const planned = planSeries([
-      at("2026-07-14T19:00:00-06:00"),
-      at("2026-07-14T20:00:00-06:00"),
-    ]);
-    expect(planned.size).toBe(0);
-  });
-
-  it("keeps distinct series at one venue apart", () => {
-    const planned = planSeries([
-      at("2026-07-14T19:00:00-06:00", { title: "Trivia Night" }),
-      at("2026-07-21T19:00:00-06:00", { title: "Trivia Night" }),
-      at("2026-07-15T19:00:00-06:00", { title: "Open Mic" }),
-      at("2026-07-22T19:00:00-06:00", { title: "Open Mic" }),
-    ]);
-    expect(planned.size).toBe(2);
   });
 });

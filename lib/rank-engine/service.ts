@@ -278,7 +278,15 @@ export async function confirmPlacement(params: {
   inBucketIndex: number;
   comparisons: { opponentEntryId: string; outcome: ComparisonOutcome }[];
 }): Promise<ConfirmPlacementResult> {
-  const { userId, ref, inBucketIndex, comparisons } = params;
+  const { userId, inBucketIndex, comparisons } = params;
+  // Wave 6A — MUST promote here too. beginPlacement created the entry keyed by
+  // seriesId, but the client still holds (and posts back) the original
+  // { eventId }. Without this, refWhere finds nothing, confirmPlacement throws
+  // "entry not found", and NO series entry is ever confirmed — which would leave
+  // the DONE written, the series suppressed from discovery, and the regulars rail
+  // structurally empty. The feature would delete your favourite weekly instead of
+  // surfacing it.
+  const ref = await promoteRankRef(params.ref);
 
   const result = await prisma.$transaction(async (tx) => {
     const entry = await tx.userRankedEntry.findFirst({
@@ -701,8 +709,10 @@ export async function fetchEntryForRef(
   userId: string,
   ref: RankRef
 ): Promise<EntryStatusView | null> {
+  // The entry is stored against the series, so the lookup must ask for it there.
+  const promoted = await promoteRankRef(ref);
   const entry = await prisma.userRankedEntry.findFirst({
-    where: refWhere(userId, ref),
+    where: refWhere(userId, promoted),
   });
   if (!entry) return null;
   const categorySize = await prisma.userRankedEntry.count({

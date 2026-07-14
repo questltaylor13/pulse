@@ -46,9 +46,24 @@ export async function getFeedbackMaps(params: {
         eventIds.length > 0 ? { eventId: { in: eventIds } } : null,
         placeIds.length > 0 ? { placeId: { in: placeIds } } : null,
         discoveryIds.length > 0 ? { discoveryId: { in: discoveryIds } } : null,
+        // Wave 6A — a status recorded against a SERIES applies to every occurrence
+        // of it. Without this, the next Tuesday's trivia renders with no "Been
+        // there" pill and is not filtered from the feed, even though the user has
+        // told us they've been — because the status row is keyed by seriesId and
+        // nothing here was looking for one.
+        eventIds.length > 0
+          ? { series: { is: { events: { some: { id: { in: eventIds } } } } } }
+          : null,
       ].filter((v): v is NonNullable<typeof v> => v !== null),
     },
-    select: { eventId: true, placeId: true, discoveryId: true, status: true },
+    select: {
+      eventId: true,
+      placeId: true,
+      discoveryId: true,
+      status: true,
+      seriesId: true,
+      series: { select: { events: { select: { id: true } } } },
+    },
   });
 
   const byEventId = new Map<string, ItemStatus>();
@@ -58,6 +73,11 @@ export async function getFeedbackMaps(params: {
     if (row.eventId) byEventId.set(row.eventId, row.status);
     if (row.placeId) byPlaceId.set(row.placeId, row.status);
     if (row.discoveryId) byDiscoveryId.set(row.discoveryId, row.status);
+    // Fan a series status out onto its occurrences, so the caller — which only
+    // ever knows about events — needs no series awareness of its own.
+    if (row.seriesId && row.series) {
+      for (const e of row.series.events) byEventId.set(e.id, row.status);
+    }
   }
   return { byEventId, byPlaceId, byDiscoveryId };
 }

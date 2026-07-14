@@ -404,6 +404,13 @@ model Event {
   /// it; ingest always sets it.
   occurrenceDate DateTime? @db.Date
 
+  /// Wave 6A — derived series identity (lib/series/key.ts), stored so that
+  /// recurrence can be detected across NIGHTS rather than only within a single
+  /// scrape batch. Without it, a weekly is invisible: do303 returns one listing
+  /// page, so two occurrences of the same trivia never appear in one batch, and
+  /// batch-local detection never fires for the source it was written to catch.
+  seriesKey String?
+
   // AI enrichment fields
   oneLiner     String? // Punchy 10-15 word description
   noveltyScore Int? // 1-10 uniqueness rating
@@ -481,6 +488,7 @@ model Event {
   @@index([category])
   @@index([placeId])
   @@index([seriesId, startTime])
+  @@index([seriesKey])
   @@index([createdById])
   @@index([status])
   @@index([isEditorsPick])
@@ -502,6 +510,12 @@ model EventSeries {
   placeId   String? // resolved venue, when venue-match finds one
   category  Category
   cadence   String? // "Every Tuesday" — only when a source actually tells us
+
+  /// Wave 6A — tags carried up from the occurrences. Without these a ranked
+  /// series contributes NOTHING to the loved/disliked similarity signal: its id
+  /// never matches an event id (so no direct hit) and it has no tags to overlap
+  /// on, so rating your favourite weekly would teach the ranker nothing at all.
+  tags String[] @default([])
 
   /// normalize(title)|normalize(venue) — see lib/series/key.ts. THE identity.
   seriesKey String @unique

@@ -50,6 +50,33 @@ async function promoteRef(ref: FeedbackRef): Promise<FeedbackRef> {
   return seriesId ? { seriesId } : ref;
 }
 
+/**
+ * Wave 6A — retire any event-grain rows for a series.
+ *
+ * The mixed-grain problem, and it is NOT just a migration artifact: an event can
+ * be rated BEFORE it is recognised as part of a series (occurrence #1 of a weekly
+ * has no series yet), and a later scrape then stamps it with a seriesId. Rate it
+ * again and the write goes to the series — leaving the old eventId row behind.
+ *
+ * Two rows for one thing means: /your-denver lists it twice (once linked, once as
+ * an orphan card), /rankings shows it twice in the same category, and un-marking
+ * DONE deletes only one of them so the rating survives its own retraction.
+ *
+ * So collapse to one grain. The series row is the survivor.
+ */
+async function retireEventGrainRows(userId: string, seriesId: string): Promise<void> {
+  try {
+    await prisma.userItemStatus.deleteMany({
+      where: { userId, event: { seriesId } },
+    });
+    await prisma.userRankedEntry.deleteMany({
+      where: { userId, event: { seriesId } },
+    });
+  } catch (err) {
+    console.warn("[feedback.retireEventGrainRows] failed:", err);
+  }
+}
+
 // After PRD 5 Phase 1, UserItemStatus has four native FKs (itemId, eventId,
 // placeId, discoveryId). Each ref shape maps directly to one column — no
 // lazy Item bridge needed anymore. The pre-Phase-5 /lists UI still writes
@@ -176,6 +203,9 @@ export async function upsertFeedback(params: {
   }
   if (isSeriesRef(ref)) {
     const snap = (await loadSeriesSnapshot(ref.seriesId)) ?? EMPTY_SNAPSHOT;
+    // One grain per thing. An earlier rating on an occurrence — made before the
+    // series was recognised — would otherwise linger beside this one.
+    await retireEventGrainRows(userId, ref.seriesId);
     return afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_seriesId: { userId, seriesId: ref.seriesId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
@@ -236,8 +266,16 @@ export async function deleteFeedback(params: {
     return count;
   }
   if (isSeriesRef(ref)) {
-    const count = await runDelete({ userId, seriesId: ref.seriesId });
+    // Delete BOTH grains. A rating made before the series was recognised lives on
+    // the event row; keyed only on seriesId, the retraction would miss it and the
+    // rating would survive being retracted — the exact failure this path exists to
+    // prevent.
+    const count = await runDelete({
+      userId,
+      OR: [{ seriesId: ref.seriesId }, { event: { seriesId: ref.seriesId } }],
+    });
     await retractRankedEntry({ seriesId: ref.seriesId });
+    await retireEventGrainRows(userId, ref.seriesId);
     return count;
   }
   throw new Error("deleteFeedback: ref missing valid id");

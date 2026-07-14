@@ -22,9 +22,31 @@ ALTER TABLE "Event" ADD COLUMN "seriesId" TEXT;
 ALTER TABLE "Event" ADD COLUMN "occurrenceDate" DATE;
 
 -- Backfill from existing startTimes so the unique index below can be built.
+--
+-- The double AT TIME ZONE is not redundant — it is the whole correctness of this
+-- statement. "startTime" is `timestamp WITHOUT time zone` holding a UTC instant.
+-- Postgres's `timestamp AT TIME ZONE z` overload INTERPRETS the naive value as
+-- being in z and returns timestamptz; it does not convert INTO z. So the single
+-- form `("startTime" AT TIME ZONE 'America/Denver')` reads a UTC instant as if it
+-- were Denver wall-clock and shifts it the WRONG WAY (+6h instead of -6h).
+--
+-- That would date every event starting between noon and midnight Denver — i.e.
+-- almost every event in an evenings-and-nightlife app — one day late, so the
+-- nightly upsert would miss its own rows and duplicate all of them. The bug this
+-- migration exists to kill, shipped inside the migration.
+--
+-- First AT TIME ZONE 'UTC': tag the naive value as the UTC instant it is.
+-- Second AT TIME ZONE 'America/Denver': convert that instant to Denver local.
 UPDATE "Event"
-SET "occurrenceDate" = ("startTime" AT TIME ZONE 'America/Denver')::date
+SET "occurrenceDate" = (("startTime" AT TIME ZONE 'UTC') AT TIME ZONE 'America/Denver')::date
 WHERE "occurrenceDate" IS NULL;
+
+-- Derived series identity, stored so recurrence can be detected across NIGHTS
+-- rather than only within one scrape batch. Left NULL by the migration and
+-- populated by ingest + `npm run series:backfill` (the derivation is a TS regex,
+-- not expressible in SQL).
+ALTER TABLE "Event" ADD COLUMN "seriesKey" TEXT;
+CREATE INDEX "Event_seriesKey_idx" ON "Event"("seriesKey");
 
 -- AlterTable
 ALTER TABLE "UserItemStatus" ADD COLUMN "seriesId" TEXT;
@@ -41,6 +63,7 @@ CREATE TABLE "EventSeries" (
     "placeId" TEXT,
     "category" "Category" NOT NULL,
     "cadence" TEXT,
+    "tags" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "seriesKey" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,

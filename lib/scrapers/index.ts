@@ -16,7 +16,8 @@ import { enrichEvent } from "@/lib/enrich-event";
 import { geocodeEvents } from "@/lib/geocode";
 import { deriveRegionalFields } from "@/lib/regional/metadata";
 import { deriveSeriesKey } from "@/lib/series/key";
-import { resolveExternalId, occurrenceDateOf, attachSeries } from "@/lib/series/ingest";
+import { attachSeries } from "@/lib/series/ingest";
+import { occurrenceIdentity } from "@/lib/series/occurrence";
 import { denverDateKey } from "@/lib/time/denver";
 import { prioritize } from "./source-priority";
 import { isProSportsEvent } from "./exclusions";
@@ -275,13 +276,12 @@ export async function runAllScrapers(): Promise<{
     // defeats the unique index entirely, which is what let permalink-less events
     // duplicate nightly), and the DAY carries the occurrence, not the instant.
     const seriesKey = deriveSeriesKey(event.title, event.venueName);
-    const externalId = resolveExternalId(event, seriesKey);
-    const occurrenceDate = occurrenceDateOf(event.startTime);
+    // ONE value, spread into BOTH the where and the create. Computing the two
+    // halves separately is how four other call sites ended up keying on
+    // occurrenceDate while inserting NULL into it.
+    const identity = occurrenceIdentity(event, seriesKey);
     const seriesId = seriesIdByKey.get(seriesKey) ?? null;
 
-    // Payload deliberately EXCLUDES startTime: it is identity now, not data.
-    // Overwriting it on match is precisely what dragged a three-week-old rating
-    // onto this week's edition of a Westword series.
     const payload = {
       title: event.title,
       description: event.description,
@@ -290,11 +290,28 @@ export async function runAllScrapers(): Promise<{
       venueName: event.venueName,
       address: event.address,
       neighborhood: event.neighborhood,
+      // startTime IS safe to update now, and must be: occurrenceDate is the
+      // identity column, so a matched row is by construction the same Denver day.
+      // A source legitimately moving a show from 7pm to 9pm the same night has to
+      // land — and endTime already did, so omitting startTime produced rows that
+      // ended before they started.
+      startTime: event.startTime,
       endTime: event.endTime,
       priceRange: event.priceRange,
       sourceUrl: event.sourceUrl,
       imageUrl: event.imageUrl,
-      seriesId,
+      // Stored so recurrence can be detected across NIGHTS, not just within one
+      // scrape batch — a weekly is invisible to batch-local detection because
+      // do303 only ever returns one occurrence of it per listing page.
+      seriesKey,
+      // NEVER write a null seriesId over an existing link. attachSeries returns
+      // an empty map when SERIES_V1_ENABLED is off, so `seriesId ?? null` in the
+      // update payload would make a flag-OFF scrape silently NULL every series
+      // link in the database — a rollback that destroys the graph instead of
+      // restoring behaviour. Unlinking must be deliberate, never a side effect of
+      // a disabled flag. (Same hazard when planSeries can't re-assert a series
+      // from tonight's batch alone: the link must survive.)
+      ...(seriesId ? { seriesId } : {}),
       region: regional.region,
       townName: regional.townName,
       isDayTrip: regional.isDayTrip,
@@ -306,28 +323,21 @@ export async function runAllScrapers(): Promise<{
     // A real upsert, replacing findFirst + branch — which was also a TOCTOU race
     // that the unique constraint could not catch while externalId was nullable.
     const row = await prisma.event.upsert({
-      where: {
-        source_externalId_occurrenceDate: {
-          source: event.source,
-          externalId,
-          occurrenceDate,
-        },
-      },
+      where: { source_externalId_occurrenceDate: identity },
       update: payload,
-      create: {
-        ...payload,
-        cityId: city.id,
-        source: event.source,
-        externalId,
-        startTime: event.startTime,
-        occurrenceDate,
-      },
+      create: { ...payload, ...identity, cityId: city.id },
       select: { id: true, createdAt: true, updatedAt: true },
     });
 
-    // upsert gives no insert/update signal, so infer it: a row created in this
-    // transaction has createdAt === updatedAt.
-    if (row.createdAt.getTime() === row.updatedAt.getTime()) {
+    // upsert gives no insert/update signal, so infer it from the run's own clock.
+    //
+    // NOT createdAt === updatedAt: Prisma evaluates @default(now()) and @updatedAt
+    // as two separate clock reads, so a millisecond boundary between them yields a
+    // 1ms delta and the insert is misread as an update. That row would then never
+    // enter newEventIds — never geocoded, never AI-enriched, permanently missing a
+    // qualityScore and oneLiner, with no backfill path (enrichEvent has no other
+    // caller). Comparing against the scrape's start is deterministic.
+    if (row.createdAt.getTime() >= startTime) {
       newEventIds.push(row.id);
       inserted++;
     } else {
