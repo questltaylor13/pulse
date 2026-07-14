@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { isSocialV1Enabled } from "./flags";
 import type { RankedItem } from "./types";
 
 export interface CachedFeed {
@@ -94,14 +95,24 @@ export async function markDirty(userId: string): Promise<void> {
  * One findMany + one updateMany, regardless of follower count.
  */
 export async function markFollowersDirty(userId: string): Promise<void> {
-  const followers = await prisma.userFollow.findMany({
-    where: { followingId: userId },
-    select: { followerId: true },
-  });
-  if (followers.length === 0) return;
+  // The dirty flag exists only to make the social signal recompute, and the
+  // social signal is flag-gated. With SOCIAL_V1 off this would dirty caches
+  // that provably cannot change (the social context is empty), forcing
+  // recomputes for byte-identical output — "flag off ⇒ unchanged app" has to
+  // mean unchanged work too, or a rollback still costs money.
+  if (!isSocialV1Enabled()) return;
 
+  // One statement. Materializing every follower id into an IN list is fine at
+  // ten followers and a bad idea at a hundred thousand; the relation filter
+  // never pulls them over the wire at all.
+  //
+  // `User.following` is the set of follows this cache's owner MADE (relation
+  // "Following", keyed on followerId). So "caches whose owner follows userId"
+  // is `following: { some: { followingId: userId } }`. Note it is NOT
+  // `followers` — that relation holds the rows pointing *at* the owner, and
+  // would collapse to dirtying only the rater themselves.
   await prisma.rankedFeedCache.updateMany({
-    where: { userId: { in: followers.map((f) => f.followerId) } },
+    where: { user: { following: { some: { followingId: userId } } } },
     data: { isDirty: true },
   });
 }

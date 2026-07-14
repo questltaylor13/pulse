@@ -42,14 +42,14 @@ describe("pickCardReason", () => {
 describe("Wave 5 social why-lines", () => {
   it("names the follower on a direct hit", () => {
     expect(
-      renderReason("followed_loved_direct", 0.2, ["Alex"]).human_readable,
+      renderReason("followed_loved_direct", 0.2, undefined, "Alex").human_readable,
     ).toBe("Alex loved this");
   });
 
   it("does not claim 'loved this' for a tag-overlap match", () => {
     // "Alex loved this" about a spot Alex has never been to is a false claim
     // attributed to a real person. The overlap tier must not make it.
-    const line = renderReason("followed_loved_similarity", 0.1, ["Alex"])
+    const line = renderReason("followed_loved_similarity", 0.1, undefined, "Alex")
       .human_readable;
     expect(line).toBe("Like spots Alex loves");
     expect(line).not.toContain("loved this");

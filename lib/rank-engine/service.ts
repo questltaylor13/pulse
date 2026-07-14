@@ -28,6 +28,7 @@ import {
   loadEventSnapshot,
   loadPlaceSnapshot,
   loadDiscoverySnapshot,
+  resolveContent,
   type ContentSnapshot,
 } from "@/lib/content/snapshot";
 import { recomputePlaceRating, upsertFeedback } from "@/lib/feedback/api";
@@ -460,14 +461,12 @@ type EntryWithContent = Prisma.UserRankedEntryGetPayload<{
 }>;
 
 function toView(e: EntryWithContent, rank: number): RankedEntryView {
-  const title =
-    e.event?.title ?? e.place?.name ?? e.discovery?.title ?? e.titleSnapshot ?? "Untitled";
-  const imageUrl =
-    e.event?.imageUrl ?? e.place?.primaryImageUrl ?? e.imageSnapshot;
-  const town =
-    e.event?.townName ?? e.event?.neighborhood ??
-    e.place?.townName ?? e.place?.neighborhood ??
-    e.discovery?.townName ?? null;
+  // Shared with the feedback writer and the social surfaces — see
+  // lib/content/snapshot.ts for why this mapping lives in exactly one place.
+  const content = resolveContent(e);
+  const title = content.title ?? "Untitled";
+  const imageUrl = content.imageUrl;
+  const town = content.town;
   let href: string | null = null;
   let ref: RankRef | null = null;
   if (e.eventId) {
@@ -604,38 +603,59 @@ export async function hydrateRankedEntriesForFeed(
 ): Promise<Map<string, FeedRankedEntry>> {
   if (entryIds.length === 0) return new Map();
 
+  // Confirmed only — and this is load-bearing, not defensive. beginPlacement
+  // flips isPlacementConfirmed back to false and drops the entry to the bottom
+  // of its bucket whenever someone re-rates; the activity row deliberately
+  // survives that. Without this filter the feed would publish a verdict its
+  // author abandoned mid-duel, at a position they never chose.
   const entries = (await prisma.userRankedEntry.findMany({
-    where: { id: { in: entryIds } },
+    where: { id: { in: entryIds }, isPlacementConfirmed: true },
     include: CONTENT_INCLUDE,
   })) as EntryWithContent[];
   if (entries.length === 0) return new Map();
 
-  // "#3" is a lie without a denominator, so carry the category size too. One
-  // groupBy over just the (user, category) pairs on this page.
-  const sizes = await prisma.userRankedEntry.groupBy({
-    by: ["userId", "category"],
-    where: {
-      userId: { in: [...new Set(entries.map((e) => e.userId))] },
-      category: { in: [...new Set(entries.map((e) => e.category))] },
-    },
-    _count: { _all: true },
+  // Rank has to be computed the way fetchPublicRankings computes it — as the
+  // index among CONFIRMED entries — not as position + 1. Positions are dense
+  // over *all* entries including provisional ones, so position + 1 would print
+  // "#4 of 5" on a card that links to a page saying "#3 of 4" about the same
+  // spot. A rank that contradicts the list it links to is exactly the false
+  // claim this wave exists to prevent.
+  const pairs = [
+    ...new Map(
+      entries.map((e) => [`${e.userId}|${e.category}`, { userId: e.userId, category: e.category }])
+    ).values(),
+  ];
+  const siblings = await prisma.userRankedEntry.findMany({
+    where: { OR: pairs, isPlacementConfirmed: true },
+    orderBy: { position: "asc" },
+    select: { id: true, userId: true, category: true },
   });
-  const sizeByPair = new Map(
-    sizes.map((s) => [`${s.userId}|${s.category}`, s._count._all])
-  );
+
+  // Position-ordered confirmed entries per (user, category) → dense 1-based rank.
+  const rankById = new Map<string, number>();
+  const sizeByPair = new Map<string, number>();
+  for (const s of siblings) {
+    const key = `${s.userId}|${s.category}`;
+    const next = (sizeByPair.get(key) ?? 0) + 1;
+    sizeByPair.set(key, next);
+    rankById.set(s.id, next); // siblings are position-asc, so this IS the rank
+  }
 
   return new Map(
-    entries.map((e) => [
-      e.id,
-      {
-        // Positions are dense within a category, so rank = position + 1.
-        ...toView(e, e.position + 1),
-        category: e.category,
-        categoryLabel: RANK_CATEGORY_LABELS[e.category],
-        categorySlug: rankCategorySlug(e.category),
-        categorySize: sizeByPair.get(`${e.userId}|${e.category}`) ?? 1,
-      },
-    ])
+    entries.map((e) => {
+      const key = `${e.userId}|${e.category}`;
+      return [
+        e.id,
+        {
+          ...toView(e, rankById.get(e.id) ?? 1),
+          category: e.category,
+          categoryLabel: RANK_CATEGORY_LABELS[e.category],
+          categorySlug: rankCategorySlug(e.category),
+          // "#3" is a lie without a denominator.
+          categorySize: sizeByPair.get(key) ?? 1,
+        },
+      ];
+    })
   );
 }
 

@@ -11,8 +11,10 @@
  * them teaches the feed nothing.
  */
 
+import "server-only";
 import { prisma } from "@/lib/prisma";
 import { RANK_CATEGORY_LABELS } from "@/lib/rank-engine/categories";
+import { resolveContent } from "@/lib/content/snapshot";
 
 export interface SuggestedTastemaker {
   id: string;
@@ -27,6 +29,14 @@ export interface SuggestedTastemaker {
 }
 
 const DEFAULT_LIMIT = 12;
+/**
+ * Rows considered before ranking by entry count. Prisma can't order by a
+ * filtered relation count, so the choice is: sort in JS, or don't sort at all.
+ * Sorting in JS means the DB slice must be WIDER than the result — taking 12
+ * unordered rows and sorting *those* returns an arbitrary 12, not the top 12,
+ * which is what the code did before and what its comment denied.
+ */
+const CANDIDATE_POOL = 100;
 
 export async function fetchSuggestedTastemakers(
   viewerId: string,
@@ -72,21 +82,22 @@ export async function fetchSuggestedTastemakers(
         },
       },
     },
-    take: limit,
+    // Bounded pool, then rank in JS. See CANDIDATE_POOL.
+    take: CANDIDATE_POOL,
   });
 
   return users
+    // The Prisma filter guarantees a username, but the type doesn't know that.
+    // A type-predicate filter is the repo's idiom for this narrowing (see
+    // featured-lists.ts); a non-null assertion would be the first in the codebase.
+    .filter((u): u is typeof u & { username: string } => u.username !== null)
     .map((u) => {
       const top = u.rankedEntries[0];
-      const title =
-        top?.event?.title ??
-        top?.place?.name ??
-        top?.discovery?.title ??
-        top?.titleSnapshot ??
-        null;
+      // Shared mapper rather than a fourth copy of "a Place's title is `name`".
+      const title = top ? resolveContent(top).title : null;
       return {
         id: u.id,
-        username: u.username!,
+        username: u.username,
         name: u.name,
         profileImageUrl: u.profileImageUrl,
         isInfluencer: u.isInfluencer,
@@ -99,6 +110,8 @@ export async function fetchSuggestedTastemakers(
     })
     // Most-ranked first: the people with the most published taste are the most
     // useful to follow. Sorted here rather than in SQL because Prisma can't
-    // order by a filtered relation count.
-    .sort((a, b) => b.rankedCount - a.rankedCount);
+    // order by a filtered relation count — hence the wider CANDIDATE_POOL above,
+    // so this actually sorts the field rather than an arbitrary slice of it.
+    .sort((a, b) => b.rankedCount - a.rankedCount)
+    .slice(0, limit);
 }

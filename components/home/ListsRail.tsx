@@ -17,11 +17,14 @@ export default function ListsRail({ lists }: Props) {
   // render a titled section with nothing under it.
   if (lists.length === 0) return null;
 
+  // No seeAllHref: /lists is the viewer's OWN saved lists (the nav calls it
+  // "Saved"), which is not what this rail is showing. There is no public list
+  // directory to point at yet, and sending someone to their own lists from
+  // "Collections other people keep saving" is worse than no link.
   return (
     <ScrollSection
       title="Lists worth stealing"
       subtitle="Collections other people keep saving"
-      seeAllHref="/lists"
     >
       {lists.map((list) => (
         <ListCard key={list.id} list={list} />
@@ -47,10 +50,12 @@ function ListCard({ list }: { list: FeaturedList }) {
           <h3 className="line-clamp-1 text-sm font-semibold text-ink">
             {list.name}
           </h3>
-          {/* Saves are the reason this list is on the rail — show the receipt. */}
-          <span className="flex-shrink-0 rounded-pill bg-coral/10 px-2 py-0.5 text-meta font-semibold text-coral">
-            {list.saveCount} {list.saveCount === 1 ? "save" : "saves"}
-          </span>
+          {/* Social proof when there is any. "0 saves" is an anti-endorsement. */}
+          {list.saveCount > 0 && (
+            <span className="flex-shrink-0 rounded-pill bg-coral/10 px-2 py-0.5 text-meta font-semibold text-coral">
+              {list.saveCount} {list.saveCount === 1 ? "save" : "saves"}
+            </span>
+          )}
         </div>
 
         <p className="mt-0.5 truncate text-meta text-mute">

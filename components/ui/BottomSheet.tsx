@@ -24,6 +24,12 @@ interface Props {
    * already committed).
    */
   cancelLabel?: string | null;
+  /**
+   * A bespoke footer, replacing the default dismiss button. WhyThisSheet ends
+   * on an affirmative indigo "Got it" rather than a grey Cancel, which a
+   * label-only API can't express.
+   */
+  footer?: React.ReactNode;
 }
 
 export default function BottomSheet({
@@ -33,6 +39,7 @@ export default function BottomSheet({
   children,
   errorMessage,
   cancelLabel = "Cancel",
+  footer,
 }: Props) {
   useEffect(() => {
     if (!open) return;
@@ -68,16 +75,18 @@ export default function BottomSheet({
           </div>
         )}
 
-        {cancelLabel && (
-          <div className="p-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-full rounded-xl bg-mute-hush py-3 text-sm font-medium text-ink hover:bg-mute-divider"
-            >
-              {cancelLabel}
-            </button>
-          </div>
+        {footer ?? (
+          cancelLabel && (
+            <div className="p-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full rounded-xl bg-mute-hush py-3 text-sm font-medium text-ink hover:bg-mute-divider"
+              >
+                {cancelLabel}
+              </button>
+            </div>
+          )
         )}
       </div>
     </div>

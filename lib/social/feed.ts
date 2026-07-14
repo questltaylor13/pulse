@@ -7,15 +7,15 @@
  * that renders a hollow placeholder is worse than one that renders nothing.
  *
  * Authorization is *not* done here. Which rows a viewer may see (follow graph,
- * `isPublic`, the author's current `rankingsArePublic`) is decided in SQL,
- * because this endpoint pages with `take: limit + 1` and filtering after the
- * fetch would under-fill pages and corrupt `hasMore`.
+ * `isPublic`, the author's current `rankingsArePublic`, confirmed-only) is
+ * decided in SQL, because this endpoint pages with `take: limit + 1` and
+ * filtering after the fetch would under-fill pages and corrupt `hasMore`.
  */
 
 import type { ActivityType } from "@prisma/client";
 import type { FeedRankedEntry } from "@/lib/rank-engine/service";
 
-interface FeedUser {
+export interface FeedUser {
   id: string;
   username: string | null;
   name: string | null;
@@ -23,23 +23,9 @@ interface FeedUser {
   isInfluencer: boolean;
 }
 
-interface FeedEvent {
-  id: string;
-  title: string;
-  category: string | null;
-  venueName: string | null;
-  startTime: Date | null;
-}
-
-interface FeedList {
+export interface FeedList {
   id: string;
   name: string;
-}
-
-interface FeedTargetUser {
-  id: string;
-  username: string | null;
-  name: string | null;
 }
 
 /** The activity row as fetched, before hydration. */
@@ -49,9 +35,7 @@ export interface FeedActivityInput {
   rankedEntryId: string | null;
   createdAt: Date;
   user: FeedUser;
-  event?: FeedEvent | null;
   list?: FeedList | null;
-  targetUser?: FeedTargetUser | null;
 }
 
 /** The activity row as the client renders it. */
@@ -59,13 +43,21 @@ export interface FollowingFeedItem {
   id: string;
   type: ActivityType;
   user: FeedUser;
-  event: FeedEvent | null;
   list: FeedList | null;
-  targetUser: FeedTargetUser | null;
   /** Current state of the ranked entry; null for non-ranked activity. */
   rankedEntry: FeedRankedEntry | null;
   createdAt: Date;
 }
+
+/**
+ * The same row after JSON serialization, which is what the client actually
+ * receives. Declared here rather than hand-copied into the component, so the
+ * wire shape can't drift away from the shape the route produces — the repo
+ * models this the same way (`lib/home/types.ts`: `lastUpdatedAt: string // ISO`).
+ */
+export type FollowingFeedItemJSON = Omit<FollowingFeedItem, "createdAt"> & {
+  createdAt: string;
+};
 
 export function toFeedItems(
   rows: FeedActivityInput[],
@@ -85,9 +77,7 @@ export function toFeedItems(
       id: row.id,
       type: row.type,
       user: row.user,
-      event: row.event ?? null,
       list: row.list ?? null,
-      targetUser: row.targetUser ?? null,
       rankedEntry,
       createdAt: row.createdAt,
     });

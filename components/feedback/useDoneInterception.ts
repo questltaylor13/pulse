@@ -24,7 +24,6 @@ interface InterceptArgs {
   next: ItemStatus;
   ref: FeedbackRef;
   itemTitle: string;
-  itemImageUrl?: string | null;
   /** Narrower than FeedbackSource by design — PROFILE_SWIPER can't open the flow. */
   source: OpenRankFlowArgs["source"];
   /** Fired when the rank flow commits — e.g. setStatusLocal("DONE"). */
@@ -41,15 +40,16 @@ export function useDoneInterception(): (args: InterceptArgs) => boolean {
   const rankFlow = useRankFlow();
 
   return useCallback(
-    ({ next, ref, itemTitle, itemImageUrl, source, onCompleted, onIntercept }: InterceptArgs) => {
+    ({ next, ref, itemTitle, source, onCompleted, onIntercept }: InterceptArgs) => {
       const rankRef = resolveContentRef(ref);
       if (next !== "DONE" || !rankFlow.enabled || !rankRef) return false;
 
       onIntercept?.();
+      // No itemImageUrl: neither ActionSheet call site has one to pass. A prop
+      // that is always undefined is a prop that lies about what the flow renders.
       rankFlow.openRankFlow({
         ref: rankRef,
         itemTitle,
-        itemImageUrl,
         source,
         onCompleted,
       });

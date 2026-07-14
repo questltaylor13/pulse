@@ -32,7 +32,13 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const cursor = searchParams.get("cursor");
-  const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 50);
+  // Clamp hard. An unguarded parseInt let ?limit=0 through as take:1, which
+  // made hasMore true, sliced results to [], and then read results[-1].id —
+  // a 500 from a query string. ?limit=-5 and ?limit=abc were equally unhappy.
+  const rawLimit = parseInt(searchParams.get("limit") ?? "", 10);
+  const limit = Number.isFinite(rawLimit)
+    ? Math.min(Math.max(rawLimit, 1), 50)
+    : 20;
 
   // Get IDs of users we follow
   const following = await prisma.userFollow.findMany({
@@ -50,23 +56,30 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Flag off ⇒ ranked rows stay out of the feed even if some were emitted
-  // while it was on, so a rollback is a clean rollback.
+  // D2 — taste events only. A rank is a verdict and a public list is a curated
+  // argument; "Alex saved 40 events" and "Alex followed Bea" are neither, and a
+  // feed full of them buries the signal it exists to carry. This is an
+  // ALLOWLIST: the four legacy ActivityType values (SAVED_EVENT,
+  // ATTENDED_EVENT, RATED_PLACE, FOLLOWED_USER) never render here.
+  //
+  // Flag off ⇒ RANKED_ITEM drops out entirely, leaving the pre-Wave-5 result
+  // set, so a rollback is a clean rollback.
   const social = isSocialV1Enabled();
   const visibility: Prisma.UserActivityWhereInput = social
     ? {
         OR: [
-          { type: { not: "RANKED_ITEM" } },
+          { type: "CREATED_LIST" },
           // A ranked row is visible only while its author's rankings are public
-          // and its entry still resolves.
+          // and its entry is still a confirmed verdict (a re-rate in progress
+          // un-confirms the entry — see hydrateRankedEntriesForFeed).
           {
             type: "RANKED_ITEM",
             user: { rankingsArePublic: true },
-            rankedEntry: { isNot: null },
+            rankedEntry: { is: { isPlacementConfirmed: true } },
           },
         ],
       }
-    : { type: { not: "RANKED_ITEM" } };
+    : { type: "CREATED_LIST" };
 
   const activities = await prisma.userActivity.findMany({
     where: {
@@ -74,7 +87,10 @@ export async function GET(request: NextRequest) {
       isPublic: true,
       ...visibility,
     },
-    orderBy: { createdAt: "desc" },
+    // createdAt is not unique (ms precision, and emissions batch). Cursor paging
+    // over a non-unique sort key silently duplicates or skips rows at page
+    // boundaries, so break the tie on id.
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit + 1,
     ...(cursor && { cursor: { id: cursor }, skip: 1 }),
     include: {
@@ -87,25 +103,9 @@ export async function GET(request: NextRequest) {
           isInfluencer: true,
         },
       },
-      event: {
-        select: {
-          id: true,
-          title: true,
-          category: true,
-          venueName: true,
-          startTime: true,
-        },
-      },
       list: {
         select: {
           id: true,
-          name: true,
-        },
-      },
-      targetUser: {
-        select: {
-          id: true,
-          username: true,
           name: true,
         },
       },

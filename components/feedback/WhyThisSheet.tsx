@@ -12,6 +12,7 @@
 import { useEffect, useState } from "react";
 import type { RankedItemType, ScoreReason } from "@/lib/ranking/types";
 import { track } from "@/lib/feedback/analytics";
+import BottomSheet from "@/components/ui/BottomSheet";
 
 interface WhyResponse {
   present: boolean;
@@ -81,15 +82,6 @@ export default function WhyThisSheet({
     };
   }, [open, itemType, itemId]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   const positive = (data?.reasons ?? [])
     .filter((r) => r.contribution > 0)
     .sort((a, b) => b.contribution - a.contribution)
@@ -98,21 +90,22 @@ export default function WhyThisSheet({
   const maxContribution = positive[0]?.contribution ?? 1;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Why you're seeing this"
-      className="fixed inset-0 z-modal flex items-end justify-center bg-ink/25 transition-opacity"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-t-[24px] bg-surface pb-safe animate-in slide-in-from-bottom duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex justify-center pt-2.5 pb-1.5">
-          <div className="h-1 w-9 rounded-full bg-slate-300" />
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      ariaLabel="Why you're seeing this"
+      footer={
+        <div className="px-3 pb-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            Got it
+          </button>
         </div>
-
+      }
+    >
         <div className="px-5 pt-2 pb-3">
           <h2 className="text-base font-semibold text-ink line-clamp-1">{itemTitle}</h2>
           {data?.rank && data?.totalRanked ? (
@@ -190,17 +183,7 @@ export default function WhyThisSheet({
           )}
         </div>
 
-        <div className="px-3 pb-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-medium text-white hover:bg-indigo-700"
-          >
-            Got it
-          </button>
-        </div>
-      </div>
-    </div>
+    </BottomSheet>
   );
 }
 

@@ -26,9 +26,7 @@ function row(overrides: Partial<FeedActivityInput> = {}): FeedActivityInput {
     rankedEntryId: "e1",
     createdAt: new Date("2026-07-13T12:00:00Z"),
     user: AUTHOR,
-    event: null,
     list: null,
-    targetUser: null,
     ...overrides,
   };
 }
@@ -103,7 +101,7 @@ describe("toFeedItems", () => {
       [
         row({ id: "a1", rankedEntryId: "e1" }),
         row({ id: "a2", rankedEntryId: "gone" }),
-        row({ id: "a3", type: "FOLLOWED_USER", rankedEntryId: null }),
+        row({ id: "a3", type: "CREATED_LIST", rankedEntryId: null }),
       ],
       new Map([["e1", entry()]])
     );

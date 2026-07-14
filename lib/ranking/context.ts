@@ -214,8 +214,10 @@ export async function buildRankingContext(userId: string): Promise<RankingContex
 
 /** At most this many follows feed the signal, most recently followed first. */
 const MAX_FOLLOWS_SCANNED = 100;
-/** At most this many of their entries, strongest verdicts first. */
+/** Total entry budget across all followed users. */
 const MAX_SOCIAL_ENTRIES = 300;
+/** Floor per followee, so someone with one great pick is never shut out. */
+const MIN_ENTRIES_PER_FOLLOWEE = 5;
 
 /**
  * Wave 5 — the two-hop load: who you follow → what they LIKED.
@@ -226,12 +228,18 @@ const MAX_SOCIAL_ENTRIES = 300;
  * entries-per-followed-user. An unbounded version is a latency bomb that only
  * goes off once someone popular exists.
  *
- * Ordering by score desc means truncation drops the weakest verdicts first, so
- * the signal degrades gracefully rather than arbitrarily.
+ * The budget is spent PER FOLLOWEE, not as one global top-N. UserRankedEntry
+ * .score is a within-user, within-category rank percentile (see scores.ts), so
+ * it is NOT comparable across people: someone with 500 LIKED entries has
+ * hundreds scoring ≥9, while someone with exactly one — the single favourite
+ * that made you follow them — scores it 8.35. A global `orderBy score desc,
+ * take 300` fills every slot with the prolific user and drops the sparse one
+ * entirely, so "Bea loved this" could never fire. Per-followee slices keep the
+ * fan-out bounded AND give everyone representation.
  *
- * UserRankedEntry has no standalone userId index, but the three
- * @@unique([userId, <ref>]) composites give a usable prefix for the IN scan.
- * Add a dedicated index only if measurement says so.
+ * Served by @@index([userId, sentiment, isPlacementConfirmed, score]) — without
+ * it, sentiment/isPlacementConfirmed are heap filters and the score sort is
+ * unindexed, so `take` would bound the output but not the work.
  */
 async function loadFollowedLovedSignals(
   userId: string,
@@ -260,28 +268,37 @@ async function loadFollowedLovedSignals(
     ]),
   );
 
-  const entries = await prisma.userRankedEntry.findMany({
-    where: {
-      userId: { in: visible.map((f) => f.followingId) },
-      sentiment: "LIKED",
-      isPlacementConfirmed: true,
-    },
-    orderBy: { score: "desc" },
-    take: MAX_SOCIAL_ENTRIES,
-    select: {
-      userId: true,
-      score: true,
-      eventId: true,
-      placeId: true,
-      discoveryId: true,
-      event: { select: { category: true, tags: true, vibeTags: true, companionTags: true, occasionTags: true } },
-      place: { select: { category: true, tags: true, vibeTags: true, companionTags: true, goodForTags: true } },
-      discovery: { select: { category: true, tags: true } },
-    },
-  });
+  const perFollowee = Math.max(
+    MIN_ENTRIES_PER_FOLLOWEE,
+    Math.ceil(MAX_SOCIAL_ENTRIES / visible.length),
+  );
+
+  const batches = await Promise.all(
+    visible.map((f) =>
+      prisma.userRankedEntry.findMany({
+        where: {
+          userId: f.followingId,
+          sentiment: "LIKED",
+          isPlacementConfirmed: true,
+        },
+        orderBy: { score: "desc" },
+        take: perFollowee,
+        select: {
+          userId: true,
+          score: true,
+          eventId: true,
+          placeId: true,
+          discoveryId: true,
+          event: { select: { category: true, tags: true, vibeTags: true, companionTags: true, occasionTags: true } },
+          place: { select: { category: true, tags: true, vibeTags: true, companionTags: true, goodForTags: true } },
+          discovery: { select: { category: true, tags: true } },
+        },
+      }),
+    ),
+  );
 
   const signals: SocialLovedSignal[] = [];
-  for (const entry of entries) {
+  for (const entry of batches.flat()) {
     const itemId = entry.eventId ?? entry.placeId ?? entry.discoveryId;
     if (!itemId) continue;
     signals.push({

@@ -18,7 +18,7 @@ import type {
   Prisma,
   UserItemStatus,
 } from "@prisma/client";
-import { markDirty } from "@/lib/ranking/cache";
+import { markDirty, markFollowersDirty } from "@/lib/ranking/cache";
 import { triggerUserRerank } from "@/lib/ranking/rerank-trigger";
 // ordering.ts only (never service.ts, which imports this module) — no cycle.
 import { removeRankedEntryForRef, type RankRef } from "@/lib/rank-engine/ordering";
@@ -35,7 +35,6 @@ import {
   loadEventSnapshot,
   loadItemSnapshot,
   loadPlaceSnapshot,
-  type ContentSnapshot,
 } from "@/lib/content/snapshot";
 
 // After PRD 5 Phase 1, UserItemStatus has four native FKs (itemId, eventId,
@@ -47,10 +46,6 @@ import {
 // with the rank engine. These wrappers keep this module's existing contract:
 // a missing row degrades to null snapshot fields rather than refusing the
 // write — feedback on a since-deleted item is still feedback worth recording.
-
-const snapshotOrEmpty = async (
-  load: Promise<ContentSnapshot | null>
-): Promise<ContentSnapshot> => (await load) ?? EMPTY_SNAPSHOT;
 
 /**
  * Wrap a Prisma write in a cache-invalidation hook. Flags the user's
@@ -128,7 +123,7 @@ export async function upsertFeedback(params: {
   const common = { status, source, ...(rating !== undefined ? { rating } : {}) };
 
   if (isItemRef(ref)) {
-    const snap = await snapshotOrEmpty(loadItemSnapshot(ref.itemId));
+    const snap = (await loadItemSnapshot(ref.itemId)) ?? EMPTY_SNAPSHOT;
     return afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_itemId: { userId, itemId: ref.itemId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
@@ -136,7 +131,7 @@ export async function upsertFeedback(params: {
     }));
   }
   if (isEventRef(ref)) {
-    const snap = await snapshotOrEmpty(loadEventSnapshot(ref.eventId));
+    const snap = (await loadEventSnapshot(ref.eventId)) ?? EMPTY_SNAPSHOT;
     return afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_eventId: { userId, eventId: ref.eventId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
@@ -144,7 +139,7 @@ export async function upsertFeedback(params: {
     }));
   }
   if (isPlaceRef(ref)) {
-    const snap = await snapshotOrEmpty(loadPlaceSnapshot(ref.placeId));
+    const snap = (await loadPlaceSnapshot(ref.placeId)) ?? EMPTY_SNAPSHOT;
     const row = await afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_placeId: { userId, placeId: ref.placeId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
@@ -155,7 +150,7 @@ export async function upsertFeedback(params: {
     return row;
   }
   if (isDiscoveryRef(ref)) {
-    const snap = await snapshotOrEmpty(loadDiscoverySnapshot(ref.discoveryId));
+    const snap = (await loadDiscoverySnapshot(ref.discoveryId)) ?? EMPTY_SNAPSHOT;
     return afterWrite(userId, source, prisma.userItemStatus.upsert({
       where: { userId_discoveryId: { userId, discoveryId: ref.discoveryId } },
       update: { ...common, itemTitleSnapshot: snap.title, itemCategorySnapshot: snap.category, itemTownSnapshot: snap.town },
@@ -175,7 +170,14 @@ export async function deleteFeedback(params: {
   // the status delete is the primary operation.
   const retractRankedEntry = async (rankRef: RankRef): Promise<void> => {
     try {
-      await removeRankedEntryForRef(userId, rankRef);
+      const removed = await removeRankedEntryForRef(userId, rankRef);
+      // Wave 5 — this is the THIRD path that deletes a ranked entry (alongside
+      // removeEntry and re-rank), and the one easiest to miss: retracting a
+      // DONE. The entry fed the social signal, so every follower's cache is now
+      // stale. Without this, the following feed would drop the row (cascade)
+      // while their For-You card kept the +0.20 boost and the "Alex loved this"
+      // why-line until the daily cron — two surfaces contradicting each other.
+      if (removed) await markFollowersDirty(userId);
     } catch (err) {
       console.warn("[feedback.retractRankedEntry] failed:", err);
     }

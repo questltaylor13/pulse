@@ -554,28 +554,35 @@ describe("formula.score — Wave 5 social signal", () => {
       item,
     );
 
-    // Direct match 0.5 × ratedScoreWeight(9) = 0.5 × 0.94, capped at 0.20.
+    // Direct match 0.5 × ratedScoreWeight(9) = 0.47, capped at 0.20.
     expect(direct.score - baseline).toBeCloseTo(0.2, 5);
     expect(
       direct.reasons.some((r) => r.factor === "followed_loved_direct"),
     ).toBe(true);
   });
 
-  it("tag overlap is the weaker fallback, and a direct hit beats it", () => {
+  it("a direct hit outranks ANY amount of tag overlap", () => {
+    // The tiers must not share one clamp. With a single shared cap, a handful
+    // of common-tag overlaps saturate it and a place a followed user actually
+    // went to scores identically to one nobody you follow has ever visited —
+    // the direct hit would drive the why-line while contributing nothing to the
+    // ordering. 20 overlap signals, not 1, is what makes this test bite.
     const item = makeItem({ itemId: "pl_target", tags: ITEM_TAGS });
     const baseline = score(makeCtx(famCtx), item).score;
 
-    // Followed user loved a *different* item that shares tags.
-    const overlap = score(
+    const manyOverlaps = score(
       makeCtx({
         ...famCtx,
-        followedLovedItems: [
-          { itemId: "pl_other", tags: ITEM_TAGS, score: 9, followerName: "Alex" },
-        ],
+        followedLovedItems: Array.from({ length: 20 }, (_, i) => ({
+          itemId: `pl_other_${i}`,
+          tags: ITEM_TAGS,
+          score: 10,
+          followerName: `Friend ${i}`,
+        })),
       }),
       item,
     );
-    const direct = score(
+    const oneDirect = score(
       makeCtx({
         ...famCtx,
         followedLovedItems: [
@@ -585,20 +592,76 @@ describe("formula.score — Wave 5 social signal", () => {
       item,
     );
 
-    expect(overlap.score).toBeGreaterThan(baseline);
-    expect(direct.score).toBeGreaterThan(overlap.score);
+    expect(manyOverlaps.score).toBeGreaterThan(baseline);
+    expect(oneDirect.score).toBeGreaterThan(manyOverlaps.score);
+    // And the saturated overlap case must not claim anyone loved this item.
+    expect(
+      manyOverlaps.reasons.some((r) => r.factor === "followed_loved_direct"),
+    ).toBe(false);
+  });
+
+  it("never boosts an item the viewer explicitly passed on", () => {
+    // A follow must not override an explicit rejection. The pool only hard-
+    // filters DONE, and passSimilarity skips exact self-matches, so without a
+    // guard a passed-on item could take the largest social boost available.
+    const item = makeItem({ itemId: "pl_passed", tags: ITEM_TAGS });
+    const ctx = makeCtx({
+      ...famCtx,
+      passItems: [{ itemId: "pl_passed", tags: ITEM_TAGS }],
+      followedLovedItems: [
+        { itemId: "pl_passed", tags: ITEM_TAGS, score: 10, followerName: "Alex" },
+      ],
+    });
+    const withoutSocial = score(
+      makeCtx({ ...famCtx, passItems: [{ itemId: "pl_passed", tags: ITEM_TAGS }] }),
+      item,
+    );
+
+    const result = score(ctx, item);
+    expect(result.score).toBe(withoutSocial.score);
+    expect(result.reasons.some((r) => r.factor.startsWith("followed_loved"))).toBe(
+      false,
+    );
   });
 
   it("caps at +0.20 — deliberately below wantSim's +0.40", () => {
     // A friend's verdict is weaker evidence about YOUR taste than your own
     // stated interest, so no number of follows can outweigh a WANT.
-    const item = makeItem({ tags: ITEM_TAGS });
+    const item = makeItem({ itemId: "pl_target", tags: ITEM_TAGS });
     const baseline = score(makeCtx(famCtx), item).score;
 
-    const many = score(
+    // Everything at once: a direct hit plus a pile of tag overlaps.
+    const saturated = score(
       makeCtx({
         ...famCtx,
-        followedLovedItems: Array.from({ length: 20 }, (_, i) => ({
+        followedLovedItems: [
+          { itemId: "pl_target", tags: ITEM_TAGS, score: 10, followerName: "Alex" },
+          ...Array.from({ length: 20 }, (_, i) => ({
+            itemId: `pl_${i}`,
+            tags: ITEM_TAGS,
+            score: 10,
+            followerName: `Friend ${i}`,
+          })),
+        ],
+      }),
+      item,
+    );
+
+    const delta = saturated.score - baseline;
+    expect(delta).toBeCloseTo(RANKING_CONFIG.weights.followedLovedSimilarity, 5);
+    expect(delta).toBeLessThan(RANKING_CONFIG.weights.interestedSimilarity);
+  });
+
+  it("tag overlap alone can never reach the full cap", () => {
+    // Overlap has its own sub-budget. If it could saturate the shared cap, a
+    // spot nobody you follow has visited would score the same as one they did.
+    const item = makeItem({ itemId: "pl_target", tags: ITEM_TAGS });
+    const baseline = score(makeCtx(famCtx), item).score;
+
+    const overlapOnly = score(
+      makeCtx({
+        ...famCtx,
+        followedLovedItems: Array.from({ length: 50 }, (_, i) => ({
           itemId: `pl_${i}`,
           tags: ITEM_TAGS,
           score: 10,
@@ -608,32 +671,27 @@ describe("formula.score — Wave 5 social signal", () => {
       item,
     );
 
-    expect(many.score - baseline).toBeCloseTo(RANKING_CONFIG.weights.followedLovedSimilarity, 5);
-    expect(many.score - baseline).toBeLessThan(RANKING_CONFIG.weights.interestedSimilarity);
+    const delta = overlapOnly.score - baseline;
+    expect(delta).toBeGreaterThan(0);
+    expect(delta).toBeLessThan(RANKING_CONFIG.weights.followedLovedSimilarity);
   });
 
   it("weights a match by how strongly the follower rated it", () => {
+    // Holds in BOTH tiers, and a single overlap match must stay under the
+    // overlap sub-cap or this weighting would clamp away to nothing.
     const item = makeItem({ itemId: "pl_x", tags: ITEM_TAGS });
-    const strong = score(
-      makeCtx({
-        ...famCtx,
-        followedLovedItems: [
-          { itemId: "pl_other", tags: ITEM_TAGS, score: 10, followerName: "Alex" },
-        ],
-      }),
-      item,
-    ).score;
-    const weak = score(
-      makeCtx({
-        ...famCtx,
-        followedLovedItems: [
-          { itemId: "pl_other", tags: ITEM_TAGS, score: 5, followerName: "Alex" },
-        ],
-      }),
-      item,
-    ).score;
+    const overlapAt = (s: number) =>
+      score(
+        makeCtx({
+          ...famCtx,
+          followedLovedItems: [
+            { itemId: "pl_other", tags: ITEM_TAGS, score: s, followerName: "Alex" },
+          ],
+        }),
+        item,
+      ).score;
 
-    expect(strong).toBeGreaterThan(weak);
+    expect(overlapAt(10)).toBeGreaterThan(overlapAt(5));
   });
 
   it("the why-line names the follower on a direct hit", () => {

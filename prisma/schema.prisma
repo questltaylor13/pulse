@@ -688,6 +688,13 @@ model UserRankedEntry {
   @@unique([userId, placeId])
   @@unique([userId, discoveryId])
   @@index([userId, category, position])
+  // Wave 5 — serves the social two-hop load (who you follow → what they LIKED).
+  // Without it, sentiment + isPlacementConfirmed are heap filters and the score
+  // sort is unindexed, so `take` bounds the rows returned but not the rows read.
+  @@index([userId, sentiment, isPlacementConfirmed, score])
+  // Wave 5 — serves the "has published rankings" semi-join behind the follow
+  // suggestions, which would otherwise scan the whole table on every render.
+  @@index([isPlacementConfirmed])
   @@index([eventId])
   @@index([placeId])
   @@index([discoveryId])
@@ -810,6 +817,9 @@ model List {
 
   @@unique([userId, name])
   @@index([isPublic])
+  // Wave 5 — the featured-lists rail orders public lists by saves. A bare
+  // boolean index can't serve that; this one can.
+  @@index([isPublic, saveCount])
   @@index([shareSlug])
 }
 

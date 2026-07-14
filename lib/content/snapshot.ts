@@ -34,10 +34,81 @@ export const EMPTY_SNAPSHOT: ContentSnapshot = {
   town: null,
 };
 
+/**
+ * A row that has already `include`d its content relations. Every field is
+ * optional because call sites select different subsets — what matters is that
+ * they all stop re-deriving the SAME four rules below.
+ */
+export interface ContentRelations {
+  event?: {
+    title?: string;
+    imageUrl?: string | null;
+    category?: string | null;
+    townName?: string | null;
+    neighborhood?: string | null;
+  } | null;
+  place?: {
+    name?: string;
+    primaryImageUrl?: string | null;
+    category?: string | null;
+    townName?: string | null;
+    neighborhood?: string | null;
+  } | null;
+  discovery?: {
+    title?: string;
+    category?: string | null;
+    townName?: string | null;
+  } | null;
+  /** Denormalized fallbacks, for rows whose content has since been deleted. */
+  titleSnapshot?: string | null;
+  imageSnapshot?: string | null;
+  categorySnapshot?: string | null;
+}
+
+/**
+ * The actual shared knowledge, and the reason this module exists: an Event's
+ * title lives in `title` but a Place's lives in `name`; the image is `imageUrl`
+ * on one and `primaryImageUrl` on the other; town falls back to neighborhood;
+ * a Discovery has no image at all.
+ *
+ * Pure — no database. The loaders below are this function plus a query, and
+ * callers that already have the relations in hand (the rank engine's toView, the
+ * featured-lists rail, the follow suggestions) call it directly rather than
+ * growing a fourth copy of the same four rules.
+ */
+export function resolveContent(row: ContentRelations): ContentSnapshot {
+  return {
+    title:
+      row.event?.title ??
+      row.place?.name ??
+      row.discovery?.title ??
+      row.titleSnapshot ??
+      null,
+    imageUrl:
+      row.event?.imageUrl ??
+      row.place?.primaryImageUrl ??
+      row.imageSnapshot ??
+      null, // Discoveries have no image field.
+    category:
+      row.event?.category ??
+      row.place?.category ??
+      row.discovery?.category ??
+      row.categorySnapshot ??
+      null,
+    town:
+      row.event?.townName ??
+      row.event?.neighborhood ??
+      row.place?.townName ??
+      row.place?.neighborhood ??
+      row.discovery?.townName ??
+      null,
+  };
+}
+
 export async function loadEventSnapshot(
   eventId: string
 ): Promise<ContentSnapshot | null> {
-  const row = await prisma.event.findUnique({
+  const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: {
       title: true,
@@ -47,19 +118,13 @@ export async function loadEventSnapshot(
       neighborhood: true,
     },
   });
-  if (!row) return null;
-  return {
-    title: row.title,
-    imageUrl: row.imageUrl,
-    category: row.category,
-    town: row.townName ?? row.neighborhood,
-  };
+  return event ? resolveContent({ event }) : null;
 }
 
 export async function loadPlaceSnapshot(
   placeId: string
 ): Promise<ContentSnapshot | null> {
-  const row = await prisma.place.findUnique({
+  const place = await prisma.place.findUnique({
     where: { id: placeId },
     select: {
       name: true,
@@ -69,29 +134,17 @@ export async function loadPlaceSnapshot(
       neighborhood: true,
     },
   });
-  if (!row) return null;
-  return {
-    title: row.name,
-    imageUrl: row.primaryImageUrl,
-    category: row.category,
-    town: row.townName ?? row.neighborhood,
-  };
+  return place ? resolveContent({ place }) : null;
 }
 
 export async function loadDiscoverySnapshot(
   discoveryId: string
 ): Promise<ContentSnapshot | null> {
-  const row = await prisma.discovery.findUnique({
+  const discovery = await prisma.discovery.findUnique({
     where: { id: discoveryId },
     select: { title: true, category: true, townName: true },
   });
-  if (!row) return null;
-  return {
-    title: row.title,
-    imageUrl: null, // Discoveries have no image field.
-    category: row.category,
-    town: row.townName,
-  };
+  return discovery ? resolveContent({ discovery }) : null;
 }
 
 /**

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { markDirty } from "@/lib/ranking/cache";
+import { triggerUserRerank } from "@/lib/ranking/rerank-trigger";
 
 // Toggle follow status for a user
 export async function POST(request: NextRequest) {
@@ -47,6 +48,16 @@ export async function POST(request: NextRequest) {
     await prisma.userFollow.delete({
       where: { id: existing.id },
     });
+    // The FOLLOWED_USER row outlives the follow it records, so unfollowing and
+    // re-following used to stack duplicates in every feed. Harmless while
+    // /feed/following was a redirect stub; visible now that it renders.
+    await prisma.userActivity.deleteMany({
+      where: {
+        userId: session.user.id,
+        type: "FOLLOWED_USER",
+        targetUserId: userId,
+      },
+    });
     await invalidateOwnFeed(session.user.id);
     return NextResponse.json({ following: false });
   } else {
@@ -78,6 +89,18 @@ export async function POST(request: NextRequest) {
  * the follow graph, so without this the new signal would silently never apply.
  * Before Wave 5 this route fired no ranking invalidation whatsoever.
  *
+ * markDirty is NOT sufficient on its own here. Only one of the three cache
+ * readers honours isDirty (lib/ranking/rails.ts re-ranks inline); /api/feed/why
+ * and the classic home rails read the persisted row raw. So after an unfollow,
+ * a dirty-but-unrecomputed cache would keep answering "Alex loved this" in the
+ * why-sheet — a named attribution to someone you no longer follow — until the
+ * daily cron. triggerUserRerank actually rewrites it.
+ *
+ * The amplification argument that keeps triggerUserRerank *out* of
+ * markFollowersDirty does not apply here: this is one user recomputing their
+ * own cache after their own action, which is exactly the case the coalesced
+ * trigger was built for.
+ *
  * Best-effort: a stale cache is a worse feed, not a failed follow.
  */
 async function invalidateOwnFeed(userId: string): Promise<void> {
@@ -86,6 +109,7 @@ async function invalidateOwnFeed(userId: string): Promise<void> {
   } catch (err) {
     console.warn("[users.follow] markDirty failed:", err);
   }
+  triggerUserRerank(userId);
 }
 
 // Get users the current user is following

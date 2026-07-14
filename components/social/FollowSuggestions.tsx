@@ -4,9 +4,8 @@
 // than an apology. "No activity yet" is a dead end; a list of people whose
 // taste you can actually see is a next step.
 
-import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import FollowButton from "./FollowButton";
 import InitialThumb from "@/components/ui/InitialThumb";
 import type { SuggestedTastemaker } from "@/lib/social/suggestions";
 
@@ -14,9 +13,20 @@ interface Props {
   suggestions: SuggestedTastemaker[];
   /** True when the viewer follows people but none of them have ranked anything. */
   hasFollows: boolean;
+  /**
+   * Re-fetch the feed. Required, not optional: this component IS the empty
+   * state, so a follow made from here has to tell the feed to look again.
+   * router.refresh() cannot do it — it preserves client component state, so the
+   * feed would sit on its cached empty result until a hard reload.
+   */
+  onFollowed: () => void;
 }
 
-export default function FollowSuggestions({ suggestions, hasFollows }: Props) {
+export default function FollowSuggestions({
+  suggestions,
+  hasFollows,
+  onFollowed,
+}: Props) {
   return (
     <div className="space-y-6">
       <div className="rounded-card border border-mute-divider bg-surface p-6 text-center">
@@ -39,7 +49,7 @@ export default function FollowSuggestions({ suggestions, hasFollows }: Props) {
           </h2>
           <ul className="divide-y divide-mute-divider overflow-hidden rounded-card border border-mute-divider bg-surface">
             {suggestions.map((s) => (
-              <SuggestionRow key={s.id} user={s} />
+              <SuggestionRow key={s.id} user={s} onFollowed={onFollowed} />
             ))}
           </ul>
         </section>
@@ -48,34 +58,19 @@ export default function FollowSuggestions({ suggestions, hasFollows }: Props) {
   );
 }
 
-function SuggestionRow({ user }: { user: SuggestedTastemaker }) {
-  const router = useRouter();
-  const [following, setFollowing] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  const toggle = async () => {
-    setBusy(true);
-    try {
-      const res = await fetch("/api/users/follow", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id }),
-      });
-      if (!res.ok) return;
-      const { following: next } = await res.json();
-      setFollowing(next);
-      // Their activity is now eligible for the feed above.
-      router.refresh();
-    } catch (err) {
-      console.error("Failed to toggle follow:", err);
-    } finally {
-      setBusy(false);
-    }
-  };
-
+function SuggestionRow({
+  user,
+  onFollowed,
+}: {
+  user: SuggestedTastemaker;
+  onFollowed: () => void;
+}) {
   return (
     <li className="flex items-center gap-3 p-3">
-      <Link href={`/u/${user.username}`} className="flex min-w-0 flex-1 items-center gap-3">
+      <Link
+        href={`/u/${user.username}`}
+        className="flex min-w-0 flex-1 items-center gap-3"
+      >
         <InitialThumb
           src={user.profileImageUrl}
           title={user.name ?? user.username}
@@ -94,18 +89,13 @@ function SuggestionRow({ user }: { user: SuggestedTastemaker }) {
           </p>
         </div>
       </Link>
-      <button
-        type="button"
-        onClick={() => void toggle()}
-        disabled={busy}
-        className={`flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
-          following
-            ? "bg-mute-hush text-mute"
-            : "bg-coral text-white hover:opacity-90"
-        }`}
-      >
-        {following ? "Following" : "Follow"}
-      </button>
+      <FollowButton
+        userId={user.id}
+        onToggled={(following) => {
+          // Their rankings are now eligible for the feed — go get them.
+          if (following) onFollowed();
+        }}
+      />
     </li>
   );
 }

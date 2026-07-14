@@ -358,8 +358,25 @@ function computeLovedSimilarity(
 
 /** A followed user loved this exact item. Strong. */
 const SOCIAL_DIRECT_MATCH = 0.5;
-/** A followed user loved something tag-similar. Weak inference. */
-const SOCIAL_OVERLAP_MATCH = 0.15;
+/**
+ * A followed user loved something tag-similar. Weak inference, so each match is
+ * small enough that a single one cannot saturate SOCIAL_OVERLAP_CAP — otherwise
+ * score-weighting inside the overlap tier would be dead code (every match, from
+ * a 5.0 to a 10.0, would clamp to the same number).
+ */
+const SOCIAL_OVERLAP_MATCH = 0.03;
+/**
+ * Tag overlap gets its own sub-budget, well under the full cap.
+ *
+ * The tiers CANNOT share one clamp. Summing them into a single total and
+ * clamping once means two common-tag overlaps ("cocktail-bar", "date-night")
+ * saturate the cap on their own — and then a place a followed user actually
+ * went to scores identically to a place nobody you follow has ever visited.
+ * The direct hit would drive the why-line while contributing nothing to the
+ * ordering, which is the opposite of the design's claim. Separate budgets keep
+ * a direct hit provably above any amount of overlap.
+ */
+const SOCIAL_OVERLAP_CAP = 0.08;
 
 function computeFollowedLovedSimilarity(
   ctx: RankingContext,
@@ -370,36 +387,56 @@ function computeFollowedLovedSimilarity(
   const signals = ctx.followedLovedItems ?? [];
   if (signals.length === 0) return { contribution: 0, reason: null };
 
-  let total = 0;
-  let bestMatch = 0;
-  let bestName: string | null = null;
-  let bestIsDirect = false;
+  // A follow must never override an explicit rejection. The candidate pool only
+  // hard-filters DONE, and computePassSimilarity deliberately skips exact
+  // self-matches — so without this, a place the user actively passed on could
+  // take the single largest social boost available and come back with "Alex
+  // loved this" on it.
+  if (ctx.passItems?.some((p) => p.itemId === item.itemId)) {
+    return { contribution: 0, reason: null };
+  }
+
+  let overlapTotal = 0;
+  let bestDirect = 0;
+  let bestOverlap = 0;
+  let directName: string | null = null;
+  let overlapName: string | null = null;
 
   for (const s of signals) {
-    const isDirect = s.itemId === item.itemId;
-    const match = isDirect
-      ? SOCIAL_DIRECT_MATCH * ratedScoreWeight(s.score)
-      : SOCIAL_OVERLAP_MATCH *
-        overlapWeight(tagOverlap(s.tags, item.tags)) *
-        ratedScoreWeight(s.score);
+    const weight = ratedScoreWeight(s.score);
 
-    total += match;
-    if (match > bestMatch) {
-      bestMatch = match;
-      bestName = s.followerName;
-      bestIsDirect = isDirect;
+    if (s.itemId === item.itemId) {
+      const match = SOCIAL_DIRECT_MATCH * weight;
+      if (match > bestDirect) {
+        bestDirect = match;
+        directName = s.followerName;
+      }
+      continue;
+    }
+
+    const match =
+      SOCIAL_OVERLAP_MATCH * overlapWeight(tagOverlap(s.tags, item.tags)) * weight;
+    overlapTotal += match;
+    if (match > bestOverlap) {
+      bestOverlap = match;
+      overlapName = s.followerName;
     }
   }
 
-  const contribution = clamp(total, 0, cap);
+  const direct = clamp(bestDirect, 0, cap);
+  const overlap = clamp(overlapTotal, 0, SOCIAL_OVERLAP_CAP);
+  const contribution = clamp(direct + overlap, 0, cap);
   if (contribution === 0) return { contribution: 0, reason: null };
 
-  // The reason describes the strongest contributor while the contribution is
-  // the sum — same convention as loved_similarity's bestTitle.
+  // The reason names the strongest contributor. A direct hit always wins it:
+  // "Alex loved this" is only ever said about the exact item.
+  const isDirect = bestDirect > 0;
+  const name = isDirect ? directName : overlapName;
   const reason = renderReason(
-    bestIsDirect ? "followed_loved_direct" : "followed_loved_similarity",
+    isDirect ? "followed_loved_direct" : "followed_loved_similarity",
     contribution,
-    bestName ? [bestName] : undefined,
+    undefined,
+    name ?? undefined, // a person, not a tag — see ScoreReason.subject
   );
   return { contribution, reason };
 }

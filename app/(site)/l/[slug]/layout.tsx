@@ -11,6 +11,12 @@ import { prisma } from "@/lib/prisma";
 // Mirrors the Wave 4 public rankings pages. Only public lists get a card —
 // a private list must not leak its name or cover image through OG tags.
 
+// Without this the segment is statically rendered and the card is frozen in the
+// Full Route Cache: flip a list private and its title + cover image keep being
+// served to crawlers forever. generateMetadata reads Prisma, not fetch(), so
+// nothing else would ever revalidate it. Matches the Wave 4 rankings pages.
+export const dynamic = "force-dynamic";
+
 interface LayoutProps {
   children: React.ReactNode;
   params: { slug: string };

@@ -40,6 +40,15 @@ export interface ScoreReason {
   human_readable: string;
   /** Which specific tags matched, when applicable. */
   tags_matched?: string[];
+  /**
+   * The named thing the reason is *about*, when it is about a thing rather than
+   * a tag overlap — Wave 5's "Alex loved this" names a person. Kept separate
+   * from tags_matched: smuggling a display name through a field called
+   * "tags_matched" is the kind of thing that reads fine today and misleads
+   * whoever touches it next. Optional, and the JSON blob is persisted, so
+   * pre-Wave-5 cached rows simply lack it.
+   */
+  subject?: string;
 }
 
 // ---------------------------------------------------------------------------
