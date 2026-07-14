@@ -255,3 +255,51 @@ unconnected models); plan share pages; Elo/agreement-weighted social trust; anyt
   idempotently.
 - The social signal is unevaluable at one user. The cap (`0.20`) is argued from the existing weight
   hierarchy, not measured. Revisit with real follow data.
+
+---
+
+## Addendum — corrections from the 8-angle review (2026-07-13)
+
+The review found the design wrong in four places. Recording them here rather than
+silently editing above, because the reasoning is the useful part.
+
+**The two-tier social signal needed two budgets, not one cap (§5).** The spec said
+a direct hit "drives the boost and the why-line". With both tiers summed into one
+`0.20` clamp it drove only the why-line: two common-tag overlaps saturate the cap
+on their own, after which a place a followed user actually went to scores exactly
+the same as one nobody you follow has ever visited. Tag overlap now has its own
+sub-budget (`0.08`), so a direct hit provably outranks any quantity of overlap.
+The original tests missed this because every fixture used a single signal.
+
+**Rank in the feed must be computed over CONFIRMED entries (§Components 2).**
+"Hydrate at read time" was right; `position + 1` was not. Positions are dense over
+*all* entries including provisional ones, while the public rankings page ranks
+confirmed-only — so the feed card and the page it links to printed different
+numbers for the same spot. And because `beginPlacement` un-confirms an entry on a
+re-rate while the activity row survives, abandoning a re-rate mid-duel published a
+verdict the author never confirmed. Both fixed; confirmed-only is enforced in SQL,
+because post-fetch filtering would corrupt `hasMore`.
+
+**D2 was stated but never implemented.** The visibility filter was written as
+"everything except RANKED_ITEM, plus public RANKED_ITEM" — which lets every legacy
+`ActivityType` through, exactly the "Quest saved 40 events" feed D2 rejects. It is
+now an allowlist (`RANKED_ITEM`, `CREATED_LIST`).
+
+**The featured rail was structurally unreachable.** `saveCount > 0` is only ever
+written when *another user copies your list* — which, at one real user, has never
+happened. PR3's headline surface would have shipped rendering nothing, and the
+place-bug fix underneath it would have been unobservable. Public lists with items
+now qualify; saves order the rail rather than gating it.
+
+**The §Testing section promised tests that cannot exist.** Hydration-privacy,
+emission-idempotence and invalidation-fan-out tests all require Prisma mocking,
+which this repo does nowhere — it tests extracted pure modules instead (the
+`insertion.ts` / `scores.ts` pattern). The code follows the convention; the spec
+was wrong to promise otherwise. What ships is the regression guard (empty signals
+⇒ byte-identical score AND reasons), the formula tiers, `toFeedItems`, and
+`formatAgo`. The DB-coupled behaviours are covered by the manual UAT checklist in
+the PR instead.
+
+Accepted, not fixed: the feed can say "#40 of 60" for an entry the public page
+(top-25) never numbers. The rank is true, so it is not a false claim — just a
+click that doesn't land where you'd expect. Revisit if it grates.
