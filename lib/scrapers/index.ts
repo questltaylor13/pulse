@@ -20,7 +20,7 @@ import { attachSeries } from "@/lib/series/ingest";
 import { occurrenceIdentity } from "@/lib/series/occurrence";
 import { denverDateKey } from "@/lib/time/denver";
 import { prioritize } from "./source-priority";
-import { isProSportsEvent } from "./exclusions";
+import { isTicketedProGame } from "./exclusions";
 
 // Note: 303magazine disabled 2026-04-18. The site migrated away from a
 // structured event calendar (JSON-LD Event schema) to a JS-rendered Tribe
@@ -219,16 +219,17 @@ export async function runAllScrapers(): Promise<{
     }
   }
 
-  // Drop pro-sports events at ingest (before dedup) so they never reach
+  // Drop the ticketed pro game at ingest (before dedup) so it never reaches
   // the DB — fans already know when their team plays and the surface is
-  // dominated by tickets-for-sale rather than discovery value. See
-  // lib/scrapers/exclusions.ts for the team list. Per-source attribution
-  // feeds ScraperRun.droppedCount below.
+  // dominated by tickets-for-sale rather than discovery value. Wave 6B: watch
+  // parties and other team-adjacent bar content now SURVIVE this filter; only
+  // the game itself dies. See lib/scrapers/exclusions.ts. Per-source
+  // attribution feeds ScraperRun.droppedCount below.
   const sportsDroppedBySource = new Map<string, number>();
   const sportsDroppedTitles: string[] = [];
   for (const result of allResults) {
     for (const ev of result.events) {
-      if (isProSportsEvent(ev.title, ev.description)) {
+      if (isTicketedProGame(ev.title, ev.description, ev.venueName)) {
         sportsDroppedBySource.set(result.source, (sportsDroppedBySource.get(result.source) ?? 0) + 1);
         if (sportsDroppedTitles.length < 5) sportsDroppedTitles.push(`${result.source}: ${ev.title}`);
       }
@@ -243,7 +244,7 @@ export async function runAllScrapers(): Promise<{
 
   const allEvents = allResults
     .flatMap((r) => r.events)
-    .filter((e) => !isProSportsEvent(e.title, e.description));
+    .filter((e) => !isTicketedProGame(e.title, e.description, e.venueName));
   const allErrors = allResults.flatMap((r) => r.errors);
   const deduplicated = deduplicateEvents(allEvents);
 
