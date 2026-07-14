@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { vibeTagLabels } from "@/lib/constants/vibe-tags";
 import { MapPin, Star, Clock } from "lucide-react";
 import { formatDistance } from "@/lib/geo";
 
@@ -122,12 +123,12 @@ export default function NearbyItemCard({
         {/* Vibe tags */}
         {vibeTags.length > 0 && (
           <div className="flex gap-1 mt-1.5">
-            {vibeTags.slice(0, 2).map((tag) => (
+            {vibeTagLabels(vibeTags).slice(0, 2).map((tag) => (
               <span
                 key={tag}
                 className="inline-block rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-600"
               >
-                {tag}
+
               </span>
             ))}
           </div>

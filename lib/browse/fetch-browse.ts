@@ -1,10 +1,12 @@
 import prisma from "@/lib/prisma";
+import { vibeTagLabels } from "@/lib/constants/vibe-tags";
 import { activeEventsWhere, upcomingWeekendRange, endOfTodayLocal, outsideDenverWhere, OUTSIDE_DENVER_REGIONS } from "@/lib/queries/events";
 import { addDaysDenver, denverHour, startOfTodayDenver, endOfTodayDenver } from "@/lib/time/denver";
 import { boundingBox } from "@/lib/geo";
 import { filterAndSortByDistance } from "./distance";
 import { matchesTimeOfDay } from "./filter-logic";
-import { localFavoritesWhere, groupFriendlyPlacesWhere, workFriendlyPlacesWhere, dateNightPlacesWhere } from "@/lib/home/places-section-filters";
+import { buildPlacesWhere } from "./places-where";
+import { watchPartyEventsWhere } from "./watch-party";
 import type { BrowseConfig } from "./browse-configs";
 import type { BrowseFilters } from "./filters";
 
@@ -141,19 +143,9 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
   }
 
   if (config.source === "places") {
-    const where: any = { openingStatus: "OPEN" };
-
-    if (config.defaults.filter === "new") {
-      where.OR = [{ isNew: true }, { openedDate: { gte: new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000) } }];
-    }
-    if (config.defaults.flag === "isLocalFavorite") Object.assign(where, localFavoritesWhere());
-    if (config.defaults.flag === "goodForWorking") Object.assign(where, workFriendlyPlacesWhere());
-    if (config.defaults.vibeTag) {
-      where.vibeTags = { hasSome: [config.defaults.vibeTag] };
-    }
-
-    if (filters.categories.length) where.category = { in: filters.categories };
-    if (filters.vibes.length) where.vibeTags = { hasSome: filters.vibes };
+    // Composed as an AND array in lib/browse/places-where.ts. The clauses used to
+    // be merged onto one object, where each silently overwrote the last.
+    const where: any = buildPlacesWhere(config, filters, now);
 
     if (distanceActive) {
       const bb = boundingBox(origin!, radiusMiles!);
@@ -179,7 +171,7 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
       category: p.category,
       neighborhood: p.neighborhood,
       subtitle: p.address,
-      meta: p.vibeTags.slice(0, 2).join(" · "),
+      meta: vibeTagLabels(p.vibeTags).slice(0, 2).join(" · "),
       lat: p.lat,
       lng: p.lng,
       startTime: null,
@@ -190,6 +182,42 @@ export async function fetchBrowse(config: BrowseConfig, filters: BrowseFilters):
     const ranked = origin && (distanceActive || sortByDistance)
       ? filterAndSortByDistance(items, origin, distanceActive ? radiusMiles : null, sortByDistance).slice(0, 50)
       : items;
+
+    // "Where can I watch the game" has two answers (spec D6): the bar that always
+    // shows it, and the party on Thursday. Wave 6B stopped DELETING the second at
+    // ingest; this is what gives it somewhere to land. Events lead — a watch party
+    // tonight beats a bar that merely owns televisions.
+    if (config.defaults.eventFilter === "watch-party") {
+      const parties = await prisma.event.findMany({
+        where: watchPartyEventsWhere(now),
+        select: {
+          id: true, title: true, imageUrl: true, category: true, neighborhood: true,
+          venueName: true, startTime: true, priceRange: true, tags: true, lat: true, lng: true,
+        },
+        orderBy: { startTime: "asc" },
+        take: 20,
+      });
+
+      const partyItems: BrowseItem[] = parties.map((e) => ({
+        id: e.id,
+        kind: "event" as const,
+        title: e.title,
+        imageUrl: e.imageUrl,
+        category: e.category,
+        neighborhood: e.neighborhood,
+        subtitle: e.venueName,
+        meta: e.startTime.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }),
+        lat: e.lat,
+        lng: e.lng,
+        startTime: e.startTime.toISOString(),
+        priceRange: e.priceRange,
+        tags: e.tags,
+      }));
+
+      const merged = [...partyItems, ...ranked].slice(0, 50);
+      return { items: merged, total: merged.length };
+    }
+
     return { items: ranked, total: ranked.length };
   }
 

@@ -1,11 +1,11 @@
-import { filterValidVibeTags } from "@/lib/constants/vibe-tags";
+import { vibeTagLabels } from "@/lib/constants/vibe-tags";
 
 interface Props {
   tags: string[];
 }
 
 export default function VibeTagPill({ tags }: Props) {
-  const valid = filterValidVibeTags(tags).slice(0, 2);
+  const valid = vibeTagLabels(tags).slice(0, 2);
   if (valid.length === 0) return null;
 
   return (

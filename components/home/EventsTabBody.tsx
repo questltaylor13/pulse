@@ -274,7 +274,7 @@ export default function EventsTabBody({ category, data, feedbackMaps }: Props) {
         <ScrollSection
           title="Worth a weekend"
           subtitle="Mountain-town trips that earn the drive"
-          seeAllHref="/browse/worth-a-weekend"
+          seeAllHref="/browse/weekend-guides"
         >
           {worthAWeekend.map((e) => (
             <EventCardCompact

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { vibeTagLabels } from "@/lib/constants/vibe-tags";
 import Link from "next/link";
 import Image from "next/image";
 import { Category, EventListStatus, GoingWith } from "@prisma/client";
@@ -586,7 +587,7 @@ export default function EventDetailClient({ event }: EventDetailClientProps) {
                 {tag}
               </span>
             ))}
-            {event.place.vibeTags?.map((tag) => (
+            {vibeTagLabels(event.place.vibeTags ?? []).map((tag) => (
               <span
                 key={tag}
                 className="inline-block rounded-full bg-violet-100 px-3 py-1 text-sm font-medium text-violet-700"

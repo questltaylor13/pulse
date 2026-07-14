@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { vibeTagLabels } from "@/lib/constants/vibe-tags";
 import Link from "next/link";
 import Image from "next/image";
 import { Category, ItemStatus } from "@prisma/client";
@@ -246,12 +247,12 @@ export default function PlaceCard({
                 {tag}
               </span>
             ))}
-            {vibeTags.slice(0, 2).map((tag) => (
+            {vibeTagLabels(vibeTags).slice(0, 2).map((tag) => (
               <span
                 key={tag}
                 className="inline-block rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-600"
               >
-                {tag}
+
               </span>
             ))}
           </div>
