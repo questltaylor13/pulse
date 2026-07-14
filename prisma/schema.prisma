@@ -1610,6 +1610,12 @@ model Place {
   hasIndoorSeating      Boolean @default(true) // default true: most places do
   fitsLargeGroups       Boolean @default(false) // 6+ without a reservation
 
+  // Set when the situational booleans above have actually been derived. Required
+  // because `false` is indistinguishable from "never asked" — without this the
+  // weekly cron would re-enrich the whole corpus every run and the backfill
+  // would not be idempotent.
+  situationalEnrichedAt DateTime?
+
   // Hype/buzz signals
   buzzScore       Int @default(0) // Social media mentions, saves, etc.
   preOpeningSaves Int @default(0) // How many users saved before opening

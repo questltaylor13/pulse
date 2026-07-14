@@ -33,6 +33,14 @@
       "schedule": "30 9 * * *"
     },
     {
+      "path": "/api/cron/enrich-places",
+      "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/cron/enrich-places?mode=attributes",
+      "schedule": "30 6 * * 1"
+    },
+    {
       "path": "/api/cron/backfill-walk-times",
       "schedule": "0 12 * * *"
     },
