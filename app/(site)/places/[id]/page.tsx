@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { similarPlaces } from "@/lib/detail/similar";
+import { isSituationsV1Enabled } from "@/lib/ranking/flags";
 import PlaceDetailPage from "@/components/detail/PlaceDetailPage";
 import DetailFeedback from "@/components/feedback/DetailFeedback";
 import PlaceRating from "@/components/feedback/PlaceRating";
@@ -123,6 +124,21 @@ export default async function PlacePage({ params }: PageProps) {
         openingHours: place.openingHours,
         lat: place.lat,
         lng: place.lng,
+        // Wave 6B — gated server-side. PlaceDetailPage is a client component, so
+        // it cannot read the flag; withholding the values is the gate. Until the
+        // enrichment backfill runs every boolean is false anyway.
+        ...(isSituationsV1Enabled()
+          ? {
+              goodForWatchingSports: place.goodForWatchingSports,
+              isKidFriendly: place.isKidFriendly,
+              hasOutdoorSeating: place.hasOutdoorSeating,
+              hasIndoorSeating: place.hasIndoorSeating,
+              fitsLargeGroups: place.fitsLargeGroups,
+              isDogFriendly: place.isDogFriendly,
+              isDrinkingOptional: place.isDrinkingOptional,
+              hasMocktailMenu: place.hasMocktailMenu,
+            }
+          : {}),
       }}
       upcomingEvents={place.events}
       similarPlaces={similar}

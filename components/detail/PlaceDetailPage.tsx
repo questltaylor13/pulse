@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { filterValidVibeTags } from "@/lib/constants/vibe-tags";
+import { placeAttributeChips } from "@/lib/places/attributes";
 import SimilarItemsRow from "./SimilarItemsRow";
 
 /* ------------------------------------------------------------------ */
@@ -41,6 +42,16 @@ interface PlaceData {
   openingHours: any;
   lat: number | null;
   lng: number | null;
+  // Wave 6B situational attributes. Optional so a caller that has not been
+  // updated still type-checks; placeAttributeChips treats absent as false.
+  goodForWatchingSports?: boolean;
+  isKidFriendly?: boolean;
+  hasOutdoorSeating?: boolean;
+  hasIndoorSeating?: boolean;
+  fitsLargeGroups?: boolean;
+  isDogFriendly?: boolean;
+  isDrinkingOptional?: boolean;
+  hasMocktailMenu?: boolean;
 }
 
 interface Props {
@@ -135,6 +146,7 @@ function HoursTable({ hours }: { hours: any }) {
 
 export default function PlaceDetailPage({ place, upcomingEvents, similarPlaces }: Props) {
   const vibes = filterValidVibeTags(place.vibeTags).slice(0, 4);
+  const attributeChips = placeAttributeChips(place);
   const price = priceLabel(place.priceLevel);
 
   const directionsUrl =
@@ -202,6 +214,22 @@ export default function PlaceDetailPage({ place, upcomingEvents, similarPlaces }
               className="rounded-pill bg-mute-hush px-2.5 py-0.5 text-[11px] text-mute"
             >
               {v}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* ---- Situational attributes (Wave 6B) ----
+          The server only passes these when SITUATIONS_V1_ENABLED, so an
+          un-backfilled corpus renders nothing rather than an empty promise. */}
+      {attributeChips.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2 px-5">
+          {attributeChips.map((chip) => (
+            <span
+              key={chip.key}
+              className="rounded-pill border border-teal/25 bg-teal/10 px-2.5 py-0.5 text-[11px] font-medium text-teal"
+            >
+              {chip.label}
             </span>
           ))}
         </div>
